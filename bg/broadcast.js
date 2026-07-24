@@ -71,7 +71,7 @@ async function openTile(sites, prune = true) {
 
 // 发送到全部：有站点尚无窗口则先平铺，再逐站等页面就绪后提交。
 // 用户初次使用无需先点「平铺」：勾选 → 输入 → Enter 即可一步开窗+群发。
-async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), image = null) {
+async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), images = []) {
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   const wins = await getWindows();
   let anyMissing = false;
@@ -79,13 +79,13 @@ async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(
   if (tile && anyMissing) await openTile(sites, false); // 隐式开窗不 prune/不重排；retry 传 tile=false 连开窗也免
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   // 进度起点（console/compose 发起都统一）；带 text/tier 让 console 重建 lastSend（compose 发起的失败也能一键重试）
-  pushBroadcast({ type: "sendStart", hosts: sites.map((s) => s.host), text, tier, hasImage: !!image });
+  pushBroadcast({ type: "sendStart", hosts: sites.map((s) => s.host), text, tier, hasImage: images.length > 0 });
   const wins2 = await getWindows(); // 开窗失败或 retry 不开窗：缺窗站立即报 no_window，不空转到 timeout
   const results = await Promise.all(sites.map(async (s) => {
     if ((await popupWindowForHost(s.host, wins2)) == null) {
       const res = { host: s.host, ok: false, code: "no_window" }; pushSiteResult(res); return res;
     }
-    return submitWhenReady(s, text, tier, 22000, 800, epoch, image);
+    return submitWhenReady(s, text, tier, images.length ? 45000 : 22000, 800, epoch, images);
   }));
   if (epoch === currentSendEpoch()) {
     if (await consoleIsMinimized()) await minimizeAllManaged();
@@ -107,7 +107,7 @@ function pushSiteResult(res) { pushBroadcast({ type: "siteResult", result: res }
 // 故 content 未注入 / composer_not_found 都视为"还没好"继续等，其它 ok=false 才是真失败。
 // 失败原因走错误码协议（code），由 console 端按界面语言翻译——bg/content 不产出用户可见文案。
 // 任一出口都先 pushSiteResult 让该站圆点立刻变色，再返回参与 Promise.all 汇总。
-async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoch = currentSendEpoch(), image = null) {
+async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoch = currentSendEpoch(), images = []) {
   const t0 = Date.now();
   const firstDeadline = t0 + timeoutMs, deadline = t0 + timeoutMs * 2;
   let retried = false; // 慢加载站首开超过 22s 后继续等到绝对截止线 44s
@@ -134,7 +134,7 @@ async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoc
         if (Date.now() >= deadline) return done(false, "timeout");
         let r;
         try {
-          r = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "submitPrompt", text, tier, deadline, image }), deadline);
+          r = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "submitPrompt", text, tier, deadline, images }), deadline);
         } catch (e) { return done(false, "submit_unconfirmed"); } // 已派发后绝不自动重发，避免端口断开造成重复提问
         if (r === MESSAGE_TIMEOUT) return done(false, "submit_unconfirmed");
         if (!r || typeof r.ok !== "boolean") return done(false, "submit_unconfirmed");

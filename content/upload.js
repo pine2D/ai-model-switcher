@@ -4,6 +4,7 @@
   const S = window.__AMS;
   if (!S) return;
 
+  const MAX_COUNT = 4;
   const MAX_BYTES = 10 * 1024 * 1024;
   const TYPES = new Set(["image/png", "image/jpeg"]);
   const CANDIDATES = 'img,canvas,[class*="attach"],[class*="upload"],[class*="preview"]';
@@ -74,15 +75,16 @@
     }).map(token));
     return { tokens, busy, errors };
   }
-  async function waitAttachment(anchor, before, deadline, fileName) {
+  async function waitAttachments(anchor, before, deadline, fileNames) {
     let candidate = "", since = 0;
     while (Date.now() < deadline) {
       const current = snapshot(anchor);
       if ([...current.errors].some((value) => !before.errors.has(value))) return false;
-      const added = [...current.tokens].find((value) => !before.tokens.has(value)) || "";
-      const named = fileName && added.includes(fileName);
-      if (added && (!current.busy || named)) {
-        if (added !== candidate) { candidate = added; since = Date.now(); }
+      const added = [...current.tokens].filter((value) => !before.tokens.has(value));
+      const named = fileNames.every((name) => added.some((value) => value.includes(name)));
+      if ((named || added.length >= fileNames.length) && (!current.busy || before.busy)) {
+        const signature = added.sort().join("\n");
+        if (signature !== candidate) { candidate = signature; since = Date.now(); }
         else if (Date.now() - since >= 400) return true;
       } else { candidate = ""; since = 0; }
       await S.sleep(Math.min(120, Math.max(0, deadline - Date.now())));
@@ -90,46 +92,49 @@
     return false;
   }
 
-  async function setInputFile(input, file, composer, deadline) {
-    if (!input || !file) return false;
+  async function setInputFiles(input, files, composer, deadline) {
+    if (!input || !files || !files.length) return false;
     const anchor = anchorRect(composer), before = snapshot(anchor);
     try {
       const transfer = new DataTransfer();
-      transfer.items.add(file);
+      files.forEach((file) => transfer.items.add(file));
       input.files = transfer.files;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     } catch (e) { return false; }
-    return waitAttachment(anchor, before, Number(deadline) || Date.now() + 15000, file.name);
+    return waitAttachments(anchor, before, Number(deadline) || Date.now() + 15000, files.map((file) => file.name));
   }
-  async function dropFile(target, file, composer, deadline) {
-    if (!target || !file) return false;
+  async function dropFiles(target, files, composer, deadline) {
+    if (!target || !files || !files.length) return false;
     const anchor = anchorRect(composer), before = snapshot(anchor);
     try {
       const transfer = new DataTransfer();
-      transfer.items.add(file);
+      files.forEach((file) => transfer.items.add(file));
       for (const type of ["dragenter", "dragover", "drop"]) {
         target.dispatchEvent(new DragEvent(type, {
           bubbles: true, cancelable: true, dataTransfer: transfer,
         }));
       }
     } catch (e) { return false; }
-    return waitAttachment(anchor, before, Number(deadline) || Date.now() + 15000, file.name);
+    return waitAttachments(anchor, before, Number(deadline) || Date.now() + 15000, files.map((file) => file.name));
   }
-  async function uploadImage(payload, adapter, composer, deadline) {
-    const file = await decodeImage(payload);
-    if (!file) return { ok: false, code: "image_invalid" };
+  async function uploadImages(payloads, adapter, composer, deadline) {
+    if (!Array.isArray(payloads) || !payloads.length || payloads.length > MAX_COUNT)
+      return { ok: false, code: "image_invalid" };
+    const files = await Promise.all(payloads.map(decodeImage));
+    if (files.some((file) => !file) || files.reduce((sum, file) => sum + file.size, 0) > MAX_BYTES)
+      return { ok: false, code: "image_invalid" };
     if (!adapter || typeof adapter.attach !== "function")
       return { ok: false, code: "attachment_unsupported" };
-    const end = Math.min(Number(deadline) || Infinity, Date.now() + 15000);
+    const end = Number(deadline) || Date.now() + 15000;
     if (Date.now() >= end) return { ok: false, code: "attachment_timeout" };
     try {
-      const ok = await adapter.attach(file, composer, end);
+      const ok = await adapter.attach(files, composer, end);
       if (typeof ok === "string") return { ok: false, code: ok };
       if (ok) return { ok: true };
       return { ok: false, code: Date.now() >= end ? "attachment_timeout" : "attachment_failed" };
     } catch (e) { return { ok: false, code: "attachment_failed" }; }
   }
 
-  Object.assign(S, { uploadImage, setInputFile, dropFile });
+  Object.assign(S, { uploadImages, setInputFiles, dropFiles });
 })();

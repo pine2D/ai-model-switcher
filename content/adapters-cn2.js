@@ -71,7 +71,7 @@
       },
       think: async function () { if (this._model() !== "K3") await this._select("K3"); await this._setEffort(/^(Max|极致|最大|最高|最强)$/i); },
       fast: async function () { if (this._model() !== "K3") await this._select("K3"); await this._setEffort(/^(Standard|标准)$/i); },
-      attach: function (file, el, deadline) { return S.dropFile(el, file, el, deadline); },
+      attach: function (files, el, deadline) { return S.dropFiles(el, files, el, deadline); },
       // 新编辑器（真机 2026-07-21）：合成 beforeinput 会 DOM/model 分叉并冻死编辑器（发送键失灵、
       // 可信键盘也不再接受）；execCommand insertText 反而正常入 model → 站点特调注入改道
       inject: function (el, text) {
@@ -121,7 +121,7 @@
       state: function () { return this._toggle() ? (this._isOn() ? "think" : "fast") : null; },
       think: async function () { await this._set(true); },
       fast: async function () { await this._set(false); },
-      attach: function (file, el, deadline) { return S.dropFile(el, file, el, deadline); },
+      attach: function (files, el, deadline) { return S.dropFiles(el, files, el, deadline); },
       // 最后一条回答（chrome-dbg 真机审计 2026-07：AI 回答在 .agent-chat__conv--ai__speech_show，
       // 正文 .hyc-common-markdown，需排除深度思考段 .hyc-component-deepsearch-cot__think 内的同类节点）
       answer: function () {

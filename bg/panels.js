@@ -16,7 +16,8 @@ async function _openScope(anchor) {
   const existing = await getScopeWinId();
   if (existing != null && await updateIfPopup(existing, { focused: true, state: "normal" })) return;
   const wa = await consoleWorkArea();
-  const width = Math.min(390, wa.width), height = Math.min(390, wa.height);
+  const width = Math.min(390, wa.width);
+  let height = Math.min(390, wa.height);
   let left = wa.left + Math.max(0, Math.floor((wa.width - width) / 2));
   let top = wa.top;
   try {
@@ -27,11 +28,13 @@ async function _openScope(anchor) {
     }
   } catch (error) {}
   left = Math.max(wa.left, Math.min(left, wa.left + wa.width - width));
-  top = Math.max(wa.top, Math.min(top, wa.top + wa.height - height));
+  top = Math.max(wa.top, Math.min(top, wa.top + wa.height - 1));
+  height = Math.min(height, Math.max(1, wa.top + wa.height - top));
   const created = await chrome.windows.create({
-    url: chrome.runtime.getURL("console/scope.html"), type: "popup",
+    url: chrome.runtime.getURL("console/scope.html") + "?top=" + Math.round(top), type: "popup",
     left: Math.round(left), top: Math.round(top), width, height, focused: true,
   });
+  await chrome.windows.update(created.id, { left: Math.round(left), top: Math.round(top) });
   scopeWinId = created.id;
   await chrome.storage.local.set({ amsScopeWin: created.id });
 }

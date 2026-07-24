@@ -24,10 +24,12 @@ done
 
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-background.js
+node scripts/test-console-polish.js
 
 echo "[test] 图片载荷与群发消息契约"
 node scripts/test-image.js
 node scripts/test-image-runtime.js
+node scripts/test-multi-image.js
 
 git diff --check
 echo "[verify] 全部通过"

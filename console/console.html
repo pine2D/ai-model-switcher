@@ -7,7 +7,7 @@
 <body>
   <div id="bar">
     <div class="brand"><svg class="logo" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 1.5 14.5 8 8 14.5 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 5.4 10.6 8 8 10.6 5.4 8z" fill="currentColor"/></svg>PolyAsk</div>
-    <button id="group" type="button" data-i18n-title="con_groupTitle" data-i18n-aria="con_groupAria" title="选择站点范围" aria-label="选择站点范围" aria-haspopup="dialog"><span id="group-count">已选 0/9</span><svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+    <button id="group" type="button" data-i18n-title="con_groupTitle" data-i18n-aria="con_groupAria" title="选择站点范围" aria-label="选择站点范围" aria-haspopup="dialog"><span id="group-count">已选 0/9</span></button>
     <div id="siteswrap">
       <button id="sites-l" class="sarr" type="button" data-i18n-aria="con_scrollSitesLeft" aria-label="向左滚动站点" aria-hidden="true" disabled><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg></button>
       <div id="sites"></div>
@@ -25,9 +25,9 @@
     </select>
     <input id="prompt" type="text" data-i18n-ph="con_promptPh" data-i18n-aria="con_promptAria" placeholder="输入要群发的问题…（Enter 发送 · ↑↓ 历史）" aria-label="群发问题" aria-keyshortcuts="Alt+P">
     <button id="image" type="button" class="icon" data-i18n-title="con_imageAdd" data-i18n-aria="con_imageAdd" title="添加图片" aria-label="添加图片" aria-pressed="false"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><circle cx="5.5" cy="6" r="1"/><path d="m3.5 12 3-3 2 2L10 9.5l2.5 2.5"/></svg></button>
-    <input id="image-input" type="file" accept="image/png,image/jpeg" hidden>
+    <input id="image-input" type="file" accept="image/png,image/jpeg" multiple hidden>
     <button id="compose" class="icon" data-i18n-title="con_composeTitle" data-i18n-aria="con_composeTitle" title="展开编辑长文本" aria-label="展开编辑长文本"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5l2.5 2.5M3 13l.8-3L11 2.8 13.2 5 6 12.2 3 13z"/></svg></button>
-    <button id="send" data-i18n="con_sendAll">发送 ▸</button>
+    <button id="send" data-i18n="con_sendAll">发送</button>
     <span id="failsum" style="display:none"></span>
     <button id="retry" class="icon" data-i18n-title="con_retryTitle" data-i18n-aria="con_retryTitle" title="重试失败的站点 · Alt+R" aria-label="重试失败的站点" aria-keyshortcuts="Alt+R" disabled><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5V6h-3.5"/></svg></button>
     <span class="vsep" aria-hidden="true"></span>
@@ -40,6 +40,7 @@
   <span id="live" class="sr" aria-live="polite"></span>
   <script src="sites.js"></script>
   <script src="library.js"></script>
+  <script src="images.js"></script>
   <script src="console.js"></script>
   <script src="status.js"></script>
 </body></html>

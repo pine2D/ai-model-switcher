@@ -53,8 +53,7 @@ html,body{margin:0;height:100%;overflow:hidden;font:13px/1.4 -apple-system,"Sego
 #bar::-webkit-scrollbar{display:none}
 .brand{display:flex;align-items:center;gap:7px;margin-right:2px;font-weight:750;font-size:13px;white-space:nowrap;flex:0 0 auto}
 .brand .logo{color:var(--accent)} /* SVG 版 ◈：字形在大字体集下有回退扫描开销 */
-#group{width:95px;height:32px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--fill);color:var(--text-2);font-size:12px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:space-between;gap:4px}
-#group svg{flex:none}
+#group{width:95px;height:32px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--fill);color:var(--text-2);font-size:12px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:4px}
 /* overflow-x:auto 而非 hidden：hidden 会把 flex 自动最小宽度归零，窄屏时芯片会被静默裁切。
    滚动条本体隐藏（零布局占位，芯片不被挤偏；96px 密排条里滚动条也放不下），滚轮横滚/按住拖动由
    console.js 接管，溢出方向由两侧箭头指示 */
@@ -127,6 +126,7 @@ body.scope{height:100vh;box-sizing:border-box;padding:12px;overflow:auto;backgro
 #scope-count{font-size:12px;font-weight:400;color:var(--text-3)}
 #scope-quick,.scope-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 #scope-groups{display:contents}
+#scope-groups button{max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
 #scope-sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0}
 .scope-site{display:flex;align-items:center;gap:6px;min-width:0;height:30px;padding:0 8px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;color:var(--text-2);background:var(--fill);white-space:nowrap;cursor:pointer;transition:background .12s ease,border-color .12s ease,transform .12s var(--ease-out)}
 .scope-site:has(input:checked){border-color:var(--active-line);color:var(--active-text);background:var(--active-bg)}

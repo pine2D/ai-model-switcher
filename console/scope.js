@@ -11,6 +11,36 @@ const elNameRow = document.getElementById("scope-name");
 const elConfirm = document.getElementById("scope-confirm");
 const elManage = document.getElementById("scope-manage");
 const elName = document.getElementById("group-name");
+const scopeTopParam = new URLSearchParams(location.search).get("top");
+const requestedScopeTop = scopeTopParam == null ? null : Number(scopeTopParam);
+let scopeFitFrame = 0;
+
+// SCOPE_SIZE_START — scripts/test-console-polish.js 直接执行纯高度计算。
+function fittedScopeHeight(contentHeight, frameHeight, requestedTop, actualTop, screenBottom) {
+  return Math.max(1, Math.min(contentHeight + frameHeight, screenBottom - Math.max(requestedTop, actualTop)));
+}
+// SCOPE_SIZE_END
+
+function fitScopeHeight() {
+  cancelAnimationFrame(scopeFitFrame);
+  scopeFitFrame = requestAnimationFrame(() => {
+    const bodyRect = document.body.getBoundingClientRect();
+    const paddingBottom = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+    const contentBottom = [...document.body.children]
+      .filter((element) => element.tagName !== "SCRIPT" && !element.hidden)
+      .reduce((bottom, element) => Math.max(bottom, element.getBoundingClientRect().bottom), bodyRect.top);
+    const contentHeight = Math.ceil(contentBottom - bodyRect.top + paddingBottom);
+    chrome.windows.getCurrent((current) => {
+      if (chrome.runtime.lastError || !current || current.id == null) return;
+      const frameHeight = Math.max(0, (current.height || outerHeight) - innerHeight);
+      const top = Number.isFinite(requestedScopeTop) ? requestedScopeTop : (current.top == null ? screenY : current.top);
+      const actualTop = current.top == null ? top : current.top;
+      const height = fittedScopeHeight(contentHeight, frameHeight, top, actualTop, screen.availTop + screen.availHeight);
+      if (height === current.height) return;
+      chrome.windows.update(current.id, { top, height }, () => void chrome.runtime.lastError);
+    });
+  });
+}
 
 function currentHosts() { return ALL_HOSTS.filter((host) => selected[host]); }
 function persistSelection() {
@@ -59,15 +89,17 @@ function renderScope() {
   });
   const saved = document.getElementById("scope-groups"); saved.replaceChildren();
   groups.forEach((group) => {
-    const button = document.createElement("button"); button.type = "button"; button.textContent = group.name;
+    const button = document.createElement("button"); button.type = "button"; button.textContent = group.name; button.title = group.name;
     button.addEventListener("click", () => applyHosts(group.hosts)); saved.appendChild(button);
   });
   document.getElementById("grp-save").disabled = !canSaveGroup(currentHosts());
   document.getElementById("grp-del").disabled = currentGroupIndex() < 0;
   document.getElementById("scope-checkup").disabled = checking || !currentHosts().length;
+  fitScopeHeight();
 }
 function showOnly(row) {
   elManage.hidden = row !== elManage; elNameRow.hidden = row !== elNameRow; elConfirm.hidden = row !== elConfirm;
+  fitScopeHeight();
 }
 function clearGroupName() { elName.value = ""; elName.removeAttribute("aria-invalid"); }
 function saveGroup() {

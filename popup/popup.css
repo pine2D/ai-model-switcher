@@ -18,7 +18,7 @@
 }}
 *{box-sizing:border-box}
 body{width:356px;margin:0;background:var(--page);color:var(--text);font:13px/1.4 -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
-#app{padding:12px;border:1px solid var(--edge);border-radius:14px;background:var(--surface)}
+#app{padding:12px;border:1px solid var(--edge);background:var(--surface)}
 button{font:inherit;color:inherit;cursor:pointer;transition:transform .12s var(--ease-out)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .head{display:flex;align-items:center;justify-content:space-between;padding:1px 2px 11px;border-bottom:1px solid var(--edge)}

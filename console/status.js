@@ -46,14 +46,14 @@ function applyResults(results) {
 
 // 逐站实时回填：sendAll 期间每站一完成，background 即推单站结果，立刻更新该站圆点（不等全部）
 let progress = { total: 0, done: 0 };
-let lastSend = null; // {text, tier, hasImage, image}
+let lastSend = null; // {text, tier, hasImage, images}
 const elSend = document.getElementById("send");
 function updateSendLabel() {
   elSend.textContent = (progress.total && progress.done < progress.total) ? t("con_sending", progress.done, progress.total) : t("con_sendAll");
 }
 function updateRetry() {
   const hasFail = [...document.querySelectorAll(".chip.fail")].some((c) => selected[c.dataset.host]);
-  const retryable = lastSend && (!lastSend.hasImage || lastSend.image);
+  const retryable = lastSend && (!lastSend.hasImage || lastSend.images);
   document.getElementById("retry").disabled = !(hasFail && retryable);
 }
 // 短暂内联提示（借 failsum 位；中性色，3s 后交还失败汇总）+ 读屏播报
@@ -117,8 +117,7 @@ function updateFailSum() {
   document.getElementById("live").textContent = el.textContent;
 }
 // 芯片状态的客户端兜底：回调/推送断掉（SW 被杀、扩展重载）时圆点会永久卡"发送中"，
-// 到点仍是 send 态就地翻超时失败。默认 50s：bg 超时 22s×2（timeout 自动重试一轮）必推结果，
-// 正常路径下兜底不会触发。
+// 到点仍是 send 态就地翻超时失败。纯文字默认 50s；图片处理预算 90s，兜底 95s。
 const dotTimers = new Map();
 function clearDotTimeout(host) {
   const timer = dotTimers.get(host);
@@ -144,11 +143,11 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.from !== "AMS_BG") return;
   if (msg.type === "sendStart") {
     ignoreResults = false; // 新一轮群发开始，恢复接收结果
-    const image = msg.hasImage && lastSend && lastSend.text === msg.text ? lastSend.image : null;
-    if (msg.text) lastSend = { text: msg.text, tier: msg.tier || null, hasImage: !!msg.hasImage, image };
+    const images = msg.hasImage && lastSend && lastSend.text === msg.text ? lastSend.images : null;
+    if (msg.text) lastSend = { text: msg.text, tier: msg.tier || null, hasImage: !!msg.hasImage, images };
     progress = { total: msg.hosts.length, done: 0 };
     msg.hosts.forEach((h) => setDot(h, "send", t("con_sendingDot")));
-    armDotTimeouts(msg.hosts);
+    armDotTimeouts(msg.hosts, msg.hasImage ? 95000 : undefined);
     updateSendLabel(); updateRetry(); updateFailSum();
   } else if (msg.type === "siteResult" && msg.result) {
     if (ignoreResults) return; // closeAll 后的迟到结果不复活芯片

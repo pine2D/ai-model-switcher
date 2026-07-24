@@ -91,11 +91,11 @@
 
   // 注入并提交：附件必须先确认；文字按 textarea setter / beforeinput 注入，再走 adapter、按钮或 Enter。
   // 返回 {ok, code?, reason?}，用户文案由 console 按错误码翻译。
-  async function submitPromptNow(text, deadline, image) {
+  async function submitPromptNow(text, deadline, images) {
     let el = findComposer();
     if (!el) return { ok: false, code: "composer_not_found" }; // 失败一律传 code，由 console 端按界面语言翻译
-    if (image) {
-      const upload = window.__AMS.uploadImage && await window.__AMS.uploadImage(image, pickAdapter(), el, deadline);
+    if (images && images.length) {
+      const upload = window.__AMS.uploadImages && await window.__AMS.uploadImages(images, pickAdapter(), el, deadline);
       if (!upload || !upload.ok) return upload || { ok: false, code: "attachment_unsupported" };
       const left = Number(deadline) ? Math.max(0, Number(deadline) - Date.now()) : 3500;
       el = findComposer() || (left ? await waitFor(findComposer, Math.min(3500, left)) : null);
@@ -133,13 +133,14 @@
     await sleep(250);
     if (deadline && Date.now() >= deadline) return { ok: false, code: "timeout" };
     const a = pickAdapter();
+    const confirmUntil = images && images.length ? deadline : 0;
     if (a && typeof a.submit === "function") {
       // 契约：submit 返回 false = 本站发送键此刻未找到/不可用 → 落回下方通用路径（按钮/Enter/校验循环）。
       // 点击成功也要过提交校验：新适配的发送键（div 无 role 等）点了未必生效，不校验就是假成功回归。
       try {
         const before = readText(el);
-        if ((await a.submit(el)) !== false)
-          return (await confirmSubmitted(before)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
+        if ((await a.submit(el, deadline)) !== false)
+          return (await confirmSubmitted(before, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
       } catch (e) { return { ok: false, code: "error", reason: String((e && e.message) || e) }; }
     }
     // 通用提交优先原生发送按钮，无可用按钮再发 Enter；所有路径都用 confirmSubmitted 防假成功。
@@ -148,19 +149,20 @@
     let btn = sendBtn();
     if (btn && !btn.disabled) {
       btn.click();
-      return (await confirmSubmitted(_txtBefore)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
+      return (await confirmSubmitted(_txtBefore, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
     }
     ["keydown", "keypress", "keyup"].forEach((t) =>
       el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
     await sleep(150);
     btn = sendBtn();
     if (btn && !btn.disabled) btn.click(); // Enter 没发出去且按钮可用 → 原生点
-    return (await confirmSubmitted(_txtBefore)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
+    return (await confirmSubmitted(_txtBefore, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
   }
 
   // 提交后输入框可能异步清空或重挂；每轮重取活节点，空或不再等于原文才算成功。
-  async function confirmSubmitted(before) {
-    for (let i = 0; i < 15; i++) {
+  async function confirmSubmitted(before, deadline) {
+    const end = Number(deadline) || Date.now() + 3000;
+    while (Date.now() < end) {
       await sleep(200);
       const composer = findComposer();
       if (!composer) continue;
@@ -180,15 +182,15 @@
   }
 
   // silent=true 时不弹 toast、只返回是否成功（供 switchTier 静默重试）。
-  async function runModeNow(mode, silent) {
-    const a = pickAdapter();
-    if (!a || !a[mode]) return false;
+  async function runModeNow(mode, silent, image) {
+    const a = pickAdapter(), action = image && a && a[mode + "Image"] ? mode + "Image" : mode;
+    if (!a || !a[action]) return false;
     // 站点偶发渲染抖动会导致首次失败：静默重试一次，仍失败才报错
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         escMenus(); // 清掉可能残留的菜单，保证从干净态开始
         await sleep(attempt ? 600 : 150);
-        await a[mode]();
+        await a[action]();
         if (!silent) toast(t(mode === "think" ? "cs_switchedThink" : "cs_switchedFast"), true);
         focusComposer();
         try { document.dispatchEvent(new CustomEvent("ams:switched")); } catch (e) {}
@@ -209,10 +211,10 @@
     return next;
   }
   function runMode(mode, silent) { return serializeInteraction(() => runModeNow(mode, silent)); }
-  function submitPrompt(text, deadline, image) { return serializeInteraction(() => submitPromptNow(text, deadline, image)); }
+  function submitPrompt(text, deadline, images) { return serializeInteraction(() => submitPromptNow(text, deadline, images)); }
 
   // 群发切档用 state() 验证；静默重试到目标档或超时，state 不可读则连续两次无异常视为已尽力。
-  async function switchTier(mode, deadlineMs = 10000) {
+  async function switchTier(mode, deadlineMs = 10000, image) {
     const okMsg = t(mode === "think" ? "cs_switchedThink" : "cs_switchedFast");
     const t0 = Date.now();
     let nullTries = 0;
@@ -222,7 +224,7 @@
       const _s = getState(); if (_s != null) sawReadable = true;
       // state 只表示粗档位，不能证明模型版本/强度/开关均精确；每次群发至少跑一次幂等适配器。
       if (attemptedOk && _s === mode) { toast(okMsg, true); return true; }
-      const switched = await runModeNow(mode, true);                  // 已在交互队列内，直接调用内部实现
+      const switched = await runModeNow(mode, true, image);           // 已在交互队列内，直接调用内部实现
       if (switched) attemptedOk = true;
       await sleep(350);
       const _s2 = getState(); if (_s2 != null) sawReadable = true;
@@ -276,13 +278,15 @@
             const waitMs = deadline ? Math.max(0, Math.min(4000, deadline - Date.now())) : 4000;
             if (!(await waitFor(() => findComposer(), waitMs))) return { host: location.hostname, ok: false, code: "composer_not_found" };
             if (deadline && Date.now() >= deadline) return { host: location.hostname, ok: false, code: "timeout" };
-            let tierOk = true;
-            if (msg.tier === "think" || msg.tier === "fast") {
+            let tierOk = true, tier = msg.tier, images = msg.images || [];
+            const a = pickAdapter(), imageMode = images.length && a && (a.thinkImage || a.fastImage);
+            if (imageMode && tier !== "think" && tier !== "fast") tier = getState() || "fast";
+            if (tier === "think" || tier === "fast") {
               const tierMs = deadline ? Math.max(1, Math.min(10000, deadline - Date.now())) : 10000;
-              tierOk = await switchTier(msg.tier, tierMs); await sleep(200);
+              tierOk = await switchTier(tier, tierMs, !!imageMode); await sleep(200);
             }
             if (deadline && Date.now() >= deadline) return { host: location.hostname, ok: false, code: "timeout" };
-            const r = await submitPromptNow(msg.text || "", deadline, msg.image || null);
+            const r = await submitPromptNow(msg.text || "", deadline, images);
             if (r.ok && !tierOk) r.code = "tier_unconfirmed"; // 提交成功但档位未确认：console 绿点带警示，不再谎报全绿
             return Object.assign({ host: location.hostname }, r);
           } catch (e) { return { host: location.hostname, ok: false, code: "error", reason: String((e && e.message) || e) }; }

@@ -47,9 +47,9 @@ function loadUpload(options = {}) {
     })),
   };
   vm.runInNewContext(fs.readFileSync(file, "utf8"), context);
-  assert.equal(typeof S.uploadImage, "function");
-  assert.equal(typeof S.setInputFile, "function");
-  assert.equal(typeof S.dropFile, "function");
+  assert.equal(typeof S.uploadImages, "function");
+  assert.equal(typeof S.setInputFiles, "function");
+  assert.equal(typeof S.dropFiles, "function");
   return { S, clock };
 }
 function pngPayload(overrides = {}) {
@@ -64,20 +64,20 @@ test("合法 PNG/JPEG 重建 File 后交给 adapter", async () => {
   let decoded = 0;
   const { S, clock } = loadUpload({ createImageBitmap: async () => { decoded++; return { close() {} }; } });
   let received;
-  let result = await S.uploadImage(pngPayload(), {
-    attach: async (file) => { received = file; return true; },
+  let result = await S.uploadImages([pngPayload()], {
+    attach: async (files) => { received = files[0]; return true; },
   }, {}, clock.now + 1000);
   assert.equal(result.ok, true);
   assert.equal(received.name, "polyask-test.png");
   assert.equal(received.type, "image/png");
   assert.equal(received.size, Buffer.from(PNG64, "base64").length);
   const jpg = Buffer.from(JPEG64, "base64");
-  result = await S.uploadImage({
+  result = await S.uploadImages([{
     name: "../polyask-test.jpg",
     type: "image/jpeg",
     size: jpg.length,
     dataUrl: "data:image/jpeg;base64," + jpg.toString("base64"),
-  }, { attach: async (file) => { received = file; return true; } }, {}, clock.now + 1000);
+  }], { attach: async (files) => { received = files[0]; return true; } }, {}, clock.now + 1000);
   assert.equal(result.ok, true);
   assert.equal(received.name, "polyask-test.jpg");
   assert.equal(received.type, "image/jpeg");
@@ -86,36 +86,36 @@ test("合法 PNG/JPEG 重建 File 后交给 adapter", async () => {
 test("非法 MIME、大小和文件签名被拒绝", async () => {
   const { S, clock } = loadUpload();
   const deadline = clock.now + 1000;
-  let result = await S.uploadImage(pngPayload({ type: "image/jpeg" }), {}, {}, deadline);
+  let result = await S.uploadImages([pngPayload({ type: "image/jpeg" })], {}, {}, deadline);
   assert.equal(result.code, "image_invalid");
-  result = await S.uploadImage(pngPayload({
+  result = await S.uploadImages([pngPayload({
     size: 3,
     dataUrl: "data:image/png;base64," + Buffer.from("bad").toString("base64"),
-  }), {}, {}, deadline);
+  })], {}, {}, deadline);
   assert.equal(result.code, "image_invalid");
-  result = await S.uploadImage(pngPayload({ size: 0 }), {}, {}, deadline);
+  result = await S.uploadImages([pngPayload({ size: 0 })], {}, {}, deadline);
   assert.equal(result.code, "image_invalid");
-  result = await S.uploadImage(pngPayload({ size: 10 * 1024 * 1024 + 1 }), {}, {}, deadline);
+  result = await S.uploadImages([pngPayload({ size: 10 * 1024 * 1024 + 1 })], {}, {}, deadline);
   assert.equal(result.code, "image_invalid");
   const brokenJpeg = Buffer.from([255, 216, 255, 217]);
-  result = await loadUpload({ createImageBitmap: async () => { throw new Error("decode"); } }).S.uploadImage({
+  result = await loadUpload({ createImageBitmap: async () => { throw new Error("decode"); } }).S.uploadImages([{
     name: "broken.jpg", type: "image/jpeg", size: brokenJpeg.length,
     dataUrl: "data:image/jpeg;base64," + brokenJpeg.toString("base64"),
-  }, { attach: async () => true }, {}, deadline);
+  }], { attach: async () => true }, {}, deadline);
   assert.equal(result.code, "image_invalid");
 });
 test("adapter 缺失、失败、异常和超时使用稳定错误码", async () => {
   const { S, clock } = loadUpload();
-  let result = await S.uploadImage(pngPayload(), {}, {}, clock.now + 1000);
+  let result = await S.uploadImages([pngPayload()], {}, {}, clock.now + 1000);
   assert.equal(result.code, "attachment_unsupported");
-  result = await S.uploadImage(pngPayload(), { attach: async () => false }, {}, clock.now + 1000);
+  result = await S.uploadImages([pngPayload()], { attach: async () => false }, {}, clock.now + 1000);
   assert.equal(result.code, "attachment_failed");
-  result = await S.uploadImage(pngPayload(), { attach: async () => "attachment_action_required" }, {}, clock.now + 1000); assert.equal(result.code, "attachment_action_required");
-  result = await S.uploadImage(pngPayload(), {
+  result = await S.uploadImages([pngPayload()], { attach: async () => "attachment_action_required" }, {}, clock.now + 1000); assert.equal(result.code, "attachment_action_required");
+  result = await S.uploadImages([pngPayload()], {
     attach: async () => { throw new Error("probe"); },
   }, {}, clock.now + 1000);
   assert.equal(result.code, "attachment_failed");
-  result = await S.uploadImage(pngPayload(), { attach: async () => true }, {}, clock.now - 1);
+  result = await S.uploadImages([pngPayload()], { attach: async () => true }, {}, clock.now - 1);
   assert.equal(result.code, "attachment_timeout");
 });
 function previewEnvironment(showPreview, showBusy = () => false) {
@@ -140,7 +140,7 @@ test("file input 事件后等待稳定附件预览", async () => {
   const { S, clock } = loadUpload({ document: env.document, onSleep: (now) => { if (now >= 1600) busy = false; } });
   const events = [];
   const input = { files: [], dispatchEvent: (event) => { events.push(event.type); if (event.type === "change") { shown = true; busy = true; } } };
-  const ok = await S.setInputFile(input, { name: "other.png" }, env.composer, clock.now + 2000);
+  const ok = await S.setInputFiles(input, [{ name: "probe.png" }], env.composer, clock.now + 2000);
   assert.equal(ok, true);
   assert.deepEqual(events, ["input", "change"]); assert.ok(clock.now >= 2000);
   assert.equal(input.files.length, 1);
@@ -151,7 +151,7 @@ test("drop 事件链后等待稳定附件预览", async () => {
   const { S, clock } = loadUpload({ document: env.document });
   const events = [];
   const target = { dispatchEvent: (event) => { events.push(event.type); if (event.type === "drop") shown = true; } };
-  const ok = await S.dropFile(target, { name: "probe.png" }, env.composer, clock.now + 1000);
+  const ok = await S.dropFiles(target, [{ name: "probe.png" }], env.composer, clock.now + 1000);
   assert.equal(ok, true);
   assert.deepEqual(events, ["dragenter", "dragover", "drop"]);
 });
@@ -160,7 +160,7 @@ test("文件名匹配的新预览不受页面常驻 loading 误判", async () =>
   const env = previewEnvironment(() => shown, () => true);
   const { S, clock } = loadUpload({ document: env.document });
   const input = { files: [], dispatchEvent: (event) => { if (event.type === "change") shown = true; } };
-  const ok = await S.setInputFile(input, { name: "probe.png" }, env.composer, clock.now + 1000);
+  const ok = await S.setInputFiles(input, [{ name: "probe.png" }], env.composer, clock.now + 1000);
   assert.equal(ok, true);
 });
 test("upload content script 在 core 之后、adapter 之前加载", () => {
@@ -181,11 +181,11 @@ function loadAdapters() {
     clickEl: () => {},
     sleep: async () => {},
     escMenus: () => {},
-    setInputFile: (target, file, composer, deadline) => {
-      calls.push({ kind: "input", target, file, composer, deadline }); return true;
+    setInputFiles: (target, files, composer, deadline) => {
+      calls.push({ kind: "input", target, files, composer, deadline }); return true;
     },
-    dropFile: (target, file, composer, deadline) => {
-      calls.push({ kind: "drop", target, file, composer, deadline }); return true;
+    dropFiles: (target, files, composer, deadline) => {
+      calls.push({ kind: "drop", target, files, composer, deadline }); return true;
     },
   };
   const context = vm.createContext({
@@ -211,14 +211,14 @@ test("九站 attach 只选择入口并复用共享上传 helper", async () => {
   };
   for (const host of ["gemini.google.com", "qianwen.com", "chatglm.cn"])
     assert.equal(S.adapters[host].attach, undefined, host + " 应明确报 unsupported");
-  const file = { name: "probe.png" }, composer = { kind: "composer" }, deadline = 9000;
+  const files = [{ name: "probe.png" }], composer = { kind: "composer" }, deadline = 9000;
   for (const [host, kind] of Object.entries(expected)) {
     assert.equal(typeof S.adapters[host].attach, "function", host + " 应实现 attach");
     calls.length = 0;
-    assert.equal(await S.adapters[host].attach(file, composer, deadline), true);
+    assert.equal(await S.adapters[host].attach(files, composer, deadline), true);
     assert.equal(calls[0].kind, kind, host + " 应使用正确上传入口");
     assert.equal(calls[0].target, kind === "input" ? input : host === "gemini.google.com" ? drop : composer);
-    assert.equal(calls[0].file, file);
+    assert.equal(calls[0].files, files);
     assert.equal(calls[0].composer, composer);
     assert.equal(calls[0].deadline, deadline);
   }
@@ -237,9 +237,9 @@ test("图片只进入 tab 消息，sendStart 仅广播 hasImage", async () => {
       },
     },
   };
-  const image = { name: "probe.png", type: "image/png", size: 8, dataUrl: "data:image/png;base64,probe" };
+  const images = [{ name: "probe.png", type: "image/png", size: 8, dataUrl: "data:image/png;base64,probe" }];
   const context = vm.createContext({
-    chrome, image, URL, console, setTimeout, clearTimeout,
+    chrome, images, URL, console, setTimeout, clearTimeout,
     getWindows: async () => ({}),
     popupWindowForHost: async () => 1,
     tabsForHost: async () => [{ id: 9 }],
@@ -251,24 +251,24 @@ test("图片只进入 tab 消息，sendStart 仅广播 hasImage", async () => {
   });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "bg/broadcast.js"), "utf8"), context);
   const results = await vm.runInContext(
-    'sendAll([{host:"chatgpt.com"}], "probe", null, false, currentSendEpoch(), image)', context
+    'sendAll([{host:"chatgpt.com"}], "probe", null, false, currentSendEpoch(), images)', context
   );
   const start = broadcasts.find((message) => message.type === "sendStart");
   const submit = tabMessages.find((message) => message.cmd === "submitPrompt");
   assert.equal(start.hasImage, true);
-  assert.equal(Object.hasOwn(start, "image"), false);
-  assert.equal(submit.image, image);
+  assert.equal(Object.hasOwn(start, "images"), false);
+  assert.equal(submit.images, images);
   assert.equal(results[0].code, "attachment_failed");
   assert.equal(tabMessages.filter((message) => message.cmd === "submitPrompt").length, 1);
 });
 test("Console 提供内存图片入口、携图重试和错误码", () => {
   const html = fs.readFileSync(path.join(ROOT, "console/console.html"), "utf8");
-  const ui = fs.readFileSync(path.join(ROOT, "console/console.js"), "utf8");
+  const ui = fs.readFileSync(path.join(ROOT, "console/console.js"), "utf8"), images = fs.readFileSync(path.join(ROOT, "console/images.js"), "utf8");
   const status = fs.readFileSync(path.join(ROOT, "console/status.js"), "utf8");
   assert.match(html, /id="image"[\s\S]*aria-pressed="false"/);
   assert.match(html, /id="image-input"[^>]*accept="image\/png,image\/jpeg"/);
-  assert.match(ui, /new FileReader\(\)/); assert.match(ui, /clipboardData\.files/); assert.match(ui, /image:\s*lastSend\.image/);
-  assert.match(status, /!lastSend\.hasImage\s*\|\|\s*lastSend\.image/);
+  assert.match(images, /new FileReader\(\)/); assert.match(images, /clipboardData\.files/); assert.match(ui, /images:\s*lastSend\.images/);
+  assert.match(status, /!lastSend\.hasImage\s*\|\|\s*lastSend\.images/);
   for (const code of ["image_invalid", "attachment_unsupported", "attachment_failed", "attachment_timeout", "attachment_action_required"]) assert.ok(status.includes(code));
 });
 test("站点范围按固定顺序提供由 SITES 派生的内置分类", () => {

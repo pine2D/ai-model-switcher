@@ -2,11 +2,6 @@ const elSites = document.getElementById("sites");
 const elTier = document.getElementById("tier");
 const elTierButtons = [...document.querySelectorAll("#tierbuttons [data-tier]")];
 const elPrompt = document.getElementById("prompt");
-const elImage = document.getElementById("image");
-const elImageInput = document.getElementById("image-input");
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-let pendingImage = null;
 let selected = {};
 // 细条历史与范围/档位控件拆在 console/library.js（本文件之前加载，classic script 共享全局）
 
@@ -135,53 +130,23 @@ document.getElementById("tile").addEventListener("click", (e) => {
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openTile", sites }, (resp) => { free(); applyResults(resp && resp.results); });
 });
 function markInvalid(el) { el.setAttribute("aria-invalid", "true"); el.focus(); }
-function setPendingImage(file, announce = true) {
-  pendingImage = file || null;
-  elImage.dataset.set = pendingImage ? "true" : "false";
-  elImage.setAttribute("aria-pressed", pendingImage ? "true" : "false");
-  const detail = pendingImage ? pendingImage.name + " · " + (pendingImage.size / 1048576).toFixed(1) + " MiB" : "";
-  const label = pendingImage ? t("con_imageRemove", detail) : t("con_imageAdd");
-  elImage.title = label; elImage.setAttribute("aria-label", label);
-  if (announce) flashNote(t(pendingImage ? "con_imageAdded" : "con_imageRemoved", pendingImage ? pendingImage.name : ""));
-}
-function chooseImage(file) {
-  if (!file || !IMAGE_TYPES.has(file.type)) { flashNote(t("con_imageType")); return false; }
-  if (file.size < 1 || file.size > MAX_IMAGE_BYTES) { flashNote(t("con_imageSize")); return false; }
-  setPendingImage(file); return true;
-}
-function imagePayload(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, dataUrl: reader.result });
-    reader.onerror = reject; reader.readAsDataURL(file);
-  });
-}
-elImage.addEventListener("click", () => {
-  if (pendingImage) setPendingImage(null);
-  else { elImageInput.value = ""; elImageInput.click(); }
-});
-elImageInput.addEventListener("change", () => chooseImage(elImageInput.files[0]));
-elPrompt.addEventListener("paste", (e) => {
-  const file = [...((e.clipboardData && e.clipboardData.files) || [])][0];
-  if (file && file.type.startsWith("image/")) chooseImage(file);
-});
 document.getElementById("send").addEventListener("click", async () => {
   if (elSend.disabled) return;                       // in-flight 防双发/双 Enter
   const sites = chosen(); if (!sites.length) { markInvalid(document.getElementById("group")); return; }
   const text = elPrompt.value.trim(); if (!text) { markInvalid(elPrompt); return; }
   elSend.disabled = true;
-  const sentImage = pendingImage;
-  let image = null;
-  try { if (sentImage) image = await imagePayload(sentImage); }
+  const sentImages = pendingImages;
+  let images = [];
+  try { if (sentImages.length) images = await imagePayloads(sentImages); }
   catch (e) { elSend.disabled = false; flashNote(t("con_imageRead")); return; }
   pushHistory(text);
-  lastSend = { text, tier: elTier.value || null, hasImage: !!image, image };
-  const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, 48000); // 兜底复位（bg 22s×2 重试窗之外）
+  lastSend = { text, tier: elTier.value || null, hasImage: images.length > 0, images };
+  const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, images.length ? 95000 : 48000);
   sites.forEach((s) => setDot(s.host, "send", t("con_sendingTile")));
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, image }, (resp) => {
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images }, (resp) => {
     clearTimeout(reEnableTimer); elSend.disabled = false; applyResults(resp && resp.results);
   });
-  if (pendingImage === sentImage) setPendingImage(null, false);
+  if (pendingImages === sentImages) setPendingImages([], false);
 });
 document.getElementById("collect").addEventListener("click", () => {
   const sites = chosen(); if (!sites.length) return;
@@ -243,13 +208,13 @@ document.getElementById("compose").addEventListener("click", () => {
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openCompose", anchor: { left: r.left, width: r.width } });
 });
 document.getElementById("retry").addEventListener("click", (e) => {
-  if (!lastSend || (lastSend.hasImage && !lastSend.image)) return;
+  if (!lastSend || (lastSend.hasImage && !lastSend.images)) return;
   const sel = new Set(chosen().map((s) => s.host));   // 只重发"仍勾选且失败"的站
   const failHosts = [...document.querySelectorAll(".chip.fail")].map((c) => c.dataset.host).filter((h) => sel.has(h));
   const sites = SITES.filter((s) => failHosts.includes(s.host));
   if (!sites.length) return;
   const free = busy(e.currentTarget);
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, image: lastSend.image || null, tile: false }, (resp) => { free(); applyResults(resp && resp.results); });
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, images: lastSend.images || [], tile: false }, (resp) => { free(); applyResults(resp && resp.results); });
 });
 
 // 伴侣窗编辑 → 经 storage 回填细条输入框（本框未编辑时才更新，防回环）

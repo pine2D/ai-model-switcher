@@ -111,8 +111,8 @@
         if (this._isEmbedLocked()) throw new Error("Claude 在 iframe 中被官方限制为 haiku，档位不可切换（请在独立标签使用）");
         await this._selectModel(/sonnet\s*5/i);
       },
-      attach: function (file, el, deadline) {
-        return S.setInputFile(document.querySelector('input[data-testid="file-upload"]'), file, el, deadline);
+      attach: function (files, el, deadline) {
+        return S.setInputFiles(document.querySelector('input[data-testid="file-upload"]'), files, el, deadline);
       },
     },
 
@@ -190,8 +190,8 @@
       },
       think: async function () { await this._selectModel(/^GPT-5\.6\s*Sol$/i); await this._pickEdge(true); },
       fast: async function () { await this._selectModel(/^GPT-5\.6\s*Sol$/i); await this._pickEdge(false); },
-      attach: function (file, el, deadline) {
-        return S.setInputFile(document.querySelector("#upload-photos"), file, el, deadline);
+      attach: function (files, el, deadline) {
+        return S.setInputFiles(document.querySelector("#upload-photos"), files, el, deadline);
       },
       stop: function () {
         const b = document.querySelector('[data-testid="stop-button"]') ||
