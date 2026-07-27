@@ -42,6 +42,7 @@
 | 元宝 (yuanbao.tencent.com) | Deep Thinking 开 | Deep Thinking 关 |
 | 智谱清言 (chatglm.cn) | 深度思考：深度 | 快速 |
 
+> Claude 手动选择 Opus 5 时，High / Extra / Max 识别为深度思考，Low 或无 effort 后缀识别为快速；悬浮按钮的主动映射仍按上表执行。
 > 站点 UI 改版可能导致个别适配失效；适配逻辑集中在 `content/adapters-intl.js`（国际站）与 `content/adapters-cn.js`+`adapters-cn2.js`（国内站），按文本/语义属性匹配，UI 词支持中英双语界面（其他语言不保证）。
 > 怀疑失效时：扩展图标 →「🩺 诊断当前站点」，逐项检查控件是否仍能找到（只读、零副作用）。
 

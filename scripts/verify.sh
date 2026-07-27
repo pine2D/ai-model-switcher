@@ -26,6 +26,9 @@ echo "[test] 后台安全边界与控制台交互"
 node scripts/test-background.js
 node scripts/test-console-polish.js
 
+echo "[test] 站点模型适配"
+node scripts/test-claude-model.js
+
 echo "[test] 图片载荷与群发消息契约"
 node scripts/test-image.js
 node scripts/test-image-runtime.js

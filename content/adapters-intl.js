@@ -81,14 +81,14 @@
         ];
       },
       // think = Fable 5 High；fast = Sonnet 5（快模型，使用该模型默认设置）。
-      // 判档：模型名带 sonnet/haiku 恒 fast；Fable/Opus 再按 thinking/effort 后缀（Adaptive/High=think，Low/无后缀=fast，其余 effort 不判）
+      // 判档：模型名带 sonnet/haiku 恒 fast；Fable/Opus 再按 thinking/effort 后缀（Adaptive/High/Extra/Max=think，Low/无后缀=fast，其余 effort 不判）
       state: function () {
         if (this._isEmbedLocked()) return null; // 受限态：不谎报 "fast"，HUD 不亮琥珀
         const t = this._label();
         if (!t) return null;
         if (/sonnet|haiku/i.test(t)) return "fast";
         if (!/fable|opus/i.test(t)) return null;
-        if (/adaptive|high|高/i.test(t)) return "think";
+        if (/adaptive|high|extra|max|高|最大/i.test(t)) return "think";
         if (/\blow\b|低/i.test(t)) return "fast";
         if (/(?:fable|opus)\s*[\d.]+$/i.test(t.trim())) return "fast"; // 窄屏思考关：无后缀
         return null;
