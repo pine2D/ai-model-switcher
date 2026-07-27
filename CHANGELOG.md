@@ -8,8 +8,15 @@
 
 ## [未发布]
 
+## [0.13.0] - 2026-07-27
+
+### 新增
+
+- 支持一次群发最多 4 张图片
+
 ### 修复
 
+- 修复内置站点分组可被重复保存并显示的问题
 - 补齐 Claude Opus 5 Extra/Max 档位识别，手动切换后悬浮控件不再显示未知状态
 
 ## [0.12.0] - 2026-07-23
@@ -297,7 +304,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.12.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/pine2D/polyask/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/pine2D/polyask/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/pine2D/polyask/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/pine2D/polyask/compare/v0.9.2...v0.10.0
