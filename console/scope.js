@@ -55,10 +55,12 @@ function applyHosts(hosts) {
 
 // SCOPE_LOGIC_START — scripts/test-background.js 直接执行这段选择逻辑。
 function groupSignature(hosts) { return hosts.slice().sort().join(","); }
+const PRESET_SIGNATURES = new Set([ALL_HOSTS, IMAGE_HOSTS, INTL_HOSTS, DOMESTIC_HOSTS].map(groupSignature));
+function isPresetGroup(group) { return PRESET_SIGNATURES.has(groupSignature(group.hosts)); }
 function canSaveGroup(hosts) {
-  if (!hosts.length) return false;
+  if (!hosts.length || isPresetGroup({ hosts })) return false;
   const signature = groupSignature(hosts);
-  return ![{ hosts: ALL_HOSTS }, { hosts: [] }, ...groups].some((group) => groupSignature(group.hosts) === signature);
+  return !groups.some((group) => groupSignature(group.hosts) === signature);
 }
 function setSiteSelected(host, on) {
   if (!ALL_HOSTS.includes(host)) return false;
@@ -68,7 +70,7 @@ function setSiteSelected(host, on) {
 
 function currentGroupIndex() {
   const signature = groupSignature(currentHosts());
-  return groups.findIndex((group) => groupSignature(group.hosts) === signature);
+  return groups.findIndex((group) => !isPresetGroup(group) && groupSignature(group.hosts) === signature);
 }
 function renderScope() {
   document.getElementById("scope-count").textContent = t("con_scopeCount", currentHosts().length, SITES.length);
@@ -88,7 +90,7 @@ function renderScope() {
     label.append(input, name, status); sites.appendChild(label);
   });
   const saved = document.getElementById("scope-groups"); saved.replaceChildren();
-  groups.forEach((group) => {
+  groups.filter((group) => !isPresetGroup(group)).forEach((group) => {
     const button = document.createElement("button"); button.type = "button"; button.textContent = group.name; button.title = group.name;
     button.addEventListener("click", () => applyHosts(group.hosts)); saved.appendChild(button);
   });

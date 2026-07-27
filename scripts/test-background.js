@@ -103,14 +103,15 @@ function testScopeControls() {
   const selected = { a: true, b: false, c: false };
   let saves = 0, renders = 0;
   const context = vm.createContext({
-    ALL_HOSTS: ["a", "b", "c"], selected, groups: [{ name: "A", hosts: ["a"] }],
+    ALL_HOSTS: ["a", "b", "c"], IMAGE_HOSTS: ["a", "c"], INTL_HOSTS: ["a"], DOMESTIC_HOSTS: ["b", "c"], selected, groups: [{ name: "B", hosts: ["b"] }],
     persistSelection: () => { saves++; }, renderScope: () => { renders++; },
   });
   vm.runInContext(js.slice(start, end), context);
   assert.equal(context.canSaveGroup([]), false, "空选择不能保存为分组");
-  assert.equal(context.canSaveGroup(["a"]), false, "与已有分组重复的选择不能保存");
+  assert.equal(context.canSaveGroup(["b"]), false, "与已有分组重复的选择不能保存");
   assert.equal(context.canSaveGroup(["c", "b", "a"]), false, "全部站点不能重复保存为分组");
-  assert.equal(context.canSaveGroup(["b"]), true, "新选择可以保存为分组");
+  assert.equal(context.canSaveGroup(["a"]), false, "国外预设不能重复保存为分组"); assert.equal(context.canSaveGroup(["b", "c"]), false, "国内预设不能重复保存为分组");
+  assert.equal(context.canSaveGroup(["c"]), true, "新选择可以保存为分组"); assert.match(js, /groups\.filter\(\(group\) => !isPresetGroup\(group\)\)/, "历史预设重复项不应继续渲染");
   assert.equal(context.setSiteSelected("b", true), true, "已知站点应可连续切换");
   assert.equal(selected.b, true); assert.equal(saves, 1); assert.equal(renders, 1);
   assert.equal(context.setSiteSelected("missing", true), false, "未知站点不得写入选择");
