@@ -1,6 +1,6 @@
 // console/library.js — 细条输入历史与范围/档位控件；模板库已归入 compose 独立窗。
 
-let history = [];
+let history = []; // 仅细条内存快捷缓存；完整历史在 IndexedDB，20 条不是数据上限。
 let histCursor = -1; // -1 = 未在浏览历史
 let histDraft = ""; // 进入历史浏览前的未发送草稿（↓ 回到 -1 时还原）
 function pushHistory(text) {

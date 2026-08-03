@@ -35,5 +35,10 @@ node scripts/test-image-runtime.js
 node scripts/test-multi-image.js
 node scripts/test-transfer.js
 
+echo "[test] Google Drive 同步"
+node scripts/test-sync-model.js
+node scripts/test-sync-runtime.js
+node scripts/test-sync-ui.js
+
 git diff --check
 echo "[verify] 全部通过"
