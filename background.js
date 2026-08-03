@@ -7,26 +7,8 @@ let composeWinId = null;
 let scopeWinId = null;       // 站点范围伴侣窗（失焦即关，不改变 console 高度）
 let archiveWinId = null;     // 归档查看窗（与伴侣窗同款受管：随 console 联动、closeAll 一起关）
 let raiseTimer = null;       // consoleFocused 抬窗去抖句柄（见 scheduleRaise）
-let archiveChain = Promise.resolve(); // 归档追加/删除串行，避免两个页面 get→set 丢更新
-
-importScripts("bg/windows.js", "bg/panels.js", "bg/broadcast.js");
-
-function mutateArchive(mutator) {
-  const task = archiveChain.then(async () => {
-    const o = await new Promise((resolve) => chrome.storage.local.get("amsArchive", resolve));
-    const next = mutator((o && o.amsArchive) || []);
-    await new Promise((resolve) => chrome.storage.local.set({ amsArchive: next }, resolve));
-  });
-  archiveChain = task.then(() => {}, () => {});
-  return task;
-}
-function addArchive(entry) {
-  return mutateArchive((arr) => {
-    const hosts = (entry.results || []).map((r) => r.host).join("\n");
-    if (arr[0] && arr[0].text === entry.text && (arr[0].results || []).map((r) => r.host).join("\n") === hosts) arr = arr.slice(1);
-    return [entry, ...arr].slice(0, 30);
-  });
-}
+importScripts("bg/windows.js", "bg/panels.js", "bg/broadcast.js",
+  "bg/sync-model.js", "bg/store.js", "bg/data.js");
 
 // 窗口 id 仅本次浏览器会话有效：重启后 id 重排，陈旧登记可能撞上无关 popup（如 OAuth 弹窗）
 // 被误关/误收编——按 id 的操作只验 type 无法防住 popup 撞 popup，故启动时一律清空登记。
@@ -129,8 +111,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.action === "checkup") { serializeOp(() => checkupAll(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "collect") { collectAll(msg.sites || []).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; } // 只读收集回答，同上
-  if (msg.action === "archiveAdd") { addArchive(msg.entry || {}).then(() => sendResponse({}), () => sendResponse({})); return true; }
-  if (msg.action === "archiveDelete") { mutateArchive((arr) => arr.filter((e) => e.ts !== msg.ts)).then(() => sendResponse({}), () => sendResponse({})); return true; }
   // 回应完成时刻：console 据此解除按钮忙碌态（操作可能在串行链里排队最长 ~22s，无反馈像卡死）
   if (msg.action === "closeAll") { cancelPendingSends(); serializeOp(closeAll).then(() => sendResponse({}), () => sendResponse({})); return true; }
   if (msg.action === "newSession") { cancelPendingSends(); serializeOp(() => newSessionAll(msg.sites || [])).then(() => sendResponse({}), () => sendResponse({})); return true; }
