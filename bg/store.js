@@ -130,6 +130,12 @@ const SyncStore = (() => {
     }
     await completion;
   }
+  async function markFile(fileId, seenAt) {
+    if (!fileId) return;
+    const db = await open(), tx = db.transaction("files", "readwrite"), store = tx.objectStore("files"), completion = done(tx);
+    const current = await request(store.get(fileId)); store.put({ ...current, fileId, seenAt });
+    await completion;
+  }
   const has = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
   function sameEntityVersion(kind, current, expected) {
     if (!current || current.fileId !== expected.fileId || current.deviceId !== expected.deviceId) return false;
@@ -194,6 +200,6 @@ const SyncStore = (() => {
     enqueue, readyOutbox, completeOutbox, countOutbox,
     putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
     deleteFile: (fileId) => erase("files", fileId),
-    setEntityFile, hydrateEntity, trimBodies, iterate, next,
+    setEntityFile, markFile, hydrateEntity, trimBodies, iterate, next,
   };
 })();

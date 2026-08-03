@@ -54,11 +54,12 @@ function syncRuntime({ entityKind = "archive", readOnly = false, duplicate = fal
     completeOutbox: async (key, revision) => { if (outbox.get(key)?.revision === revision) outbox.delete(key); }, countOutbox: async () => outbox.size,
     getHistory: async (id) => records.get(`history:${id}`), putHistory: async (value) => records.set(`history:${value.id}`, value),
     getArchive: async (id) => records.get(`archive:${id}`), putArchive: async (value) => records.set(`archive:${value.id}`, value),
-    putFile: async (file) => files.set(file.fileId, file), getFile: async (id) => files.get(id), deleteFile: async (id) => files.delete(id),
+    putFile: async (file) => files.set(file.fileId, file), getFile: async (id) => files.get(id), markFile: async (id, seenAt) => files.set(id, { ...files.get(id), fileId: id, seenAt }), deleteFile: async (id) => files.delete(id),
     findFile: async (key) => [...files.values()].filter((file) => file.logicalKey === key).sort((a, b) => a.fileId.localeCompare(b.fileId))[0],
     setEntityFile: async (kind, id, fileId, expected, ownerId) => {
       const key = `${kind}:${id}`, value = records.get(key);
-      if (value && (expected === undefined || value.fileId === expected)) records.set(key, { ...value, ...(fileId ? { fileId } : {}), ...(ownerId ? { deviceId: ownerId } : {}) });
+      if (value && (expected === undefined || value.fileId === expected)) { const next = { ...value, ...(ownerId ? { deviceId: ownerId } : {}) };
+        if (fileId) next.fileId = fileId; else delete next.fileId; records.set(key, next); }
     }, hydrateEntity: async (kind, id, expected, body) => {
       const key = `${kind}:${id}`, current = records.get(key), owns = (value, field) => Object.hasOwn(value || {}, field);
       const same = current?.fileId === expected.fileId && current?.deviceId === expected.deviceId && (kind === "history" ?
@@ -118,7 +119,7 @@ function syncRuntime({ entityKind = "archive", readOnly = false, duplicate = fal
   if (entityKind === "history") records.set("history:a", { id: "a", textHash: "a", text: "old", createdAt: 1, lastUsedAt: 1, deviceId: "device" });
   if (entityKind === "archive") records.set("archive:a", { id: "a", text: "old", results: [], createdAt: 1, updatedAt: 1, deviceId: "device" });
   if (deadFile) records.set("archive:a", { id: "a", createdAt: 1, fileId: "dead" });
-  return { sync: scope.sync, store, data, drive, outbox, records, files, uploads, downloads, notes, local, timers,
+  return { sync: scope.sync, store, data, drive, outbox, records, files, uploads, downloads, notes, local, meta, timers,
     waitUpload: async () => { while (!release) await new Promise(setImmediate); }, release: () => release(),
     update: async () => {
       if (entityKind === "state") deviceState = { ...deviceState, settings: { amsTheme: { value: "new", updatedAt: 2, deviceId: "device" } } };
@@ -225,6 +226,20 @@ async function main() {
   assert.equal((await newerHistory.sync.resolveHistory(historyId2)).lastUsedAt, 2, "history 同 fileId 的新裁剪版本也必须按版本 CAS 重读");
   assert.equal(historyReads, 2);
 
+  const staleArchive = syncRuntime(); staleArchive.outbox.clear(); let staleArchiveReads = 0;
+  staleArchive.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, fileId: "same", deviceId: "d" });
+  staleArchive.drive.download = async () => { if (++staleArchiveReads > 2) throw { code: "too_many_reads" };
+    return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "old", results: [], deviceId: "d" }; };
+  await assert.rejects(staleArchive.sync.resolveArchive("a"), (error) => error.code === "stale_body", "archive 持续旧正文必须有限重试后终止");
+  assert.equal(staleArchiveReads, 2);
+
+  const staleHistory = syncRuntime(); staleHistory.outbox.clear(); staleHistory.records.clear(); let staleHistoryReads = 0;
+  staleHistory.records.set(`history:${historyId2}`, { id: historyId2, textHash: historyId2, createdAt: 1, lastUsedAt: 2, fileId: "history-file", deviceId: "d" });
+  staleHistory.drive.download = async () => { if (++staleHistoryReads > 2) throw { code: "too_many_reads" };
+    return { schema: 1, id: historyId2, textHash: historyId2, text: historyText, createdAt: 1, lastUsedAt: 1, deviceId: "d" }; };
+  await assert.rejects(staleHistory.sync.resolveHistory(historyId2), (error) => error.code === "stale_body", "history 持续旧正文必须有限重试后终止");
+  assert.equal(staleHistoryReads, 2);
+
   const sticky = syncRuntime({ readOnly: true }); await sticky.sync.connect();
   assert.equal((await sticky.sync.status()).readOnly, true, "auth reconnect 不得清 schema readOnly");
   assert.equal(sticky.uploads.length, 0, "空 changes 不能解除只读并上传");
@@ -238,6 +253,14 @@ async function main() {
   missingState.drive.visitChanges = async (_token, visit) => { await visit({ file: { id: "dead", appProperties: { app: "polyask", schema: "1", kind: "state", id: "remote" } } }); return { newStartPageToken: "next" }; };
   await missingState.sync.runNow();
   assert.equal(Object.hasOwn(await missingState.store.getMeta("remoteStates"), "dead"), false, "state 404 必须移出远端物化集合");
+
+  const orphanedPull = syncRuntime(); orphanedPull.outbox.clear(); orphanedPull.files.clear(); orphanedPull.meta.delete("pageToken");
+  orphanedPull.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "dead", deviceId: "d" });
+  orphanedPull.drive.visitFiles = async (visit) => visit({ id: "dead", appProperties: { app: "polyask", schema: "1", kind: "archive", id: "a" } });
+  orphanedPull.drive.download = async () => { throw { code: "not_found", status: 404 }; };
+  await orphanedPull.sync.connect();
+  assert.equal(Object.hasOwn(orphanedPull.records.get("archive:a"), "fileId"), false, "无旧索引的扫描 404 仍必须清除实体死引用");
+  assert.equal(orphanedPull.files.get("dead").logicalKey, undefined, "404 后只能保留无 logicalKey 的扫描 marker");
 
   const invalidRemote = syncRuntime(); invalidRemote.outbox.clear();
   invalidRemote.drive.visitChanges = async (_token, visit) => { await visit({ file: { id: "invalid", appProperties: { app: "polyask", schema: "1", kind: "history", id: "invalid", device: "d" } } }); return { newStartPageToken: "next" }; };

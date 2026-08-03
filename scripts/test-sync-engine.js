@@ -2,13 +2,15 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 
-function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false } = {}) {
-  const meta = new Map(), index = new Map(), outbox = new Map(queued.map((op) => [op.key, op]));
+function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false } = {}) {
+  const meta = new Map(), index = new Map(indexed.map((file) => [file.logicalKey, file])), outbox = new Map(queued.map((op) => [op.key, op]));
   const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [];
   const deviceState = { schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {}, ...device }; let listener, notes = 0, activeChanges = changes;
   const store = {
     getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
-    putFile: async (file) => index.set(file.logicalKey, file), findFile: async (key) => index.get(key), getFile: async (id) => [...index.values()].find((file) => file.fileId === id),
+    putFile: async (file) => { index.delete(`@${file.fileId}`); index.set(file.logicalKey, file); }, findFile: async (key) => index.get(key), getFile: async (id) => [...index.values()].find((file) => file.fileId === id),
+    markFile: async (id, seenAt) => { const current = [...index.values()].find((file) => file.fileId === id);
+      if (current) current.seenAt = seenAt; else index.set(`@${id}`, { fileId: id, seenAt }); },
     deleteFile: async (id) => { for (const [key, file] of index) if (file.fileId === id) index.delete(key); },
     iterate: async (kind, visit) => { if (kind === "files") for (const file of index.values()) await visit(file); },
     readyOutbox: async (now, limit) => [...outbox.values()].filter((op) => op.nextAt <= now).slice(0, limit),
@@ -65,6 +67,24 @@ module.exports = async function testSyncEngine() {
   await unknownRemoval.sync.connect();
   assert.deepEqual(unknownRemoval.seeds, [false], "未知 removal 不得把仍有 PolyAsk 文件的云端误判为空");
 
+  const future = { id: "future", appProperties: { app: "polyask", schema: "2", kind: "state", id: "future" } };
+  const futureRemoval = runtime({ listed: [future], changes: [{ fileId: "future", removed: true }] });
+  await futureRemoval.sync.connect(); assert.deepEqual(futureRemoval.seeds, [true], "高 schema 文件随后 removal 时云端应判空");
+  const invalidRemoval = runtime({ listed: [{ id: "invalid", appProperties: { app: "polyask", schema: "1", kind: "history", id: "invalid", device: "d" } }],
+    changes: [{ fileId: "invalid", removed: true }], bodies: { invalid: { schema: 1 } } });
+  await invalidRemoval.sync.connect(); assert.deepEqual(invalidRemoval.seeds, [true], "损坏正文随后 removal 时云端应判空");
+  const missingRemoval = runtime({ listed: [{ id: "missing", appProperties: { app: "polyask", schema: "1", kind: "state", id: "missing" } }],
+    changes: [{ fileId: "missing", removed: true }], bodies: { missing: { throw: { code: "not_found", status: 404 } } } });
+  await missingRemoval.sync.connect(); assert.deepEqual(missingRemoval.seeds, [true], "下载 404 后收到 removal 时云端应判空");
+  const staleMapping = runtime({ listed: [future], indexed: [{ fileId: "future", logicalKey: "state:future" }] });
+  await staleMapping.sync.connect();
+  assert.equal(staleMapping.index.has("state:future"), false, "高 schema marker 不得保留旧 logicalKey 供 canonical 选择");
+  assert.ok([...staleMapping.index.values()].some((file) => file.fileId === "future" && !file.logicalKey), "高 schema 文件只保留无 logicalKey 的扫描 marker");
+  const prunedMarker = runtime({ indexed: [{ fileId: "stale", seenAt: "old" }] });
+  await prunedMarker.sync.connect(); assert.equal(prunedMarker.index.size, 0, "下轮全量扫描必须清除未再出现的 marker");
+  const clearedMarker = runtime({ indexed: [{ fileId: "stale", seenAt: "old" }] });
+  await clearedMarker.sync.disconnect(); assert.equal(clearedMarker.index.size, 0, "清缓存必须删除无 logicalKey marker");
+
   const old = { id: "old", appProperties: { app: "polyask", schema: "1", kind: "state", id: "old" } };
   const newer = { id: "new", appProperties: { app: "polyask", schema: "1", kind: "state", id: "new" } };
   const lww = runtime({ listed: [old], bodies: { old: { schema: 1, deviceId: "old", settings: { amsTheme: { value: "light", updatedAt: 1, deviceId: "a" } } }, new: { schema: 1, deviceId: "new", settings: { amsTheme: { value: "dark", updatedAt: 2, deviceId: "b" } } } } });
@@ -92,7 +112,7 @@ module.exports = async function testSyncEngine() {
   const malformed = runtime({ listed: [{ id: "bad", appProperties: { app: "polyask", schema: "1", kind: "history", id: "bad", device: "d" } }], bodies: { bad: { schema: 1 } } });
   await malformed.sync.connect();
   assert.equal((await malformed.sync.status()).errorCount, 1, "缺少 history 正文的文件必须隔离计错");
-  assert.equal(malformed.index.size, 0, "损坏文件不得进入 file index");
+  assert.equal(malformed.index.has("history:bad:d"), false, "损坏文件的 marker 不得进入 logicalKey 索引");
 
   const combined = runtime({ listed: [added], bodies: { remote: { schema: 1, deviceId: "remote", settings: { amsTheme: { value: "dark", updatedAt: 2 } }, templates: { remote: { id: "remote", updatedAt: 2 } } } }, device: { settings: { amsTheme: { value: "light", updatedAt: 1 } }, templates: { local: { id: "local", updatedAt: 1 } } } });
   await combined.sync.connect();
@@ -118,7 +138,7 @@ module.exports = async function testSyncEngine() {
   assert.equal(replacement.uploads.at(-1).settings.amsTheme.value, "new", "changes 中同 fileId 的新 state 必须覆盖扫描旧 state");
 
   const mismatch = runtime({ listed: [{ id: "h", appProperties: { app: "polyask", schema: "1", kind: "history", id: "h", device: "d" } }], bodies: { h: { schema: 1, id: "h", textHash: "wrong", text: "text", createdAt: 1, lastUsedAt: 1, deviceId: "d" } } });
-  await mismatch.sync.connect(); assert.equal(mismatch.index.size, 0, "正文 hash/身份错配不得建立索引");
+  await mismatch.sync.connect(); assert.equal(mismatch.index.has("history:h:d"), false, "正文 hash/身份错配不得建立 logicalKey 索引");
   const resolveError = runtime({ localHistory: [{ id: "h", textHash: "h", text: undefined, fileId: "f", deviceId: "d" }], bodies: { f: { throw: { code: "network_error" } } } });
   await assert.rejects(resolveError.sync.resolveHistory("h"), (error) => error.code === "network_error", "resolver 必须透传 Drive 网络错误");
 

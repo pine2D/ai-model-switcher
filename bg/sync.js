@@ -34,7 +34,7 @@ const SyncEngine = (() => {
     await chrome.storage.local.set({ [STATUS]: value });
     return value;
   }
-  const logicalKey = (file) => { const props = file.appProperties || {}, kind = props.kind, id = props.id || "";
+  const logicalKey = (file) => { const props = file.appProperties || {}, kind = props.kind, id = props.id; if (!id || kind === "history" && !props.device) return null;
     return kind === "state" ? `state:${id}` : kind === "history" ? `history:${id}:${props.device || ""}` :
       kind === "archive" ? `archive:${id}` : null; };
   async function forget(fileId, logicalHint) {
@@ -45,6 +45,7 @@ const SyncEngine = (() => {
     if (match && SyncStore.setEntityFile) { const alternative = await SyncStore.findFile(logical);
       await SyncStore.setEntityFile(match[1], match[2], alternative?.fileId, fileId); }
   }
+  async function invalidate(fileId, seenAt, logicalHint) { await forget(fileId, logicalHint); if (seenAt) await SyncStore.markFile(fileId, seenAt); }
   const object = (value) => value && typeof value === "object" && !Array.isArray(value);
   const validTime = SyncModel.validTime || ((value) => typeof value === "number" && Number.isFinite(value) && value >= 0);
   const validVersion = (value) => object(value) && validTime(value.updatedAt) && (!Object.hasOwn(value, "deletedAt") || validTime(value.deletedAt));
@@ -61,22 +62,22 @@ const SyncEngine = (() => {
   async function readFile(file, collected, seenAt) {
     if (file.removed) { collected.removedStates.push(file.fileId); collected.futureFiles.delete(file.fileId); return forget(file.fileId); }
     if (file.appProperties?.app !== "polyask") return;
-    const id = file.id || file.fileId;
-    if (Number(file.appProperties.schema) > SyncModel.SCHEMA) { collected.futureFiles.add(id); collected.removedStates.push(id); await saveConfig({ readOnly: true }); return; }
+    const id = file.id || file.fileId; if (seenAt && id) await SyncStore.markFile(id, seenAt);
+    if (Number(file.appProperties.schema) > SyncModel.SCHEMA) { collected.futureFiles.add(id); collected.removedStates.push(id); await saveConfig({ readOnly: true }); await invalidate(id, seenAt, logicalKey(file)); return; }
     const kind = file.appProperties.kind;
-    if (!Object.hasOwn({ state: 1, history: 1, archive: 1 }, kind) || !file.appProperties.id || kind === "history" && !file.appProperties.device || Number(file.appProperties.schema) !== SyncModel.SCHEMA) { errorCount++; return; }
+    if (!Object.hasOwn({ state: 1, history: 1, archive: 1 }, kind) || !file.appProperties.id || kind === "history" && !file.appProperties.device || Number(file.appProperties.schema) !== SyncModel.SCHEMA) { errorCount++; await invalidate(id, seenAt); return; }
     try {
       const body = await Drive.download(id);
-      if (Number(body?.schema) > SyncModel.SCHEMA) { collected.futureFiles.add(id); collected.removedStates.push(id); await saveConfig({ readOnly: true }); return; }
-      if (!await validBody(kind, body, file.appProperties)) { errorCount++; return; }
+      if (Number(body?.schema) > SyncModel.SCHEMA) { collected.futureFiles.add(id); collected.removedStates.push(id); await saveConfig({ readOnly: true }); await invalidate(id, seenAt, logicalKey(file)); return; }
+      if (!await validBody(kind, body, file.appProperties)) { errorCount++; await invalidate(id, seenAt, logicalKey(file)); return; }
       const key = logicalKey(file);
       if (key) await SyncStore.putFile({ fileId: id, logicalKey: key, ...(seenAt ? { seenAt } : {}) });
       if (kind === "state") collected.states.push({ fileId: id, body });
       if (kind === "history") await Data.importRecords({ history: [{ ...body, fileId: id }] });
       if (kind === "archive") await Data.importRecords({ archives: [{ ...body, fileId: id }] });
     } catch (error) {
-      if (error?.code === "not_found" || error?.status === 404) { if (kind === "state") collected.removedStates.push(id); return forget(id, logicalKey(file)); }
-      if (error?.code === "invalid_response") { errorCount++; return; }
+      if (error?.code === "not_found" || error?.status === 404) { if (kind === "state") collected.removedStates.push(id); await invalidate(id, seenAt, logicalKey(file)); return; }
+      if (error?.code === "invalid_response") { errorCount++; await invalidate(id, seenAt, logicalKey(file)); return; }
       throw error;
     }
   }
@@ -127,7 +128,7 @@ const SyncEngine = (() => {
     });
     const changes = await visitChanges(token, async (change) => {
       if (change.removed && (await SyncStore.getFile(change.fileId))?.seenAt === scanId) cloudCount = Math.max(0, cloudCount - 1);
-      else if (change.file?.appProperties?.app === "polyask" && (!SyncStore.getFile || !await SyncStore.getFile(change.file.id))) cloudCount++;
+      else if (change.file?.appProperties?.app === "polyask" && (await SyncStore.getFile(change.file.id))?.seenAt !== scanId) cloudCount++;
       await readFile(change.file || change, collected, scanId);
     });
     await SyncStore.iterate("files", async (file) => { if (file.seenAt !== scanId) await forget(file.fileId); });
@@ -255,7 +256,7 @@ const SyncEngine = (() => {
     return { state: value.state || "idle", lastSuccessAt: value.lastSuccessAt, pending: await SyncStore.countOutbox(),
       errorCount: value.errorCount || errorCount, reason: value.reason, readOnly: !!(await config()).readOnly };
   }
-  async function resolve(kind, id) {
+  async function resolve(kind, id) { let staleReads = 0;
     for (;;) {
       const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
       if (!record || record.text != null || !record.fileId || kind === "archive" && Object.hasOwn(record, "deletedAt")) return record;
@@ -263,6 +264,7 @@ const SyncEngine = (() => {
         if (!await validBody(kind, body, props)) throw { code: "invalid_response" };
         const hydrated = await SyncStore.hydrateEntity(kind, id, record, body), latest = hydrated.record;
         if (hydrated.hydrated || !latest || latest.text != null || !latest.fileId || kind === "archive" && Object.hasOwn(latest, "deletedAt")) return latest;
+        if (++staleReads >= 2) throw coded("stale_body");
       } catch (error) {
         if (error?.code !== "not_found" && error?.status !== 404) throw error;
         await forget(record.fileId, kind === "history" ? `history:${id}:${record.deviceId}` : `archive:${id}`);
