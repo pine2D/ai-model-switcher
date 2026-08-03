@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 
-function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], queued = [], fail = false, clearFail = false, device = {}, goneOnce = false } = {}) {
+function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, device = {}, goneOnce = false } = {}) {
   const meta = new Map(), index = new Map(), outbox = new Map(queued.map((op) => [op.key, op]));
   const local = new Map(), calls = [], uploads = [], applied = [], imports = [], seeds = [], events = [];
   const deviceState = { schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {}, ...device }; let listener, notes = 0, activeChanges = changes;
@@ -13,7 +13,7 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], q
     iterate: async (kind, visit) => { if (kind === "files") for (const file of index.values()) await visit(file); },
     readyOutbox: async (now, limit) => [...outbox.values()].filter((op) => op.nextAt <= now).slice(0, limit),
     enqueue: async (op) => outbox.set(op.key, op), completeOutbox: async (key) => outbox.delete(key), countOutbox: async () => outbox.size,
-    getHistory: async () => null, getArchive: async (id) => localArchives.find((item) => item.id === id),
+    getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),
     putHistory: async () => {}, putArchive: async () => {},
   };
   const data = {
@@ -21,12 +21,12 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], q
     applyRemoteState: async (state) => { applied.push(state); events.push("apply"); listener?.({ amsTheme: { newValue: "dark" } }, "local"); },
     noteStorageChanges: async () => { notes++; return {}; }, seedState: async (empty) => { seeds.push(empty); events.push("seed"); },
     exportRecords: async () => ({ history: [], archives: localArchives }), importRecords: async (records) => imports.push(records),
-    getHistory: async () => null, getArchive: async (id) => localArchives.find((item) => item.id === id),
+    getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),
   };
   const drive = {
     connect: async () => {}, disconnect: async () => { calls.push("disconnect"); }, getStartToken: async () => { calls.push("token"); return "start"; },
     listFiles: async () => { calls.push("list"); return listed; }, listChanges: async (token) => { calls.push(`changes:${token}`); if (goneOnce) { goneOnce = false; throw { status: 410 }; } return { changes: activeChanges, newStartPageToken: "next" }; },
-    download: async (id) => { if (bodies[id]?.throw) throw bodies[id].throw; return bodies[id]; }, upsert: async (_id, _name, props, body) => { calls.push(`upload:${props.kind}`); uploads.push(body); if (fail && props.kind !== "state") throw { code: "server_error", status: 500 }; return { id: `up-${calls.length}` }; },
+    download: async (id) => { const body = Array.isArray(bodies[id]) ? bodies[id].shift() : bodies[id]; if (body?.throw) throw body.throw; return body; }, upsert: async (_id, _name, props, body) => { calls.push(`upload:${props.kind}`); uploads.push(body); if (fail && props.kind !== "state") throw { code: "server_error", status: 500 }; return { id: `up-${calls.length}` }; },
     clearAll: async (progress) => { await progress(1); calls.push(`progress:${local.get("amsSyncConfig").clearProgress}`); if (clearFail) throw { code: "server_error" }; calls.push("clear"); },
   };
   const chrome = {
@@ -34,7 +34,7 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], q
     runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} } }, alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
   };
   const SyncModel = {
-    SCHEMA: 1, utf8Preview: (value) => value || "", retryDelay: () => 50,
+    SCHEMA: 1, hashText: async (value) => value, utf8Preview: (value) => value || "", retryDelay: () => 50,
     mergeStateFragments: (items) => {
       const settings = {}, templates = {}, groups = {};
       for (const item of items) for (const [bucket, target] of [["settings", settings], ["templates", templates], ["groups", groups]])
@@ -102,6 +102,19 @@ module.exports = async function testSyncEngine() {
   const beforeNoise = own.notes(); own.change({ amsSyncStatus: { newValue: {} } }); await Promise.resolve();
   assert.equal(own.notes(), beforeNoise, "非同步白名单 storage 变更不得访问 Data/IDB");
 
+  const changedState = { id: "same", appProperties: { app: "polyask", schema: "1", kind: "state", id: "device" } };
+  const replacement = runtime({ listed: [changedState], changes: [{ file: changedState }], bodies: { same: [
+    { schema: 1, deviceId: "device", settings: { amsTheme: { value: "old", updatedAt: 1 } } },
+    { schema: 1, deviceId: "device", settings: { amsTheme: { value: "new", updatedAt: 2 } } },
+  ] } });
+  await replacement.sync.connect(); replacement.outbox.set("state", { key: "state", kind: "state", nextAt: 0 }); await replacement.sync.runNow();
+  assert.equal(replacement.uploads.at(-1).settings.amsTheme.value, "new", "changes 中同 fileId 的新 state 必须覆盖扫描旧 state");
+
+  const mismatch = runtime({ listed: [{ id: "h", appProperties: { app: "polyask", schema: "1", kind: "history", id: "h", device: "d" } }], bodies: { h: { schema: 1, id: "h", textHash: "wrong", text: "text", createdAt: 1, lastUsedAt: 1, deviceId: "d" } } });
+  await mismatch.sync.connect(); assert.equal(mismatch.index.size, 0, "正文 hash/身份错配不得建立索引");
+  const resolveError = runtime({ localHistory: [{ id: "h", textHash: "h", text: undefined, fileId: "f", deviceId: "d" }], bodies: { f: { throw: { code: "network_error" } } } });
+  await assert.rejects(resolveError.sync.resolveHistory("h"), (error) => error.code === "network_error", "resolver 必须透传 Drive 网络错误");
+
   const cleared = runtime();
   await cleared.sync.connect(); await cleared.sync.clearRemote();
   assert.equal(cleared.local.get("amsSyncConfig").clearRunning, false, "成功清理后才结束 clearRunning");
@@ -110,4 +123,7 @@ module.exports = async function testSyncEngine() {
   await failedClear.sync.connect(); await assert.rejects(failedClear.sync.clearRemote());
   assert.equal(failedClear.local.get("amsSyncConfig").clearRunning, true, "清除失败必须保留 clearRunning");
   assert.equal(failedClear.calls.includes("disconnect"), false);
+  const resumed = runtime(); resumed.local.set("amsSyncConfig", { connected: true, clearRunning: true, clearProgress: 3 });
+  await resumed.sync.clearRemote(); assert.equal(resumed.local.get("amsSyncConfig").clearProgress, 4, "中断后重试必须沿用清理进度");
+  await resumed.sync.clearRemote(); assert.equal(resumed.local.get("amsSyncConfig").clearProgress, 1, "成功后的新清理必须从零开始");
 };

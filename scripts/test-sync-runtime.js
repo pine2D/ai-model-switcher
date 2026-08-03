@@ -99,7 +99,7 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
     alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
   };
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: {
-    SCHEMA: 1, utf8Preview: (text) => text, retryDelay: () => 500, mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], corrupt: 0 }),
+    SCHEMA: 1, hashText: async (text) => text, utf8Preview: (text) => text, retryDelay: () => 500, mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], corrupt: 0 }),
     mergeHistory: (items) => items, mergeArchives: (items) => items,
   }, chrome, Date: class extends Date { static now() { return now; } }, setTimeout, clearTimeout, console });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
@@ -248,7 +248,7 @@ async function main() {
   const damaged = syncRuntime({ files: [
     { id: "bad", appProperties: { app: "polyask", schema: "1", kind: "history", id: "bad", device: "d" } },
     { id: "good", appProperties: { app: "polyask", schema: "1", kind: "history", id: "good", device: "d" } },
-  ], downloads: { bad: "not json", good: { schema: 1, id: "good", textHash: "good", text: "ok", createdAt: 1, lastUsedAt: 1 } } });
+  ], downloads: { bad: "not json", good: { schema: 1, id: "good", textHash: "good", text: "good", createdAt: 1, lastUsedAt: 1, deviceId: "d" } } });
   await damaged.sync.connect();
   assert.equal((await damaged.sync.status()).errorCount, 1, "单条损坏 JSON 必须计错并继续");
   await require("./test-sync-engine")();

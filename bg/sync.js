@@ -30,11 +30,11 @@ const SyncEngine = (() => {
   };
   async function forget(fileId) { if (fileId) await SyncStore.deleteFile(fileId); }
   const object = (value) => value && typeof value === "object" && !Array.isArray(value);
-  function validBody(kind, body, props) {
+  async function validBody(kind, body, props) {
     if (!object(body) || Number(body.schema) !== SyncModel.SCHEMA) return false;
     if (kind === "state") return body.deviceId === props.id && ["settings", "templates", "groups"].every((key) => body[key] == null || object(body[key]));
-    if (kind === "history") return ["id", "textHash", "text"].every((key) => typeof body[key] === "string") && Number.isFinite(Number(body.createdAt)) && Number.isFinite(Number(body.lastUsedAt));
-    return kind === "archive" && typeof body.id === "string" && Number.isFinite(Number(body.createdAt)) &&
+    if (kind === "history") return body.id === props.id && body.textHash === props.id && body.deviceId === props.device && ["text"].every((key) => typeof body[key] === "string") && Number.isFinite(Number(body.createdAt)) && Number.isFinite(Number(body.lastUsedAt)) && await SyncModel.hashText(body.text) === body.textHash;
+    return kind === "archive" && body.id === props.id && Number.isFinite(Number(body.createdAt)) &&
       (Number.isFinite(Number(body.deletedAt)) || typeof body.text === "string" && Array.isArray(body.results));
   }
   async function readFile(file, collected) {
@@ -47,10 +47,9 @@ const SyncEngine = (() => {
     try {
       const body = await Drive.download(id);
       if (Number(body?.schema) > SyncModel.SCHEMA) { await saveConfig({ readOnly: true }); return; }
-      if (!validBody(kind, body, file.appProperties)) { errorCount++; return; }
+      if (!await validBody(kind, body, file.appProperties)) { errorCount++; return; }
       const key = logicalKey(file);
       if (key) await SyncStore.putFile({ fileId: id, logicalKey: key });
-      if (kind === "state" && file.appProperties.id === await Data.deviceId()) await saveConfig({ stateFileId: id });
       if (kind === "state") collected.states.push({ fileId: id, body });
       if (kind === "history") collected.history.push({ ...body, fileId: id });
       if (kind === "archive") collected.archives.push({ ...body, fileId: id });
@@ -68,11 +67,22 @@ const SyncEngine = (() => {
     }
     return [...winners.values()];
   }
-  async function applyCollected(collected, replaceStates = false) {
-    const remoteStates = replaceStates ? {} : { ...await SyncStore.getMeta("remoteStates") };
-    for (const item of collected.states) remoteStates[item.fileId] = item.body;
+  function stateMap(base, collected, seen) {
+    const remoteStates = { ...base };
+    for (const item of collected.states) if (!seen || seen.has(item.fileId)) remoteStates[item.fileId] = item.body;
     for (const fileId of collected.removedStates) delete remoteStates[fileId];
+    if (seen) for (const fileId of Object.keys(remoteStates)) if (!seen.has(fileId)) delete remoteStates[fileId];
+    return remoteStates;
+  }
+  async function setStateFile(states) {
+    const deviceId = await Data.deviceId(), fileId = Object.keys(states).find((id) => states[id].deviceId === deviceId);
+    const { stateFileId, ...saved } = await config();
+    await chrome.storage.local.set({ [CONFIG]: { ...saved, ...(fileId ? { stateFileId: fileId } : {}) } });
+  }
+  async function applyCollected(collected, replaceStates = false, seen = null) {
+    const remoteStates = stateMap(replaceStates ? {} : await SyncStore.getMeta("remoteStates"), collected, seen);
     await SyncStore.putMeta("remoteStates", remoteStates);
+    await setStateFile(remoteStates);
     const state = SyncModel.mergeStateFragments([...Object.values(remoteStates), await Data.deviceState()]);
     errorCount += state.corrupt || 0;
     if (state.readOnly) await saveConfig({ readOnly: true });
@@ -116,12 +126,12 @@ const SyncEngine = (() => {
     if (firstConnect) await Data.seedState(cloudEmpty);
     const localState = await Data.deviceState();
     if (firstConnect && !cloudEmpty) {
-      const mine = collected.states.find((item) => item.body.deviceId === localState.deviceId);
-      if (mine) { localState.settings = { ...mine.body.settings }; localState.templates = mergeBucket(localState.templates, mine.body.templates); localState.groups = mergeBucket(localState.groups, mine.body.groups); }
+      const states = stateMap({}, collected, seen), mine = Object.values(states).filter((body) => body.deviceId === localState.deviceId);
+      if (mine.length) for (const body of mine) { localState.settings = mergeBucket(localState.settings, body.settings); localState.templates = mergeBucket(localState.templates, body.templates); localState.groups = mergeBucket(localState.groups, body.groups); }
       else localState.settings = {};
       await SyncStore.putMeta("deviceState", localState);
     }
-    await applyCollected(collected, true);
+    await applyCollected(collected, true, seen);
     await saveToken(changes.newStartPageToken || token);
   }
   async function pull() {
@@ -214,7 +224,7 @@ const SyncEngine = (() => {
   async function disconnectNow() { await Drive.disconnect(); await clearCache(false); return setStatus("idle"); }
   const disconnect = () => serialize(disconnectNow);
   async function clearRemoteNow() {
-    const offset = Number((await config()).clearProgress) || 0;
+    const saved = await config(), offset = saved.clearRunning ? Number(saved.clearProgress) || 0 : 0;
     await saveConfig({ clearRunning: true, clearProgress: offset });
     await Drive.clearAll(async (progress) => saveConfig({ clearProgress: offset + progress }));
     await disconnectNow(); await saveConfig({ clearRunning: false });
@@ -229,10 +239,12 @@ const SyncEngine = (() => {
     const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
     if (!record || record.text != null || !record.fileId) return record;
     try {
-      const body = await Drive.download(record.fileId), merged = { ...record, ...body, fileId: record.fileId };
+      const body = await Drive.download(record.fileId), props = kind === "history" ? { id, device: record.deviceId } : { id };
+      if (!await validBody(kind, body, props)) throw { code: "invalid_response" };
+      const merged = { ...record, ...body, fileId: record.fileId };
       await (kind === "history" ? SyncStore.putHistory(merged) : SyncStore.putArchive(merged));
       return merged;
-    } catch (error) { if (error?.code === "not_found" || error?.status === 404) await forget(record.fileId); return record; }
+    } catch (error) { if (error?.code === "not_found" || error?.status === 404) await forget(record.fileId); throw error; }
   }
   function init() {
     chrome.alarms.create("ams-sync", { periodInMinutes: 15 });
