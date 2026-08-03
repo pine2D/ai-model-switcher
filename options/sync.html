@@ -29,8 +29,8 @@
     <h2 id="connection-title" data-i18n="sync_connection">Google Drive</h2>
     <div class="actions">
       <button id="connect" data-sync-control data-i18n="sync_connect">连接 Google Drive</button>
-      <button id="sync-now" data-sync-control data-i18n="sync_now">立即同步</button>
-      <button id="disconnect" data-sync-control data-i18n="sync_disconnect">断开连接</button>
+      <button id="sync-now" data-sync-control data-i18n="sync_now" hidden>立即同步</button>
+      <button id="disconnect" data-sync-control data-i18n="sync_disconnect" hidden>断开连接</button>
     </div>
   </section>
 
@@ -46,7 +46,7 @@
   <section class="card danger" aria-labelledby="danger-title">
     <h2 id="danger-title" data-i18n="sync_danger">危险操作</h2>
     <p data-i18n="sync_clearWarning">这会删除 Google Drive 应用专属目录中的全部 PolyAsk 同步数据，且无法撤销。</p>
-    <button id="clear-remote" data-sync-control data-i18n="sync_clear">清除云端同步数据</button>
+    <button id="clear-remote" data-sync-control data-i18n="sync_clear" hidden>清除云端同步数据</button>
     <div id="clear-confirmation" class="confirmation" hidden>
       <p data-i18n="sync_clearConfirm">确认删除全部 PolyAsk 云端数据？</p>
       <button id="clear-continue" data-sync-control class="danger-button" data-i18n="sync_clearContinue">继续清除</button>

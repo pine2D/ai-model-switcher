@@ -31,12 +31,14 @@ function renderStatus() {
   if (config.connected && status.lastSuccessAt) detail.push(t("sync_lastSuccess", new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(status.lastSuccessAt)));
   if (config.connected && status.pending) detail.push(t("sync_pending", status.pending));
   byId("status-detail").textContent = detail.join(" · ");
-  const connected = !!config.connected && !config.clearRunning;
+  const reconnect = !!config.connected && !config.clearRunning && status.state === "auth";
+  const connected = !!config.connected && !config.clearRunning && !reconnect;
   byId("connect").hidden = connected || !!config.clearRunning;
+  byId("connect").textContent = t(reconnect ? "sync_auth" : "sync_connect");
   byId("sync-now").hidden = !connected;
-  byId("disconnect").hidden = !connected;
+  byId("disconnect").hidden = !config.connected || !!config.clearRunning;
   byId("clear-confirmation").hidden = !config.clearRunning && !byId("clear-confirmation").dataset.open;
-  byId("clear-remote").hidden = !config.connected || !!config.clearRunning;
+  byId("clear-remote").hidden = !config.connected || !!config.clearRunning || reconnect;
 }
 
 async function refresh() {

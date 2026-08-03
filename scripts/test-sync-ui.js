@@ -41,3 +41,6 @@ assert.ok(fs.readFileSync("scripts/package.sh", "utf8").includes(" options"));
 const syncPage = fs.readFileSync("options/sync.js", "utf8");
 assert.ok(syncPage.includes("config.clearProgress") && syncPage.includes("sync_clearProgress"), "清理进度必须作为状态详情呈现");
 assert.ok(syncPage.includes('document.title = `PolyAsk · ${t("sync_title")}`'), "页面标题必须使用 sync_title 本地化");
+for (const id of ["sync-now", "disconnect", "clear-remote"]) assert.match(html, new RegExp(`id="${id}"[^>]*\\shidden`), `首次渲染不得暴露 ${id}`);
+assert.ok(syncPage.includes('const reconnect = !!config.connected && !config.clearRunning && status.state === "auth";'), "auth 重连入口必须让 clearRunning 优先");
+assert.ok(syncPage.includes('byId("clear-remote").hidden = !config.connected || !!config.clearRunning || reconnect;'), "auth 状态不得暴露清云端按钮");
