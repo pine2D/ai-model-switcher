@@ -29,6 +29,34 @@ function deviceRuntime(fail = false) {
   return { data: scope.data, retry: () => { fail = false; }, writes: () => writes, ids: () => ids };
 }
 
+function driveRuntime(responses, clearFails = false) {
+  let tokenCalls = 0, removed = 0, uuids = 0;
+  const requests = [];
+  const scope = vm.createContext({
+    chrome: { identity: {
+      getAuthToken: async () => ({ token: `t${++tokenCalls}` }),
+      removeCachedAuthToken: async () => { removed++; },
+      clearAllCachedAuthTokens: async () => { if (clearFails) throw new Error("clear failed"); },
+    } },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      if (typeof responses === "function") return responses(url, init);
+      const response = responses.shift();
+      if (!response) throw new Error("unexpected fetch");
+      return response;
+    },
+    Response, URLSearchParams, Blob, TextEncoder, crypto: { randomUUID: () => `random-${++uuids}` },
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/drive.js"), "utf8") + ";this.drive=Drive", scope);
+  return { drive: scope.drive, tokenCalls: () => tokenCalls, removed: () => removed, requests, uuids: () => uuids };
+}
+
+async function assertDriveError(response, code, retryAfter) {
+  const runtime = driveRuntime([response]);
+  await assert.rejects(runtime.drive.download("missing"), (error) =>
+    error.code === code && (retryAfter === undefined || error.retryAfter === retryAfter));
+}
+
 async function main() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/data.js"), "utf8") + ";this.data=Data", context);
   await context.data.addHistory("question");
@@ -54,6 +82,73 @@ async function main() {
   assert.equal(first, second, "并发首次调用必须得到同一 ID");
   assert.equal(concurrent.ids(), 1, "并发首次调用只能生成一个 ID");
   assert.equal(concurrent.writes(), 1, "并发首次调用只能写入一次 ID");
+
+  const listed = driveRuntime([
+    new Response("unauthorized", { status: 401 }),
+    new Response(JSON.stringify({ files: [{ id: "1" }], nextPageToken: "p2" }), { status: 200 }),
+    new Response(JSON.stringify({ files: [{ id: "2" }] }), { status: 200 }),
+  ]);
+  assert.deepEqual(Array.from(await listed.drive.listFiles(), (file) => file.id), ["1", "2"],
+    "401 后必须仅刷新一次 token 并穷尽全部分页");
+  assert.equal(listed.removed(), 1);
+  assert.equal(listed.tokenCalls(), 2);
+  assert.match(listed.requests[1].url, /spaces=appDataFolder/);
+  assert.match(listed.requests[1].url, /q=trashed%3Dfalse/);
+
+  await assertDriveError(new Response("forbidden", { status: 403 }), "forbidden");
+  await assertDriveError(new Response("slow down", { status: 429, headers: { "Retry-After": "17" } }), "rate_limited", 17_000);
+  await assertDriveError(new Response("bad gateway", { status: 502 }), "server_error");
+  await assertDriveError(new Response("missing", { status: 404 }), "not_found");
+
+  const uploaded = driveRuntime([
+    new Response(JSON.stringify({ id: "new" }), { status: 200 }),
+    new Response(JSON.stringify({ id: "newer" }), { status: 200 }),
+  ]);
+  assert.equal((await uploaded.drive.upsert(null, "state.json", { app: "polyask" }, { schema: 1 })).id, "new");
+  assert.equal((await uploaded.drive.upsert(null, "state-2.json", { app: "polyask" }, { schema: 2 })).id, "newer");
+  assert.match(uploaded.requests[0].url, /^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files\?uploadType=multipart$/);
+  assert.equal(uploaded.requests[0].init.headers.Authorization, "Bearer t1");
+  assert.equal(uploaded.requests[0].init.headers["Content-Type"], "multipart/related; boundary=random-1");
+  assert.equal(uploaded.requests[1].init.headers["Content-Type"], "multipart/related; boundary=random-2");
+  assert.match(uploaded.requests[0].init.body, /^--random-1/);
+  assert.match(uploaded.requests[1].init.body, /^--random-2/);
+  assert.match(uploaded.requests[0].init.body, /"parents":\["appDataFolder"\]/);
+  assert.match(uploaded.requests[0].init.body, /\{"schema":1\}/);
+
+  const sync = driveRuntime([
+    new Response(JSON.stringify({ startPageToken: "start" }), { status: 200 }),
+    new Response(JSON.stringify({ changes: [{ fileId: "1" }], nextPageToken: "p2" }), { status: 200 }),
+    new Response(JSON.stringify({ changes: [{ fileId: "2" }], newStartPageToken: "next" }), { status: 200 }),
+  ]);
+  assert.equal(await sync.drive.getStartToken(), "start");
+  const changed = await sync.drive.listChanges("old");
+  assert.deepEqual(Array.from(changed.changes, (change) => change.fileId), ["1", "2"]);
+  assert.equal(changed.newStartPageToken, "next");
+
+  let pageReads = 0;
+  const cleared = driveRuntime((url, init) => {
+    if (url.includes("/files?")) {
+      pageReads++;
+      return new Response(JSON.stringify({ files: pageReads === 1 ? [
+        { id: "mine", appProperties: { app: "polyask" } },
+        { id: "mine-2", appProperties: { app: "polyask" } },
+        { id: "other", appProperties: { app: "other" } },
+      ] : [] }), { status: 200 });
+    }
+    if (/\/files\/mine(?:-2)?$/.test(url) && init.method === "DELETE") return new Response(null, { status: 204 });
+    throw new Error(`unexpected request ${url}`);
+  });
+  const progress = [];
+  await cleared.drive.clearAll((count) => progress.push(count));
+  const deletes = cleared.requests.filter((request) => request.init.method === "DELETE");
+  const pages = cleared.requests.filter((request) => request.url.includes("/files?"));
+  assert.deepEqual(deletes.map((request) => request.url.match(/\/files\/([^?]+)/)[1]), ["mine", "mine-2"]);
+  assert.equal(pages.length, 2, "删除后必须重新读取首页直到为空");
+  assert.ok(pages.every((request) => request.url.includes("pageSize=100") && !request.url.includes("pageToken=")));
+  assert.deepEqual(progress, [1, 2]);
+
+  const disconnect = driveRuntime([], true);
+  await assert.rejects(disconnect.drive.disconnect(), (error) => error.code === "auth_failed" && error.status === 0);
   console.log("sync-runtime tests passed");
 }
 
