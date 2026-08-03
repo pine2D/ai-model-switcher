@@ -1,15 +1,19 @@
 // bg/data.js — 本地记录与设备状态协议
 const Data = (() => {
   const SETTINGS = ["amsLang", "amsTheme", "displayMode", "amsAutoRaise"];
-  let cachedDeviceId;
+  let cachedDeviceId, deviceIdOpening;
   async function getDeviceId() {
     if (cachedDeviceId) return cachedDeviceId;
-    cachedDeviceId = await SyncStore.getMeta("deviceId");
-    if (!cachedDeviceId) {
-      cachedDeviceId = crypto.randomUUID();
-      await SyncStore.putMeta("deviceId", cachedDeviceId);
-    }
-    return cachedDeviceId;
+    if (deviceIdOpening) return deviceIdOpening;
+    deviceIdOpening = (async () => {
+      const saved = await SyncStore.getMeta("deviceId");
+      if (saved) { cachedDeviceId = saved; return saved; }
+      const created = crypto.randomUUID();
+      await SyncStore.putMeta("deviceId", created);
+      cachedDeviceId = created;
+      return created;
+    })();
+    try { return await deviceIdOpening; } finally { deviceIdOpening = null; }
   }
   async function deviceState() {
     const id = await getDeviceId(), saved = await SyncStore.getMeta("deviceState");
