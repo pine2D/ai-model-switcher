@@ -125,27 +125,31 @@ async function main() {
   assert.deepEqual(Array.from(changed.changes, (change) => change.fileId), ["1", "2"]);
   assert.equal(changed.newStartPageToken, "next");
 
-  let pageReads = 0;
+  let hasMine = true;
+  const otherFiles = Array.from({ length: 100 }, (_, index) => ({ id: `other-${index}`, appProperties: { app: "other" } }));
   const cleared = driveRuntime((url, init) => {
     if (url.includes("/files?")) {
-      pageReads++;
-      return new Response(JSON.stringify({ files: pageReads === 1 ? [
-        { id: "mine", appProperties: { app: "polyask" } },
-        { id: "mine-2", appProperties: { app: "polyask" } },
-        { id: "other", appProperties: { app: "other" } },
-      ] : [] }), { status: 200 });
+      const isSecondPage = url.includes("pageToken=p2");
+      return new Response(JSON.stringify(isSecondPage
+        ? { files: hasMine ? [{ id: "mine", appProperties: { app: "polyask" } }] : [] }
+        : { files: otherFiles, nextPageToken: "p2" }), { status: 200 });
     }
-    if (/\/files\/mine(?:-2)?$/.test(url) && init.method === "DELETE") return new Response(null, { status: 204 });
+    if (url.endsWith("/files/mine") && init.method === "DELETE") {
+      hasMine = false;
+      return new Response(null, { status: 204 });
+    }
     throw new Error(`unexpected request ${url}`);
   });
   const progress = [];
   await cleared.drive.clearAll((count) => progress.push(count));
   const deletes = cleared.requests.filter((request) => request.init.method === "DELETE");
   const pages = cleared.requests.filter((request) => request.url.includes("/files?"));
-  assert.deepEqual(deletes.map((request) => request.url.match(/\/files\/([^?]+)/)[1]), ["mine", "mine-2"]);
-  assert.equal(pages.length, 2, "删除后必须重新读取首页直到为空");
-  assert.ok(pages.every((request) => request.url.includes("pageSize=100") && !request.url.includes("pageToken=")));
-  assert.deepEqual(progress, [1, 2]);
+  assert.deepEqual(deletes.map((request) => request.url.match(/\/files\/([^?]+)/)[1]), ["mine"]);
+  assert.equal(pages.length, 4, "首个目标在第二页时，删除后必须从首页重新扫描");
+  assert.ok(pages.every((request) => request.url.includes("pageSize=100")));
+  assert.ok(!pages[0].url.includes("pageToken=") && pages[1].url.includes("pageToken=p2") &&
+    !pages[2].url.includes("pageToken=") && pages[3].url.includes("pageToken=p2"));
+  assert.deepEqual(progress, [1]);
 
   const disconnect = driveRuntime([], true);
   await assert.rejects(disconnect.drive.disconnect(), (error) => error.code === "auth_failed" && error.status === 0);

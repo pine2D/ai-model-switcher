@@ -131,13 +131,20 @@ const Drive = (() => {
   async function clearAll(onProgress) {
     let deleted = 0;
     while (true) {
-      const page = await listPage(null, 100);
-      const files = (page.files || []).filter((file) => file.appProperties?.app === "polyask");
-      if (!files.length) return;
-      for (const file of files) {
-        await remove(file.id);
-        deleted++;
-        if (onProgress) onProgress(deleted);
+      let pageToken = null;
+      while (true) {
+        const page = await listPage(pageToken, 100);
+        const files = (page.files || []).filter((file) => file.appProperties?.app === "polyask");
+        if (files.length) {
+          for (const file of files) {
+            await remove(file.id);
+            deleted++;
+            if (onProgress) onProgress(deleted);
+          }
+          break;
+        }
+        pageToken = page.nextPageToken || null;
+        if (!pageToken) return;
       }
     }
   }
