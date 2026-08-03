@@ -13,7 +13,7 @@ VERSION=$(grep -m1 '"version"' manifest.json | sed -E 's/.*"version"[[:space:]]*
 
 DIST_DIR="${POLYASK_DIST_DIR:-dist}"
 OUT="${DIST_DIR}/polyask-v${VERSION}.zip"
-RUNTIME=(manifest.json _locales i18n.js background.js bg icons content console popup)
+RUNTIME=(manifest.json _locales i18n.js background.js bg icons content console popup options)
 
 # 运行时文件齐全性校验（缺一即扩展静默不工作）
 for p in "${RUNTIME[@]}"; do

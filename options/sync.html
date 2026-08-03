@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PolyAsk · Data sync</title>
+  <link rel="stylesheet" href="sync.css">
+  <script src="../console/theme.js"></script>
+  <script src="../i18n.js"></script>
+  <script src="sync-i18n.js"></script>
+</head>
+<body>
+<main>
+  <h1 data-i18n="sync_title">数据同步</h1>
+  <section class="card" aria-labelledby="privacy-title">
+    <h2 id="privacy-title" data-i18n="sync_privacy">隐私说明</h2>
+    <p data-i18n="sync_intro">通过 Google Drive 应用专属目录同步设置、模板、历史和归档。</p>
+    <p data-i18n="sync_storage">问题历史和 AI 回答会保存到 Google Drive 应用专属目录。</p>
+    <p data-i18n="sync_sensitive">问题、AI 回答和迁移包均为明文，不提供端到端加密。</p>
+    <p data-i18n="sync_noChromeSync">数据同步不使用 Chrome Sync。</p>
+  </section>
+
+  <section id="sync-status" class="card status" role="status" aria-live="polite">
+    <strong id="status-title"></strong>
+    <p id="status-detail"></p>
+  </section>
+
+  <section class="card" aria-labelledby="connection-title">
+    <h2 id="connection-title" data-i18n="sync_connection">Google Drive</h2>
+    <div class="actions">
+      <button id="connect" data-sync-control data-i18n="sync_connect">连接 Google Drive</button>
+      <button id="sync-now" data-sync-control data-i18n="sync_now">立即同步</button>
+      <button id="disconnect" data-sync-control data-i18n="sync_disconnect">断开连接</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="transfer-title">
+    <h2 id="transfer-title" data-i18n="sync_transfer">迁移包</h2>
+    <p data-i18n="sync_transferPlain">迁移包包含明文问题和 AI 回答。</p>
+    <div class="actions">
+      <button id="export" data-sync-control disabled data-i18n="sync_export">导出迁移包</button>
+      <label class="file-button" data-sync-control for="import-file"><span data-i18n="sync_import">导入迁移包</span><input id="import-file" type="file" accept="application/json" disabled></label>
+    </div>
+  </section>
+
+  <section class="card danger" aria-labelledby="danger-title">
+    <h2 id="danger-title" data-i18n="sync_danger">危险操作</h2>
+    <p data-i18n="sync_clearWarning">这会删除 Google Drive 应用专属目录中的全部 PolyAsk 同步数据，且无法撤销。</p>
+    <button id="clear-remote" data-sync-control data-i18n="sync_clear">清除云端同步数据</button>
+    <div id="clear-confirmation" class="confirmation" hidden>
+      <p data-i18n="sync_clearConfirm">确认删除全部 PolyAsk 云端数据？</p>
+      <button id="clear-continue" data-sync-control class="danger-button" data-i18n="sync_clearContinue">继续清除</button>
+    </div>
+  </section>
+</main>
+<script src="sync.js"></script>
+</body>
+</html>

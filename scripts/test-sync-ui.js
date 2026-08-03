@@ -31,3 +31,13 @@ assert.ok(archive.includes("!e || !e.results"));
 assert.ok(data.includes("Object.hasOwn(actions, msg.action)"));
 assert.ok(compose.includes('token !== historyLoadToken || activeKind !== "history"'));
 assert.ok(archive.includes("selectedId === entry.id"));
+
+assert.deepEqual(manifest.options_ui, { page: "options/sync.html", open_in_tab: true });
+const html = fs.readFileSync("options/sync.html", "utf8");
+for (const id of ["connect", "sync-now", "disconnect", "export", "import-file", "clear-remote", "sync-status"]) {
+  assert.ok(html.includes(`id="${id}"`), `设置页缺少 ${id}`);
+}
+assert.ok(fs.readFileSync("scripts/package.sh", "utf8").includes(" options"));
+const syncPage = fs.readFileSync("options/sync.js", "utf8");
+assert.ok(syncPage.includes("config.clearProgress") && syncPage.includes("sync_clearProgress"), "清理进度必须作为状态详情呈现");
+assert.ok(syncPage.includes('document.title = `PolyAsk · ${t("sync_title")}`'), "页面标题必须使用 sync_title 本地化");
