@@ -2,6 +2,7 @@
 const Data = (() => {
   const SETTINGS = ["amsLang", "amsTheme", "displayMode", "amsAutoRaise"];
   let cachedDeviceId, deviceIdOpening;
+  const scheduleLocal = () => { if (typeof SyncEngine !== "undefined") SyncEngine.scheduleLocal?.(); };
   async function getDeviceId() {
     if (cachedDeviceId) return cachedDeviceId;
     if (deviceIdOpening) return deviceIdOpening;
@@ -31,6 +32,7 @@ const Data = (() => {
     await SyncStore.putHistory(record);
     await SyncStore.enqueue({ key: `history:${id}:${deviceId}`, kind: "history", entityId: id, nextAt: 0, attempt: 0 });
     await SyncStore.trimBodies(200, 50);
+    scheduleLocal();
     return record;
   }
   async function addArchive(entry = {}) {
@@ -40,6 +42,7 @@ const Data = (() => {
     await SyncStore.putArchive(record);
     await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
     await SyncStore.trimBodies(200, 50);
+    scheduleLocal();
     return record;
   }
   async function deleteArchive(id) {
@@ -49,6 +52,7 @@ const Data = (() => {
       deviceId: await getDeviceId(), schema: SyncModel.SCHEMA };
     await SyncStore.putArchive(record);
     await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
+    scheduleLocal();
     return record;
   }
   async function noteStorageChanges(changes = {}) {
@@ -74,14 +78,17 @@ const Data = (() => {
     await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
     return state;
   }
-  async function projectState(state = {}) {
+  async function projectState(state = {}, suppress) {
     const settings = state.settings || {}, values = {};
     for (const key of SETTINGS) if (settings[key]) values[key] = settings[key].value;
     if (settings["amsConsole.selected"] || settings["amsConsole.tier"]) values.amsConsole = {
       selected: settings["amsConsole.selected"]?.value || {}, tier: settings["amsConsole.tier"]?.value || "" };
-    if (state.templates) values.amsTemplates = Object.values(state.templates).filter((item) => !item.deletedAt);
-    if (state.groups) values.amsGroups = Object.values(state.groups).filter((item) => !item.deletedAt);
-    if (Object.keys(values).length) await chrome.storage.local.set(values);
+    if (state.templates) values.amsTemplates = Object.values(state.templates).filter((item) => !Object.hasOwn(item, "deletedAt"));
+    if (state.groups) values.amsGroups = Object.values(state.groups).filter((item) => !Object.hasOwn(item, "deletedAt"));
+    if (Object.keys(values).length) {
+      const cleanup = suppress?.(values);
+      try { await chrome.storage.local.set(values); } finally { cleanup?.(); }
+    }
   }
   const applyRemoteState = projectState;
   async function seedState(cloudEmpty) {
@@ -137,9 +144,10 @@ const Data = (() => {
       await SyncStore.putMeta("deviceState", state); await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
       if (typeof SyncEngine !== "undefined") await SyncEngine.projectImportedState(state); else await projectState(state);
     }
+    await SyncStore.trimBodies(200, 50);
   }
   async function* exportRecords() {
-    const state = await deviceState();
+    const state = SyncModel.mergeStateFragments([await SyncStore.getMeta("materializedState") || {}, await deviceState()]).materialized;
     for (const [key, value] of Object.entries(state.settings)) yield { kind: "setting", value: { key, value: value.value, updatedAt: value.updatedAt, deviceId: value.deviceId } };
     for (const value of Object.values(state.templates)) yield { kind: "template", value };
     for (const value of Object.values(state.groups)) yield { kind: "group", value };
@@ -147,8 +155,9 @@ const Data = (() => {
       let after = null, item;
       while ((item = await SyncStore.next(store, after))) {
         after = item.key;
-        const isHistory = store === "history", resolved = !isHistory && item.value.deletedAt ? item.value : await resolve(isHistory ? "history" : "archive", item.value.id);
-        if (!resolved || isHistory && resolved.text == null || !isHistory && !resolved.deletedAt && (resolved.text == null || !Array.isArray(resolved.results)))
+        const isHistory = store === "history", tombstone = !isHistory && Object.hasOwn(item.value, "deletedAt");
+        const resolved = tombstone ? item.value : await resolve(isHistory ? "history" : "archive", item.value.id);
+        if (!resolved || isHistory && resolved.text == null || !isHistory && !Object.hasOwn(resolved, "deletedAt") && (resolved.text == null || !Array.isArray(resolved.results)))
           throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
         const value = { ...resolved }; delete value.fileId;
         yield { kind: isHistory ? "history" : "archive", value };

@@ -72,14 +72,18 @@ const Drive = (() => {
     return json(await request(`${API}/files?${query}`));
   }
 
-  async function listFiles() {
-    const files = [];
+  async function visitFiles(visit, pageSize = 1000) {
     let pageToken = null;
     do {
-      const page = await listPage(pageToken);
-      files.push(...(page.files || []));
+      const page = await listPage(pageToken, pageSize);
+      for (const file of page.files || []) await visit(file);
       pageToken = page.nextPageToken || null;
     } while (pageToken);
+  }
+
+  async function listFiles() {
+    const files = [];
+    await visitFiles((file) => files.push(file));
     return files;
   }
 
@@ -88,19 +92,24 @@ const Drive = (() => {
     return page.startPageToken;
   }
 
-  async function listChanges(pageToken) {
-    const changes = [];
+  async function visitChanges(pageToken, visit, pageSize = 1000) {
     let next = pageToken, newStartPageToken = null;
     do {
       const page = await json(await request(`${API}/changes?${params({
-        pageToken: next, spaces: "appDataFolder", pageSize: 1000,
+        pageToken: next, spaces: "appDataFolder", pageSize,
         fields: "nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,modifiedTime,appProperties))",
       })}`));
-      changes.push(...(page.changes || []));
+      for (const change of page.changes || []) await visit(change);
       newStartPageToken = page.newStartPageToken || newStartPageToken;
       next = page.nextPageToken || null;
     } while (next);
-    return { changes, newStartPageToken };
+    return { newStartPageToken };
+  }
+
+  async function listChanges(pageToken) {
+    const changes = [];
+    const result = await visitChanges(pageToken, (change) => changes.push(change));
+    return { changes, newStartPageToken: result.newStartPageToken };
   }
 
   async function download(fileId) {
@@ -158,5 +167,5 @@ const Drive = (() => {
     }
   }
 
-  return { connect, disconnect, listFiles, getStartToken, listChanges, download, upsert, remove, clearAll };
+  return { connect, disconnect, visitFiles, listFiles, getStartToken, visitChanges, listChanges, download, upsert, remove, clearAll };
 })();

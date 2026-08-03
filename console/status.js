@@ -89,13 +89,12 @@ function archiveSummary(sites, results, q) {
     ts: Date.now(), text: q || "",
     results: sites.map((s) => { const r = byHost[s.host] || {}; return { host: s.host, label: s.label, text: r.text || null, state: r.state || null, code: r.code || null }; }),
   };
-  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, () => void chrome.runtime.lastError);
+  return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (result) => resolve(!chrome.runtime.lastError && !!result?.ok)));
 }
 function copySummary(sites, results, question) {
   const { md, miss, q } = buildSummary(sites, results, question);
-  archiveSummary(sites, results, q);
-  navigator.clipboard.writeText(md).then(
-    () => flashNote(miss ? t("con_collectDonePart", sites.length, miss) : t("con_collectDone", sites.length)),
+  Promise.all([navigator.clipboard.writeText(md), archiveSummary(sites, results, q)]).then(
+    ([, archived]) => flashNote(archived ? (miss ? t("con_collectDonePart", sites.length, miss) : t("con_collectDone", sites.length)) : t("con_collectDoneUnarchived")),
     () => flashNote(t("con_collectFail"))
   );
 }
@@ -140,6 +139,7 @@ function armDotTimeouts(hosts, ms) {
   });
 }
 chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.from === "AMS_COMPOSE" && msg.type === "historySaveFailed") { flashNote(t("con_historySaveFailed")); return; }
   if (!msg || msg.from !== "AMS_BG") return;
   if (msg.type === "sendStart") {
     ignoreResults = false; // 新一轮群发开始，恢复接收结果

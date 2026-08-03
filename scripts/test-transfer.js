@@ -18,7 +18,8 @@ function syncRuntime(connected) {
   let notes = 0;
   const store = { countOutbox: async () => 0, getMeta: async () => "token", putMeta: async () => {}, readyOutbox: async () => [], iterate: async () => {}, deleteMeta: async () => {}, deleteFile: async () => {} };
   const chrome = { storage: { local: { get: async (defaults) => ({ ...defaults, amsSyncConfig: config, amsSyncStatus: {} }), set: async () => {} }, onChanged: events.storage }, runtime: { onMessage: events.message, onStartup: events.startup }, alarms: { create: () => {}, onAlarm: events.alarm } };
-  const Data = { projectState: async () => events.storage.emit({ amsTheme: { newValue: "dark" } }, "local"), noteStorageChanges: async () => { notes++; } };
+  const Data = { projectState: async (_state, suppress) => { const cleanup = suppress({ amsTheme: "dark" });
+    events.storage.emit({ amsTheme: { newValue: "dark" } }, "local"); cleanup(); }, noteStorageChanges: async () => { notes++; } };
   const scope = vm.createContext({ chrome, SyncStore: store, Data, Drive: { listChanges: async () => { throw { code: "network_error" }; } }, SyncModel: { SCHEMA: 1, retryDelay: () => 1 }, setTimeout, clearTimeout, Date });
   vm.runInContext(fs.readFileSync("bg/sync.js", "utf8") + ";this.sync=SyncEngine", scope);
   return { sync: scope.sync, notes: () => notes };

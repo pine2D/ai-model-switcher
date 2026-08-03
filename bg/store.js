@@ -1,6 +1,6 @@
 // bg/store.js — 同步数据的本地 IndexedDB 存储层
 const SyncStore = (() => {
-  const DB_NAME = "polyask", DB_VERSION = 1;
+  const DB_NAME = "polyask", DB_VERSION = 2;
   let opening;
   const done = (tx) => new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
@@ -15,17 +15,25 @@ const SyncStore = (() => {
     if (opening) return opening;
     opening = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        const history = db.createObjectStore("history", { keyPath: "id" });
-        history.createIndex("lastUsed", ["lastUsedAt", "id"]);
-        const archives = db.createObjectStore("archives", { keyPath: "id" });
-        archives.createIndex("created", ["createdAt", "id"]);
-        const outbox = db.createObjectStore("outbox", { keyPath: "key" });
-        outbox.createIndex("next", ["nextAt", "key"]);
-        const files = db.createObjectStore("files", { keyPath: "fileId" });
-        files.createIndex("logicalKey", "logicalKey", { unique: true });
-        db.createObjectStore("meta", { keyPath: "key" });
+      req.onupgradeneeded = (event) => {
+        const db = req.result, tx = req.transaction;
+        if (event.oldVersion < 1) {
+          const history = db.createObjectStore("history", { keyPath: "id" });
+          history.createIndex("lastUsed", ["lastUsedAt", "id"]);
+          const archives = db.createObjectStore("archives", { keyPath: "id" });
+          archives.createIndex("created", ["createdAt", "id"]);
+          const outbox = db.createObjectStore("outbox", { keyPath: "key" });
+          outbox.createIndex("next", ["nextAt", "key"]);
+          outbox.createIndex("entity", ["kind", "entityId"]);
+          const files = db.createObjectStore("files", { keyPath: "fileId" });
+          files.createIndex("logicalKey", "logicalKey", { unique: false });
+          db.createObjectStore("meta", { keyPath: "key" });
+        } else if (event.oldVersion < 2) {
+          const files = tx.objectStore("files"), outbox = tx.objectStore("outbox");
+          files.deleteIndex("logicalKey");
+          files.createIndex("logicalKey", "logicalKey", { unique: false });
+          outbox.createIndex("entity", ["kind", "entityId"]);
+        }
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
@@ -67,8 +75,8 @@ const SyncStore = (() => {
     return { items, nextCursor: items.length === limit && last ? [last[time], last.id] : null };
   }
   async function iterate(kind, visit) {
-    const db = await open(), tx = db.transaction(kind), values = await request(tx.objectStore(kind).getAll());
-    for (const value of values) await visit(value);
+    let after = null, item;
+    while ((item = await next(kind, after))) { after = item.key; await visit(item.value); }
   }
   async function next(kind, after) {
     const db = await open(), tx = db.transaction(kind), store = tx.objectStore(kind);
@@ -97,36 +105,64 @@ const SyncStore = (() => {
   }
   async function findFile(logicalKey) {
     const db = await open(), tx = db.transaction("files");
-    return request(tx.objectStore("files").index("logicalKey").get(logicalKey));
+    const row = await request(tx.objectStore("files").index("logicalKey").openCursor(IDBKeyRange.only(logicalKey)));
+    return row?.value;
+  }
+  async function enqueue(op) {
+    const db = await open(), tx = db.transaction("outbox", "readwrite"), store = tx.objectStore("outbox"), completion = done(tx);
+    const current = await request(store.get(op.key)), value = { ...op, revision: (current?.revision || 0) + 1 };
+    store.put(value); await completion; return value;
+  }
+  async function completeOutbox(key, revision) {
+    const db = await open(), tx = db.transaction("outbox", "readwrite"), store = tx.objectStore("outbox"), completion = done(tx);
+    const current = await request(store.get(key));
+    if (current && (current.revision || 0) === (revision || 0)) store.delete(key);
+    await completion;
+  }
+  async function setEntityFile(kind, id, fileId, expectedFileId, ownerId) {
+    const name = kind === "history" ? "history" : "archives", db = await open();
+    const tx = db.transaction(name, "readwrite"), store = tx.objectStore(name), completion = done(tx), value = await request(store.get(id));
+    if (value && (expectedFileId === undefined || value.fileId === expectedFileId)) {
+      const nextValue = { ...value };
+      if (fileId) nextValue.fileId = fileId; else delete nextValue.fileId;
+      if (ownerId) nextValue.deviceId = ownerId;
+      store.put(nextValue);
+    }
+    await completion;
   }
   async function trimBodies(historyLimit = 200, archiveLimit = 50) {
     const db = await open(), tx = db.transaction(["history", "archives", "outbox"], "readwrite");
-    const pending = new Set((await request(tx.objectStore("outbox").getAll()))
-      .map((op) => `${op.kind}:${op.entityId}`));
-    const trim = (store, index, limit, fields) => new Promise((resolve, reject) => {
+    const completion = done(tx), pending = tx.objectStore("outbox").index("entity");
+    const trim = (store, index, kind, limit, fields) => new Promise((resolve, reject) => {
       let kept = 0, req = tx.objectStore(store).index(index).openCursor(null, "prev");
       req.onerror = () => reject(req.error || new Error("IndexedDB cursor failed"));
       req.onsuccess = () => {
         const row = req.result;
         if (!row) return resolve();
-        const value = row.value;
-        if (kept++ >= limit && value.fileId && !pending.has(`${store === "history" ? "history" : "archive"}:${value.id}`)) {
-          for (const field of fields) delete value[field];
-          row.update(value);
-        }
-        row.continue();
+        const value = row.value, hasBody = fields.some((field) => value[field] != null);
+        if (!hasBody || kept++ < limit || !value.fileId) return row.continue();
+        const check = pending.get([kind, value.id]);
+        check.onerror = () => reject(check.error || new Error("IndexedDB request failed"));
+        check.onsuccess = () => {
+          if (!check.result) { for (const field of fields) delete value[field]; row.update(value); }
+          row.continue();
+        };
       };
     });
-    await trim("history", "lastUsed", historyLimit, ["text"]);
-    await trim("archives", "created", archiveLimit, ["text", "results"]);
-    await done(tx);
+    await Promise.all([
+      trim("history", "lastUsed", "history", historyLimit, ["text"]),
+      trim("archives", "created", "archive", archiveLimit, ["text", "results"]),
+    ]);
+    await completion;
   }
 
   return {
     open, getMeta: (key) => read("meta", key).then((row) => row && row.value), putMeta: (key, value) => write("meta", { key, value }), deleteMeta: (key) => erase("meta", key),
     putHistory: (record) => write("history", record), getHistory: (id) => read("history", id), pageHistory: (cursor, limit) => page("history", "lastUsed", cursor, limit),
-    putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => page("archives", "created", cursor, limit, (value) => !value.deletedAt),
-    enqueue: (op) => write("outbox", op), readyOutbox, completeOutbox: (key) => erase("outbox", key), countOutbox,
-    putFile: (file) => write("files", file), findFile, deleteFile: (fileId) => erase("files", fileId), trimBodies, iterate, next,
+    putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => page("archives", "created", cursor, limit, (value) => !Object.hasOwn(value, "deletedAt")),
+    enqueue, readyOutbox, completeOutbox, countOutbox,
+    putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
+    deleteFile: (fileId) => erase("files", fileId),
+    setEntityFile, trimBodies, iterate, next,
   };
 })();

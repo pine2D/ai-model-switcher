@@ -20,8 +20,9 @@ function transfer(action, extra = {}) {
 
 function setBusy(value) {
   busy = value;
-  controls.forEach((el) => { el.disabled = value || !!config.clearRunning; });
+  controls.forEach((el) => { el.disabled = value || (!!config.clearRunning && el.id !== "clear-continue"); });
   byId("import-file").disabled = value || !!config.clearRunning;
+  byId("clear-continue").disabled = value;
 }
 
 function statusKey() {
@@ -38,6 +39,8 @@ function renderStatus() {
   if (config.clearRunning) detail.push(t("sync_clearProgress", config.clearProgress || 0));
   if (config.connected && status.lastSuccessAt) detail.push(t("sync_lastSuccess", new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(status.lastSuccessAt)));
   if (config.connected && status.pending) detail.push(t("sync_pending", status.pending));
+  if (status.state === "blocked") detail.push(t({ drive_disabled: "sync_blockedDriveDisabled", quota: "sync_blockedQuota", policy: "sync_blockedPolicy" }[status.reason] || "sync_blockedPolicy"));
+  if (status.errorCount) detail.push(t("sync_errorCount", status.errorCount));
   byId("status-detail").textContent = detail.join(" · ");
   const reconnect = !!config.connected && !config.clearRunning && status.state === "auth";
   const connected = !!config.connected && !config.clearRunning && !reconnect;
@@ -45,7 +48,9 @@ function renderStatus() {
   byId("connect").textContent = t(reconnect ? "sync_auth" : "sync_connect");
   byId("sync-now").hidden = !connected;
   byId("disconnect").hidden = !config.connected || !!config.clearRunning;
-  byId("clear-confirmation").hidden = !config.clearRunning && !byId("clear-confirmation").dataset.open;
+  const confirmation = byId("clear-confirmation");
+  confirmation.hidden = !config.clearRunning && !confirmation.dataset.open;
+  byId("clear-continue").hidden = busy || (!config.clearRunning && !confirmation.dataset.open);
   byId("clear-remote").hidden = !config.connected || !!config.clearRunning || reconnect;
 }
 
@@ -154,6 +159,7 @@ byId("disconnect").addEventListener("click", () => run("disconnect"));
 byId("clear-remote").addEventListener("click", () => {
   byId("clear-confirmation").dataset.open = "true";
   byId("clear-confirmation").hidden = false;
+  byId("clear-continue").hidden = false;
   byId("clear-continue").focus();
 });
 byId("clear-continue").addEventListener("click", () => run("clearRemote"));

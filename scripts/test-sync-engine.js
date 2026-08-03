@@ -18,7 +18,8 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], l
   };
   const data = {
     deviceId: async () => "device", deviceState: async () => meta.get("deviceState") || deviceState,
-    applyRemoteState: async (state) => { applied.push(state); events.push("apply"); listener?.({ amsTheme: { newValue: "dark" } }, "local"); },
+    applyRemoteState: async (state, suppress) => { applied.push(state); events.push("apply"); const cleanup = suppress({ amsTheme: "dark" });
+      listener?.({ amsTheme: { newValue: "dark" } }, "local"); cleanup(); },
     noteStorageChanges: async () => { notes++; return {}; }, seedState: async (empty) => { seeds.push(empty); events.push("seed"); },
     exportRecords: async () => ({ history: [], archives: localArchives }), importRecords: async (records) => imports.push(records),
     getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),

@@ -1,0 +1,136 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+
+class El {
+  constructor(id) { this.id = id; this.disabled = this.hidden = false; this.dataset = {}; this.textContent = ""; this.listeners = {}; this.style = {}; this.classList = { add() {}, remove() {} }; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  focus() {}
+  setAttribute() {}
+  removeAttribute() {}
+  replaceChildren() {}
+  appendChild() {}
+  append() {}
+}
+function syncPage(config, status, clearReply = Promise.resolve({ ok: true })) {
+  const ids = ["connect", "sync-now", "disconnect", "export", "import-file", "clear-remote", "clear-confirmation", "clear-continue", "status-title", "status-detail"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El(id)]));
+  const controls = ["connect", "sync-now", "disconnect", "export", "clear-remote", "clear-continue"].map((id) => els[id]);
+  let clearCalls = 0;
+  const chrome = { runtime: { sendMessage(message) {
+    if (message.source === "AMS_SYNC" && message.action === "status") return Promise.resolve({ ok: true, value: status });
+    if (message.source === "AMS_SYNC" && message.action === "clearRemote") return typeof clearReply === "function" ? clearReply(++clearCalls) : (++clearCalls, clearReply);
+    return Promise.resolve({ ok: true });
+  } }, storage: { local: { get: () => Promise.resolve({ amsSyncConfig: config }), set() {} } } };
+  const context = { chrome, document: { title: "", getElementById: (id) => els[id], querySelectorAll: () => controls, addEventListener() {} },
+    applyI18n() {}, t: (key, value) => value == null ? key : `${key}:${value}`, Intl, TextDecoderStream, window: {}, setInterval() {}, clearInterval() {}, setTimeout() {}, console };
+  vm.runInNewContext(fs.readFileSync("options/sync.js", "utf8") + "\nglobalThis.testApi={renderStatus,run,setState:(c,s)=>{config=c;status=s;busy=false;notice='';renderStatus();}};", context);
+  return new Promise((resolve) => setImmediate(() => resolve({ els, clearCalls: () => clearCalls, api: context.testApi })));
+}
+
+async function clearRunningFeedback() {
+  let release;
+  const page = await syncPage({ connected: true, clearRunning: true, clearProgress: 3 }, { state: "auth" }, (count) => count === 1 ? new Promise((resolve) => { release = resolve; }) : Promise.reject(new Error("retry")));
+  assert.equal(page.els["clear-continue"].hidden, false, "续跑按钮在清云端暂停时必须可见");
+  assert.equal(page.els["clear-continue"].disabled, false, "续跑按钮在空闲时必须可用");
+  assert.equal(page.els.export.disabled, true, "迁移操作必须在续跑期间禁用");
+  const pending = page.api.run("clearRemote");
+  assert.equal(page.els["clear-continue"].disabled, true, "实际续跑期间必须禁用继续按钮");
+  release({ ok: true }); await pending;
+  await page.api.run("clearRemote");
+  assert.equal(page.clearCalls(), 2, "失败后必须允许再次续跑");
+  assert.equal(page.els["clear-continue"].disabled, false, "失败后继续按钮必须恢复可用");
+}
+
+async function blockedFeedback() {
+  const page = await syncPage({ connected: true }, { state: "blocked", reason: "quota", errorCount: 2 });
+  assert.match(page.els["status-detail"].textContent, /sync_blockedQuota/, "配额阻断原因必须呈现");
+  assert.match(page.els["status-detail"].textContent, /sync_errorCount:2/, "损坏记录数必须呈现");
+}
+
+function historyRejects() {
+  const group = new El("group");
+  const context = { chrome: { runtime: { lastError: null, sendMessage(_message, done) { done({ ok: false }); } } }, document: { getElementById: () => group },
+    t: (key) => key, chosen: () => [], SITES: [], elTier: new El("tier"), elTierButtons: [], Event, flashNote() {} };
+  vm.runInNewContext(fs.readFileSync("console/library.js", "utf8") + "\nglobalThis.testApi={pushHistory,getHistory:()=>history};", context);
+  context.loadHistory = () => context.testApi.getHistory().splice(0);
+  context.testApi.pushHistory("not saved");
+  assert.equal(context.testApi.getHistory().length, 0, "持久化历史失败时不得写入内存快捷缓存");
+}
+
+function historyRace() {
+  const callbacks = [], group = new El("group"), persisted = ["old"];
+  const context = { chrome: { runtime: { lastError: null, sendMessage(_message, done) { callbacks.push(done); } } }, document: { getElementById: () => group },
+    t: (key) => key, chosen: () => [], SITES: [], elTier: new El("tier"), elTierButtons: [], Event, flashNote() {} };
+  vm.runInNewContext(fs.readFileSync("console/library.js", "utf8") + "\nglobalThis.testApi={pushHistory,getHistory:()=>history,replace:(next)=>history=next};", context);
+  context.loadHistory = () => context.testApi.replace(persisted);
+  context.testApi.replace(persisted);
+  context.testApi.pushHistory("A");
+  context.testApi.pushHistory("B");
+  persisted.unshift("B"); callbacks[1]({ ok: true }); callbacks[0]({ ok: false });
+  assert.equal(context.testApi.getHistory().join(","), "B,old", "A 失败不得抹掉随后成功的 B 或原有顺序");
+}
+
+function composeHistoryRejects() {
+  const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template", "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel", "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El(id)]));
+  els["ch-text"].value = "question";
+  const messages = []; let historyDone, feedbackDone, closed = 0;
+  const chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+    messages.push(message);
+    if (message.source === "AMS_DATA") { historyDone = done; return; }
+    if (message.from === "AMS_COMPOSE") { feedbackDone = done; return; }
+    if (done) done({ ok: true });
+  } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } } }); }, set(_value, done) { if (done) done(); } }, onChanged: { addListener() {} } } };
+  const context = { chrome, document: { getElementById: (id) => els[id], querySelectorAll: () => [], createElement: () => new El("new"), createTextNode: () => new El("text"), addEventListener() {}, hasFocus: () => false },
+    SITES: [{ host: "a", label: "A" }], t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console };
+  vm.runInNewContext(fs.readFileSync("console/compose.js", "utf8"), context);
+  els["ch-send"].listeners.click[0]();
+  assert.equal(messages.some((message) => message.action === "sendAll"), false, "历史写入完成前不得关闭 compose 或发送");
+  historyDone({ ok: false });
+  assert.equal(messages.some((message) => message.from === "AMS_COMPOSE" && message.type === "historySaveFailed"), true, "历史失败必须通知主控制台可见反馈");
+  assert.equal(messages.some((message) => message.action === "sendAll"), false, "主控制台收到失败提示前不得关闭 compose 或发送");
+  feedbackDone();
+  assert.equal(messages.some((message) => message.action === "sendAll"), true, "历史失败不得阻断 AI 群发");
+  assert.equal(closed, 1, "历史回调后仍应关闭 compose");
+}
+
+async function archiveRejects() {
+  const failsum = new El("failsum"), live = new El("live"), send = new El("send"), retry = new El("retry");
+  let receive;
+  const context = { chrome: { runtime: { lastError: null, sendMessage(_message, done) { done({ ok: false }); }, onMessage: { addListener(fn) { receive = fn; } } } },
+    document: { documentElement: {}, getElementById: (id) => ({ failsum, live, send, retry })[id], querySelector: () => null, querySelectorAll: () => [] },
+    navigator: { clipboard: { writeText: () => Promise.resolve() } }, t: (key) => key, setTimeout() {}, clearTimeout, Date, Map, console };
+  vm.runInNewContext(fs.readFileSync("console/status.js", "utf8") + "\nglobalThis.testApi={copySummary};", context);
+  context.testApi.copySummary([{ host: "a", label: "A" }], [{ host: "a", text: "answer" }], "q");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(failsum.textContent, "con_collectDoneUnarchived", "复制成功、归档失败必须明确说明未归档");
+  receive({ from: "AMS_COMPOSE", type: "historySaveFailed" });
+  assert.equal(failsum.textContent, "con_historySaveFailed", "主控制台必须可见地播报 compose 的历史保存失败");
+}
+
+function archivePageRejects() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El(id)]));
+  const chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+    if (message.source === "AMS_CONSOLE") return done({ results: [] });
+    if (message.action === "archiveAdd") return done({ ok: false });
+    return done({ ok: true, items: [] });
+  } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } }, amsConsolePrompt: "q" }); } } } };
+  const context = { chrome, document: { documentElement: {}, getElementById: (id) => els[id], addEventListener() {}, createElement: () => new El("new"), createTextNode: () => new El("text") },
+    navigator: { clipboard: { writeText: () => Promise.resolve() } }, URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, SITES: [{ host: "a", label: "A" }], t: (key) => key, applyI18n() {}, setTimeout, Date };
+  vm.runInNewContext(fs.readFileSync("console/archive.js", "utf8"), context);
+  els["ar-capture"].listeners.click[0]({ currentTarget: els["ar-capture"] });
+  assert.equal(els["ar-status"].textContent, "arc_saveFailed", "归档页保存失败必须明确提示");
+}
+
+(async () => {
+  await clearRunningFeedback();
+  await blockedFeedback();
+  historyRejects();
+  historyRace();
+  composeHistoryRejects();
+  await archiveRejects();
+  archivePageRejects();
+  console.log("sync feedback UI checks passed");
+})().catch((error) => { console.error(error); process.exitCode = 1; });

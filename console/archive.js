@@ -80,8 +80,7 @@ function showCurrent() {
 }
 function dataMessage(action, payload, done) {
   chrome.runtime.sendMessage({ source: "AMS_DATA", action, ...payload }, (res) => {
-    void chrome.runtime.lastError;
-    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    if (chrome.runtime.lastError || !res?.ok) { document.getElementById("ar-status").textContent = t(action === "archiveDelete" ? "arc_deleteFailed" : "arc_loadFailed"); return; }
     if (done) done(res);
   });
 }
@@ -134,9 +133,8 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
         }),
       };
       chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (res) => {
-        void chrome.runtime.lastError;
         button.disabled = false;
-        if (!res || !res.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+        if (chrome.runtime.lastError || !res?.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
         selectedId = res.record.id;
         document.getElementById("ar-status").textContent = t("arc_captured", sites.length);
         loadPage(true, selectedId);

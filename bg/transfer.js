@@ -5,16 +5,19 @@ const Transfer = (() => {
   const coded = (code) => Object.assign(new Error(code), { code });
   const object = (value) => value && typeof value === "object" && !Array.isArray(value);
   const text = (value, key) => typeof value[key] === "string" && value[key].length > 0;
-  const time = (value, key) => Number.isFinite(Number(value[key]));
+  const validTime = SyncModel.validTime || ((value) => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const time = (value, key) => validTime(value[key]);
   function validateHeader(row) {
     if (row?.format !== FORMAT) throw coded("invalid_header");
     if (row.version > VERSION) throw coded("newer_format");
-    if (row.version !== VERSION || !Date.parse(row.exportedAt)) throw coded("invalid_header");
+    if (row.version !== VERSION || typeof row.exportedAt !== "string" || !validTime(Date.parse(row.exportedAt))) throw coded("invalid_header");
     return true;
   }
   function validateKindValue(kind, value) {
     if (!object(value)) throw coded("invalid_record");
-    const tombstone = time(value, "deletedAt");
+    for (const key of ["createdAt", "lastUsedAt", "updatedAt", "deletedAt"])
+      if (Object.hasOwn(value, key) && !time(value, key)) throw coded("invalid_record");
+    const tombstone = value.deletedAt != null && time(value, "deletedAt");
     const valid = kind === "setting" ? text(value, "key") && Object.hasOwn(value, "value") && time(value, "updatedAt") && text(value, "deviceId")
       : kind === "template" ? text(value, "id") && time(value, "updatedAt") && (tombstone || typeof value.text === "string")
       : kind === "group" ? text(value, "id") && time(value, "updatedAt") && (tombstone || text(value, "name") && Array.isArray(value.hosts))

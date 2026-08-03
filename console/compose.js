@@ -168,9 +168,11 @@ document.getElementById("ch-send").addEventListener("click", () => {
     const sites = SITES.filter((s) => (c.selected || {})[s.host]);
     if (!sites.length) { const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
     chrome.storage.local.set({ amsConsolePrompt: elText.value }, () => {
-      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, () => void chrome.runtime.lastError);
-      chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: c.tier || null });
-      window.close();
+      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, (result) => {
+        const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: c.tier || null }); window.close(); };
+        if (chrome.runtime.lastError || !result?.ok) chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, send);
+        else send();
+      });
     });
   });
 });

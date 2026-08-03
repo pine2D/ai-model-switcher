@@ -26,7 +26,7 @@ assert.ok(compose.includes('action: "historyPage"'));
 assert.ok(archive.includes('action: "archivePage"') && archive.includes('action: "archiveGet"'));
 assert.ok(manage.includes("crypto.randomUUID()") && manage.includes("updatedAt: Date.now()"));
 assert.ok(compose.includes('item.text || item.preview || ""'));
-assert.ok(store.includes("accept") && store.includes("!value.deletedAt"));
+assert.ok(store.includes("accept") && store.includes('!Object.hasOwn(value, "deletedAt")'));
 assert.ok(archive.includes("!e || !e.results"));
 assert.ok(data.includes("Object.hasOwn(actions, msg.action)"));
 assert.ok(compose.includes('token !== historyLoadToken || activeKind !== "history"'));

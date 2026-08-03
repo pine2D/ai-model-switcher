@@ -6,7 +6,11 @@ let histDraft = ""; // 进入历史浏览前的未发送草稿（↓ 回到 -1 �
 function pushHistory(text) {
   if (!text) return;
   history = [text, ...history.filter((h) => h !== text)].slice(0, 20);
-  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, () => void chrome.runtime.lastError);
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, (result) => {
+    if (!chrome.runtime.lastError && result?.ok) return;
+    loadHistory();
+    if (typeof flashNote === "function") flashNote(t("con_historySaveFailed"));
+  });
   histCursor = -1;
 }
 
