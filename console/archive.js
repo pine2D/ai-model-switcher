@@ -99,7 +99,8 @@ function loadEntry(entry) {
     void chrome.runtime.lastError;
     if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
     if (!res.record || !res.record.results) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
-    archive = archive.map((item) => item.id === entry.id ? res.record : item); renderList(entry.id);
+    archive = archive.map((item) => item.id === entry.id ? res.record : item);
+    if (selectedId === entry.id) renderList(entry.id);
   });
 }
 document.getElementById("ar-more").addEventListener("click", () => loadPage(false));

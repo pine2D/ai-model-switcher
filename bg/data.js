@@ -123,7 +123,7 @@ if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addList
     archivePage: () => Data.pageArchives(msg.cursor, msg.limit),
     archiveGet: async () => ({ record: await Data.getArchive(msg.id) }),
   };
-  if (!actions[msg.action]) return;
+  if (!Object.hasOwn(actions, msg.action)) return;
   actions[msg.action]().then((value) => {
     sendResponse({ ok: true, ...value });
     if (value.changed) chrome.runtime.sendMessage({ source: "AMS_DATA", type: value.changed });

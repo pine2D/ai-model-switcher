@@ -18,6 +18,7 @@ const library = fs.readFileSync("console/library.js", "utf8");
 const background = fs.readFileSync("background.js", "utf8");
 const manage = fs.readFileSync("console/manage.js", "utf8");
 const store = fs.readFileSync("bg/store.js", "utf8");
+const data = fs.readFileSync("bg/data.js", "utf8");
 assert.ok(!compose.includes("amsHistory") && !compose.includes("slice(0, 20)"));
 assert.ok(!archive.includes("amsArchive") && !background.includes("slice(0, 30)"));
 assert.ok(library.includes('action: "historyAdd"'));
@@ -27,3 +28,6 @@ assert.ok(manage.includes("crypto.randomUUID()") && manage.includes("updatedAt: 
 assert.ok(compose.includes('item.text || item.preview || ""'));
 assert.ok(store.includes("accept") && store.includes("!value.deletedAt"));
 assert.ok(archive.includes("!e || !e.results"));
+assert.ok(data.includes("Object.hasOwn(actions, msg.action)"));
+assert.ok(compose.includes('token !== historyLoadToken || activeKind !== "history"'));
+assert.ok(archive.includes("selectedId === entry.id"));
