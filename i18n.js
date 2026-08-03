@@ -1,5 +1,5 @@
 // i18n.js — 运行时 UI 三语（popup/console/compose/内容脚本共用）。同步字典，避免 fetch/CSP/FOUC。
-// 真值存 storage.sync.amsLang（默认 auto；popup 改）；扩展页镜像 localStorage 供同步启动。
+// 真值存 storage.local.amsLang（默认 auto；popup 改）；扩展页镜像 localStorage 供同步启动。
 // MSG 由各 surface 任务填充：{ key: { en, zh_CN, zh_TW } }
 const MSG = {
   // —— console 段（I2）——
@@ -189,6 +189,7 @@ const MSG = {
   pop_shortcutUnset:   { en: "not set",                  zh_CN: "未设置",      zh_TW: "未設定" },
   pop_consoleKeys:     { en: "Console shortcuts",        zh_CN: "控制台内快捷键", zh_TW: "主控台內快捷鍵" },
   pop_manageShortcuts: { en: "Manage shortcuts",         zh_CN: "管理快捷键",     zh_TW: "管理快速鍵" },
+  pop_syncSettings:    { en: "Data sync",                zh_CN: "数据同步",       zh_TW: "資料同步" },
   pop_diagShort:       { en: "Diagnose",                 zh_CN: "诊断",           zh_TW: "診斷" },
   pop_shortcutOpen:    { en: "Open / focus console",     zh_CN: "打开 / 聚焦控制台", zh_TW: "開啟 / 聚焦主控台" },
   pop_shortcutThink:   { en: "Switch to deep think",     zh_CN: "切换深度思考",   zh_TW: "切換深度思考" },
@@ -253,8 +254,8 @@ function applyI18n(root) {
   root.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.getAttribute("data-i18n-ph")); });
   root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria"))); });
 }
-// 权威值取 storage.sync；变更实时重应用 + 通知各 surface 重渲动态串
-chrome.storage.sync.get({ amsLang: "auto" }, (v) => { _setLangFrom(v.amsLang); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); });
+// 权威值取 storage.local；变更实时重应用 + 通知各 surface 重渲动态串
+chrome.storage.local.get({ amsLang: "auto" }, (v) => { _setLangFrom(v.amsLang); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); });
 chrome.storage.onChanged.addListener((c, area) => {
-  if (area === "sync" && c.amsLang) { _setLangFrom(c.amsLang.newValue); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); }
+  if (area === "local" && c.amsLang) { _setLangFrom(c.amsLang.newValue); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); }
 });

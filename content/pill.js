@@ -1,5 +1,5 @@
 // content/pill.js — 三态悬浮控件：handle(默认贴边把手)/always(常显)/hidden。
-// displayMode 存 chrome.storage.sync，popup 修改后经 storage.onChanged 实时生效。
+// displayMode 存 chrome.storage.local，popup 修改后经 storage.onChanged 实时生效。
 (function () {
   "use strict";
   if (document.getElementById("ams-pill-host")) return;
@@ -109,9 +109,9 @@
     if (mode === "always") { refreshState(); armIdle(); }
   }
 
-  chrome.storage.sync.get({ displayMode: "handle" }, (v) => applyMode(v.displayMode));
+  chrome.storage.local.get({ displayMode: "handle" }, (v) => applyMode(v.displayMode));
   chrome.storage.onChanged.addListener((ch, area) => {
-    if (area === "sync" && ch.displayMode) applyMode(ch.displayMode.newValue);
+    if (area === "local" && ch.displayMode) applyMode(ch.displayMode.newValue);
   });
 
   document.addEventListener("ams:switched", refreshState);

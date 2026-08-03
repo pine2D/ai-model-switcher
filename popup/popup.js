@@ -68,7 +68,7 @@ function setupSelect(id, storageKey, fallback) {
   trigger.addEventListener("click", () => menu.hidden ? open() : close());
   menu.addEventListener("click", (e) => {
     const option = e.target.closest("[data-value]"); if (!option) return;
-    select(option.dataset.value); close(); trigger.focus(); chrome.storage.sync.set({ [storageKey]: option.dataset.value });
+    select(option.dataset.value); close(); trigger.focus(); chrome.storage.local.set({ [storageKey]: option.dataset.value });
   });
   root.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { close(); trigger.focus(); return; }
@@ -80,18 +80,18 @@ function setupSelect(id, storageKey, fallback) {
   });
   document.addEventListener("click", (e) => { if (!root.contains(e.target)) close(); });
   document.addEventListener("i18n:changed", () => select(root.dataset.value || fallback));
-  chrome.storage.sync.get({ [storageKey]: fallback }, (v) => select(v[storageKey]));
+  chrome.storage.local.get({ [storageKey]: fallback }, (v) => select(v[storageKey]));
 }
 setupSelect("lang", "amsLang", "auto");
 setupSelect("dm", "displayMode", "handle");
 
 // popup / console / compose 共用 amsTheme，由 theme.js 即时应用
-chrome.storage.sync.get({ amsTheme: "auto" }, (v) => {
+chrome.storage.local.get({ amsTheme: "auto" }, (v) => {
   const el = document.querySelector(`input[name=theme][value="${v.amsTheme}"]`);
   if (el) el.checked = true;
 });
 document.querySelectorAll("input[name=theme]").forEach((r) =>
-  r.addEventListener("change", () => chrome.storage.sync.set({ amsTheme: r.value }))
+  r.addEventListener("change", () => chrome.storage.local.set({ amsTheme: r.value }))
 );
 
 document.getElementById("diag").addEventListener("click", async () => {
@@ -141,6 +141,10 @@ buildKeys();
 document.addEventListener("i18n:changed", () => { buildKeys(); renderStatus(); });
 
 document.getElementById("shortcut-help").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
+document.getElementById("sync-settings").addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+  window.close();
+});
 
 document.getElementById("open-console").addEventListener("click", async () => {
   // 带上当前站 host：console 首次使用（无勾选历史）时预勾该站，打通"正看着这个站想群发"的路径
