@@ -33,6 +33,7 @@ echo "[test] 图片载荷与群发消息契约"
 node scripts/test-image.js
 node scripts/test-image-runtime.js
 node scripts/test-multi-image.js
+node scripts/test-transfer.js
 
 git diff --check
 echo "[verify] 全部通过"

@@ -74,7 +74,7 @@ async function run(action) {
 }
 
 async function readJsonLines(file, onRow) {
-  const reader = file.stream().pipeThrough(new TextDecoderStream()).getReader();
+  const reader = file.stream().pipeThrough(new TextDecoderStream("utf-8", { fatal: true })).getReader();
   let buffer = "";
   for (;;) {
     const { value = "", done } = await reader.read();
@@ -131,7 +131,7 @@ byId("export").addEventListener("click", async () => {
     const handle = await picker;
     notice = ""; setBusy(true); await writeTransfer(handle);
   } catch (error) {
-    if (error?.name !== "AbortError") notice = error?.code === "reconnect_required" ? "sync_reconnectExport" : "sync_exportError";
+    if (error?.name !== "AbortError") notice = ["reconnect_required", "unauthorized", "auth_failed"].includes(error?.code) ? "sync_reconnectExport" : "sync_exportError";
   } finally { setBusy(false); renderStatus(); }
 });
 
@@ -142,6 +142,7 @@ byId("import-file").addEventListener("change", async (event) => {
   try {
     await batches(file, (header, records) => transfer("validateImport", { header, records }));
     await batches(file, (_header, records) => transfer("importBatch", { records }));
+    await transfer("finishImport");
     notice = "sync_importDone";
   } catch (_) { notice = "sync_importError"; }
   finally { event.target.value = ""; setBusy(false); await refresh().catch(() => renderStatus()); }

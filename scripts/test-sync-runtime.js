@@ -113,9 +113,9 @@ function transferRuntime() {
     onDisconnect: { addListener: (fn) => disconnectListeners.push(fn), removeListener: (fn) => disconnectListeners.splice(disconnectListeners.indexOf(fn), 1) },
     ack: (seq) => messageListeners.slice().forEach((fn) => fn({ ack: seq })),
     disconnect: () => disconnectListeners.slice().forEach((fn) => fn()) };
-  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "h", text: "q", textHash: "h", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "a", text: "q", results: [], createdAt: 1 } }; } },
+  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "q", text: "q", textHash: "q", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "00000000-0000-4000-8000-000000000001", text: "q", results: [], createdAt: 1 } }; } },
     SyncEngine: { runForExport: async () => { synced++; } },
-    chrome: { runtime: { onConnect: { addListener: () => {} } } }, Date, console });
+    chrome: { runtime: { onConnect: { addListener: () => {} } } }, SyncModel: { hashText: async (text) => text }, Date, console });
   const file = path.join(__dirname, "..", "bg/transfer.js");
   const source = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   vm.runInContext(source + ";this.transfer=typeof Transfer === 'undefined' ? undefined : Transfer", scope);
@@ -133,7 +133,7 @@ async function main() {
   await context.data.deleteArchive("uuid");
   assert.ok(archives.get("uuid").deletedAt, "删除必须写 tombstone");
   history.set("remote", { id: "remote", fileId: "drive-history" });
-  context.SyncEngine = { resolveHistory: async () => ({ id: "remote", text: "restored", fileId: "drive-history" }), wake: async () => {} };
+  context.SyncEngine = { resolveHistory: async () => ({ id: "remote", text: "restored", fileId: "drive-history" }), wake: async () => {}, projectImportedState: async () => {} };
   assert.equal((await context.data.getHistory("remote")).text, "restored", "缺正文的历史记录必须按 fileId 补回正文");
   const imported = [{ kind: "template", value: { id: "t", text: "template", updatedAt: 1 } },
     { kind: "history", value: { id: "h", text: "question", textHash: "h", createdAt: 1, lastUsedAt: 2 } }, { kind: "archive", value: { id: "a", text: "answer", results: [], createdAt: 1 } }];

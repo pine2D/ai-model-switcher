@@ -3,6 +3,7 @@ const SyncEngine = (() => {
   const CONFIG = "amsSyncConfig", STATUS = "amsSyncStatus";
   let chain = Promise.resolve(), localTimer = null, applyingRemote = false, errorCount = 0;
   const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+  const coded = (code) => Object.assign(new Error(code), { code });
   const LOCAL_KEYS = { amsLang: 1, amsTheme: 1, displayMode: 1, amsAutoRaise: 1, amsConsole: 1, amsTemplates: 1, amsGroups: 1 };
   const serialize = (task) => {
     const run = chain.then(task, task);
@@ -209,12 +210,27 @@ const SyncEngine = (() => {
     } catch (error) { return failure(error); }
   }
   const wake = (reason) => serialize(() => syncOnce(reason));
+  async function exportOnce() {
+    const saved = await config();
+    if (!saved.connected || saved.clearRunning) return status();
+    try {
+      await setStatus("syncing", { reason: "export" });
+      await pull(); const waiting = await flush();
+      if ((await config()).readOnly) throw coded("schema");
+      return setStatus(waiting ? "waiting" : "idle", { lastSuccessAt: Date.now(), reason: undefined });
+    } catch (error) { if (error?.code === "schema") await setStatus("schema"); else await failure(error); throw error; }
+  }
   async function connect() {
     try { await Drive.connect(true); await saveConfig({ connected: true, readOnly: false }); return wake("connect"); }
     catch (error) { return failure(error); }
   }
   async function runNow(reason = "manual") { if (!(await config()).connected) return connect(); return wake(reason); }
-  async function runForExport() { return (await config()).connected ? wake("export") : status(); }
+  const runForExport = () => serialize(exportOnce);
+  const finishImport = async () => (await config()).connected ? wake("import") : status();
+  async function projectImportedState(state) {
+    applyingRemote = true;
+    try { await Data.projectState(state); } finally { applyingRemote = false; }
+  }
   async function clearCache(connected = false) {
     await SyncStore.deleteMeta("pageToken"); await SyncStore.deleteMeta("remoteStates");
     await SyncStore.iterate("files", (file) => forget(file.fileId));
@@ -264,6 +280,6 @@ const SyncEngine = (() => {
     actions[msg.action]().then((value) => respond({ ok: true, value }), (error) => respond({ ok: false, code: error?.code || "sync_failed" }));
     return true;
   });
-  return { init, wake, connect, runNow, runForExport, disconnect, clearRemote, status, resolveHistory: (id) => resolve("history", id), resolveArchive: (id) => resolve("archive", id) };
+  return { init, wake, connect, runNow, runForExport, finishImport, projectImportedState, disconnect, clearRemote, status, resolveHistory: (id) => resolve("history", id), resolveArchive: (id) => resolve("archive", id) };
 })();
 SyncEngine.init();

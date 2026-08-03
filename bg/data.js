@@ -74,15 +74,16 @@ const Data = (() => {
     await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
     return state;
   }
-  async function applyRemoteState(state = {}) {
+  async function projectState(state = {}) {
     const settings = state.settings || {}, values = {};
     for (const key of SETTINGS) if (settings[key]) values[key] = settings[key].value;
     if (settings["amsConsole.selected"] || settings["amsConsole.tier"]) values.amsConsole = {
       selected: settings["amsConsole.selected"]?.value || {}, tier: settings["amsConsole.tier"]?.value || "" };
-    if (state.templates) values.amsTemplates = state.templates.filter((item) => !item.deletedAt);
-    if (state.groups) values.amsGroups = state.groups.filter((item) => !item.deletedAt);
+    if (state.templates) values.amsTemplates = Object.values(state.templates).filter((item) => !item.deletedAt);
+    if (state.groups) values.amsGroups = Object.values(state.groups).filter((item) => !item.deletedAt);
     if (Object.keys(values).length) await chrome.storage.local.set(values);
   }
+  const applyRemoteState = projectState;
   async function seedState(cloudEmpty) {
     const keys = cloudEmpty ? [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups", "amsHistory", "amsArchive"] :
       ["amsTemplates", "amsGroups", "amsHistory", "amsArchive"];
@@ -132,15 +133,16 @@ const Data = (() => {
         await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
       }
     }
-    if (stateChanged) { await SyncStore.putMeta("deviceState", state); await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 }); }
-    const config = (await chrome.storage.local.get({ amsSyncConfig: {} })).amsSyncConfig || {};
-    if (config.connected && typeof SyncEngine !== "undefined") SyncEngine.wake("import");
+    if (stateChanged) {
+      await SyncStore.putMeta("deviceState", state); await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
+      if (typeof SyncEngine !== "undefined") await SyncEngine.projectImportedState(state); else await projectState(state);
+    }
   }
   async function* exportRecords() {
     const state = await deviceState();
     for (const [key, value] of Object.entries(state.settings)) yield { kind: "setting", value: { key, value: value.value, updatedAt: value.updatedAt, deviceId: value.deviceId } };
-    for (const value of Object.values(state.templates)) if (!value.deletedAt) yield { kind: "template", value };
-    for (const value of Object.values(state.groups)) if (!value.deletedAt) yield { kind: "group", value };
+    for (const value of Object.values(state.templates)) yield { kind: "template", value };
+    for (const value of Object.values(state.groups)) yield { kind: "group", value };
     for (const store of ["history", "archives"]) {
       let after = null, item;
       while ((item = await SyncStore.next(store, after))) {
@@ -163,7 +165,7 @@ const Data = (() => {
   return { deviceId: getDeviceId, deviceState, noteStorageChanges, applyRemoteState, addHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
     addArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), getArchive: (id) => resolve("archive", id),
-    seedState, importRecords, exportRecords };
+    seedState, importRecords, exportRecords, projectState };
 })();
 
 if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

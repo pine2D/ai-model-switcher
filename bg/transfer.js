@@ -14,9 +14,10 @@ const Transfer = (() => {
   }
   function validateKindValue(kind, value) {
     if (!object(value)) throw coded("invalid_record");
+    const tombstone = time(value, "deletedAt");
     const valid = kind === "setting" ? text(value, "key") && Object.hasOwn(value, "value") && time(value, "updatedAt") && text(value, "deviceId")
-      : kind === "template" ? text(value, "id") && typeof value.text === "string" && time(value, "updatedAt")
-      : kind === "group" ? text(value, "id") && text(value, "name") && Array.isArray(value.hosts) && time(value, "updatedAt")
+      : kind === "template" ? text(value, "id") && time(value, "updatedAt") && (tombstone || typeof value.text === "string")
+      : kind === "group" ? text(value, "id") && time(value, "updatedAt") && (tombstone || text(value, "name") && Array.isArray(value.hosts))
       : kind === "history" ? text(value, "id") && text(value, "text") && text(value, "textHash") && time(value, "createdAt") && time(value, "lastUsedAt")
       : text(value, "id") && time(value, "createdAt") && (time(value, "deletedAt") || typeof value.text === "string" && Array.isArray(value.results));
     if (!valid) throw coded("invalid_record");
@@ -24,6 +25,13 @@ const Transfer = (() => {
   function validateRecord(row) {
     if (!KINDS.has(row?.kind)) throw coded("unknown_kind");
     validateKindValue(row.kind, row.value);
+    return true;
+  }
+  async function validateContent(row) {
+    validateRecord(row);
+    const value = row.value;
+    if (row.kind === "history" && (value.id !== value.textHash || value.textHash !== await SyncModel.hashText(value.text))) throw coded("invalid_record");
+    if (row.kind === "archive" && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id)) throw coded("invalid_record");
     return true;
   }
   function waitAck(port, seq, row) {
@@ -37,28 +45,42 @@ const Transfer = (() => {
   }
   async function attachPort(port) {
     if (port.name !== "ams-transfer") return;
+    let cancelled = false, iterator;
+    const onDisconnect = () => { cancelled = true; };
+    const live = () => { if (cancelled) throw coded("export_cancelled"); };
+    port.onDisconnect.addListener(onDisconnect);
     try {
+      live();
       await SyncEngine.runForExport();
-      for await (const row of Data.exportRecords()) validateRecord(row);
+      live();
+      iterator = Data.exportRecords()[Symbol.asyncIterator]();
+      for (;;) { live(); const next = await iterator.next(); live(); if (next.done) break; await validateContent(next.value); }
       let seq = 0, count = 0;
+      live();
       await waitAck(port, seq++, { format: FORMAT, version: VERSION, exportedAt: new Date().toISOString() });
-      for await (const row of Data.exportRecords()) { validateRecord(row); await waitAck(port, seq++, row); count++; }
+      iterator = Data.exportRecords()[Symbol.asyncIterator]();
+      for (;;) {
+        live(); const next = await iterator.next(); live(); if (next.done) break;
+        await validateContent(next.value); live(); await waitAck(port, seq++, next.value); count++;
+      }
+      live();
       port.postMessage({ done: true, count });
-    } catch (error) { try { port.postMessage({ error: error.code || "export_failed" }); } catch (_) {} }
+    } catch (error) { if (!cancelled) try { port.postMessage({ error: error.code || "export_failed" }); } catch (_) {} }
+    finally { try { await iterator?.return?.(); } catch (_) {} port.onDisconnect.removeListener(onDisconnect); }
   }
-  return { FORMAT, VERSION, validateHeader, validateRecord, attachPort };
+  return { FORMAT, VERSION, validateHeader, validateRecord, validateContent, attachPort };
 })();
 
 if (globalThis.chrome?.runtime?.onConnect) chrome.runtime.onConnect.addListener(Transfer.attachPort);
 if (globalThis.chrome?.runtime?.onMessage) chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
-  if (!msg || msg.source !== "AMS_TRANSFER" || !["validateImport", "importBatch"].includes(msg.action)) return;
+  if (!msg || msg.source !== "AMS_TRANSFER" || !["validateImport", "importBatch", "finishImport"].includes(msg.action)) return;
   Promise.resolve().then(async () => {
     if (msg.action === "validateImport") {
       Transfer.validateHeader(msg.header);
-      for (const row of msg.records || []) Transfer.validateRecord(row);
+      for (const row of msg.records || []) await Transfer.validateContent(row);
     } else {
-      for (const row of msg.records || []) Transfer.validateRecord(row);
-      await Data.importRecords(msg.records || []);
+      if (msg.action === "finishImport") await SyncEngine.finishImport();
+      else { for (const row of msg.records || []) await Transfer.validateContent(row); await Data.importRecords(msg.records || []); }
     }
     return {};
   }).then((value) => respond({ ok: true, value }), (error) => respond({ ok: false, code: error.code || "import_failed" }));

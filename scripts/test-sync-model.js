@@ -20,6 +20,13 @@ async function main() {
   assert.throws(() => Transfer.validateHeader({ format: "polyask-transfer", version: 2 }), /newer_format/);
   assert.throws(() => Transfer.validateRecord({ kind: "unknown", value: {} }), /unknown_kind/);
   assert.throws(() => Transfer.validateRecord({ kind: "history", value: { id: "h" } }), /invalid_record/);
+  const id = "00000000-0000-4000-8000-000000000001", hash = await M.hashText("same text");
+  assert.equal(Transfer.validateRecord({ kind: "template", value: { id: "t", updatedAt: 1, deletedAt: 1 } }), true);
+  assert.equal(Transfer.validateRecord({ kind: "group", value: { id: "g", updatedAt: 1, deletedAt: 1 } }), true);
+  await Transfer.validateContent({ kind: "history", value: { id: hash, textHash: hash, text: "same text", createdAt: 1, lastUsedAt: 1 } });
+  await Transfer.validateContent({ kind: "archive", value: { id, createdAt: 1, deletedAt: 1 } });
+  await assert.rejects(Transfer.validateContent({ kind: "history", value: { id: hash, textHash: hash, text: "other", createdAt: 1, lastUsedAt: 1 } }), /invalid_record/);
+  await assert.rejects(Transfer.validateContent({ kind: "archive", value: { id: "not-uuid", createdAt: 1, deletedAt: 1 } }), /invalid_record/);
   assert.equal(M.compareVersion({ updatedAt: 2, deviceId: "a" }, { updatedAt: 1, deviceId: "z" }), 1);
   assert.equal(M.compareVersion({ updatedAt: 2, deviceId: "b" }, { updatedAt: 2, deviceId: "a" }), 1);
   assert.ok(new TextEncoder().encode(M.utf8Preview("问".repeat(100))).length <= 96);
