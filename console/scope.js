@@ -109,7 +109,7 @@ function saveGroup() {
   if (!name) { elName.setAttribute("aria-invalid", "true"); elName.focus(); return; }
   const hosts = currentHosts();
   if (!canSaveGroup(hosts)) { showOnly(elManage); renderScope(); return; }
-  groups = [...groups.filter((group) => group.name !== name), { name, hosts }];
+  groups = [...groups.filter((group) => group.name !== name), { id: crypto.randomUUID(), name, hosts, updatedAt: Date.now() }];
   chrome.storage.local.set({ amsGroups: groups });
   clearGroupName(); showOnly(elManage); renderScope();
 }

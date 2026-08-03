@@ -21,7 +21,7 @@ function cancelName(restoreFocus) {
 function commitName() {
   if (!pendingSave) return;
   const name = elName.value.trim();
-  templates = [...templates, { name, text: pendingSave.text }];
+  templates = [...templates, { id: crypto.randomUUID(), name, text: pendingSave.text, updatedAt: Date.now() }];
   chrome.storage.local.set({ amsTemplates: templates });
   renderTemplates();
   cancelName(true);

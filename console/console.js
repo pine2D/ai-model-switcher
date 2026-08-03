@@ -87,9 +87,16 @@ function save() {
   chrome.storage.local.set({ amsConsole: { selected, tier: elTier.value }, amsConsolePrompt: elPrompt.value });
   if (typeof syncGroupSelect === "function") syncGroupSelect();
 }
+function loadHistory() {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyPage", cursor: null, limit: 20 }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok || !Array.isArray(res.items)) return;
+    history = res.items.map((item) => item.text || item.preview).filter(Boolean);
+  });
+}
 function load() {
   // 所需 key 单次 get：冷启动少一轮 storage IPC 往返
-  chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsHistory", "amsConsolePrefill"], (o) => {
+  chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsConsolePrefill"], (o) => {
     const c = (o && o.amsConsole) || {};
     selected = c.selected || {};
     const firstSelection = !Object.keys(selected).length;
@@ -106,7 +113,7 @@ function load() {
     const prompt = o.amsConsolePrompt != null ? o.amsConsolePrompt : c.prompt;
     if (prompt) elPrompt.value = prompt;
     if (o.amsConsolePrompt == null && c.prompt != null) chrome.storage.local.set({ amsConsolePrompt: c.prompt }); // 旧结构一次性迁移
-    history = (o && o.amsHistory) || [];
+    loadHistory();
     render();
     if (firstSelection) save(); // 范围伴侣窗从 storage 读取；首次默认选择也必须落盘
     syncGroupSelect();
@@ -220,7 +227,6 @@ document.getElementById("retry").addEventListener("click", (e) => {
 // 伴侣窗编辑 → 经 storage 回填细条输入框（本框未编辑时才更新，防回环）
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area !== "local") return;
-  if (ch.amsHistory) history = ch.amsHistory.newValue || [];
   if (ch.amsConsole && ch.amsConsole.newValue) {
     const c = ch.amsConsole.newValue; selected = c.selected || {};
     if (c.tier != null) elTier.value = c.tier;
@@ -230,6 +236,9 @@ chrome.storage.onChanged.addListener((ch, area) => {
   const p = ch.amsConsolePrompt.newValue;
   // "编辑中"须同时窗口持焦：窗口失焦后 activeElement 不重置，单看它会永久挡住回填
   if (p != null && p !== elPrompt.value && !(document.hasFocus() && document.activeElement === elPrompt)) { elPrompt.value = p; }
+});
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.source === "AMS_DATA" && msg.type === "historyChanged") loadHistory();
 });
 
 load();

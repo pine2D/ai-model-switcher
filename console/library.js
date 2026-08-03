@@ -6,7 +6,7 @@ let histDraft = ""; // 进入历史浏览前的未发送草稿（↓ 回到 -1 �
 function pushHistory(text) {
   if (!text) return;
   history = [text, ...history.filter((h) => h !== text)].slice(0, 20);
-  chrome.storage.local.set({ amsHistory: history });
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, () => void chrome.runtime.lastError);
   histCursor = -1;
 }
 

@@ -1,4 +1,4 @@
-// console/archive.js — 归档只读页：amsArchive（汇总复制/导出时定格的「问题+各站回答」快照）的
+// console/archive.js — 归档只读页：汇总复制/导出时定格的「问题+各站回答」快照的
 // 列表与详情。md 重建与 console/status.js 的 buildSummary 对齐（本页无 console 全局，独立小实现）。
 applyI18n();
 const elList = document.getElementById("ar-list");
@@ -7,7 +7,7 @@ const elCopy = document.getElementById("ar-copy");
 const elExport = document.getElementById("ar-export");
 const elDel = document.getElementById("ar-del");
 let archive = [];
-let selectedTs = null;
+let archiveCursor = null, selectedId = null;
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
   submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow",
   not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
@@ -49,32 +49,60 @@ function renderMd(md, box) {
   if (fenceLen && codeBuf.length) add("pre", "ar-code", codeBuf.join("\n")); // 未闭合围栏兜底
 }
 function currentEntry() {
-  return archive.find((entry) => entry.ts === selectedTs) || null;
+  return archive.find((entry) => entry.id === selectedId) || null;
 }
-function renderList(preferredTs) {
-  selectedTs = archive.some((entry) => entry.ts === preferredTs) ? preferredTs
-    : archive.some((entry) => entry.ts === selectedTs) ? selectedTs : archive[0] && archive[0].ts;
+function renderList(preferredId) {
+  selectedId = archive.some((entry) => entry.id === preferredId) ? preferredId
+    : archive.some((entry) => entry.id === selectedId) ? selectedId : archive[0] && archive[0].id;
   disarmDel();
   elList.replaceChildren();
   archive.forEach((entry) => {
     const button = document.createElement("button");
     button.type = "button"; button.className = "ar-item"; button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(entry.ts === selectedTs));
+    button.setAttribute("aria-selected", String(entry.id === selectedId));
     const date = document.createElement("time"); date.textContent = new Date(entry.ts).toLocaleString(document.documentElement.lang || undefined);
     const question = document.createElement("span");
-    question.textContent = (entry.text || "").length > 52 ? entry.text.slice(0, 52) + "…" : (entry.text || "—");
+    const text = entry.text || entry.preview || "";
+    question.textContent = text.length > 52 ? text.slice(0, 52) + "…" : (text || "—");
     button.append(date, question);
-    button.addEventListener("click", () => { selectedTs = entry.ts; renderList(entry.ts); });
+    button.addEventListener("click", () => { selectedId = entry.id; renderList(entry.id); });
     elList.appendChild(button);
   });
+  document.getElementById("ar-more").hidden = !archiveCursor;
   elDetail.setAttribute("data-empty", t("arc_empty")); showCurrent();
+  const current = currentEntry(); if (current && !current.results) loadEntry(current);
 }
 function showCurrent() {
   const e = currentEntry();
   elDetail.replaceChildren();
-  if (e) renderMd(entryMd(e), elDetail);
-  elCopy.disabled = elExport.disabled = elDel.disabled = !e;
+  if (e && e.results) renderMd(entryMd(e), elDetail);
+  elCopy.disabled = elExport.disabled = elDel.disabled = !e || !e.results;
 }
+function dataMessage(action, payload, done) {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action, ...payload }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    if (done) done(res);
+  });
+}
+function loadPage(reset, preferredId) {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archivePage", cursor: reset ? null : archiveCursor, limit: 50 }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    archive = reset ? res.items || [] : archive.concat(res.items || []);
+    archiveCursor = res.nextCursor || null; document.getElementById("ar-status").textContent = ""; renderList(preferredId);
+  });
+}
+function loadEntry(entry) {
+  if (entry.results) return;
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveGet", id: entry.id }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    if (!res.record || !res.record.results) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    archive = archive.map((item) => item.id === entry.id ? res.record : item); renderList(entry.id);
+  });
+}
+document.getElementById("ar-more").addEventListener("click", () => loadPage(false));
 elCopy.addEventListener("click", () => {
   const e = currentEntry();
   if (e) navigator.clipboard.writeText(entryMd(e)).then(() => { elCopy.textContent = t("arc_copied"); setTimeout(() => { elCopy.textContent = t("arc_copy"); }, 1500); });
@@ -104,36 +132,36 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
           return { host: site.host, label: site.label, text: result.text || null, state: result.state || null, code: result.code || null };
         }),
       };
-      chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "archiveAdd", entry }, () => {
-        button.disabled = false; selectedTs = entry.ts;
+      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (res) => {
+        void chrome.runtime.lastError;
+        button.disabled = false;
+        if (!res || !res.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+        selectedId = res.record.id;
         document.getElementById("ar-status").textContent = t("arc_captured", sites.length);
-        renderList(entry.ts);
+        loadPage(true, selectedId);
       });
     });
   });
 });
 // 删除二段确认（与 console 删模板/分组的确认保护一致，归档是不可恢复的完整对比现场）：
-// 首击按钮变「确认删除？」危险态并绑定目标条目（ts 唯一标识），3s 内对同一条目再击才删；
+// 首击按钮变「确认删除？」危险态并绑定目标条目（id 唯一标识），3s 内对同一条目再击才删；
 // 超时/换条目/任何重渲染（renderList 首行）都撤销确认——确认目标绝不漂移（对抗审查 F1）。
-let delArmedUntil = 0, delArmedTs = null;
-function disarmDel() { delArmedUntil = 0; delArmedTs = null; elDel.textContent = t("arc_del"); elDel.classList.remove("danger"); }
+let delArmedUntil = 0, delArmedId = null;
+function disarmDel() { delArmedUntil = 0; delArmedId = null; elDel.textContent = t("arc_del"); elDel.classList.remove("danger"); }
 elDel.addEventListener("click", () => {
   const cur = currentEntry();
   if (!cur) return;
-  if (Date.now() > delArmedUntil || delArmedTs !== cur.ts) {
-    delArmedUntil = Date.now() + 3000; delArmedTs = cur.ts;
+  if (Date.now() > delArmedUntil || delArmedId !== cur.id) {
+    delArmedUntil = Date.now() + 3000; delArmedId = cur.id;
     elDel.textContent = t("arc_delConfirm"); elDel.classList.add("danger");
     setTimeout(() => { if (delArmedUntil && Date.now() >= delArmedUntil) disarmDel(); }, 3100);
     return;
   }
   disarmDel();
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "archiveDelete", ts: cur.ts }, () => void chrome.runtime.lastError);
+  dataMessage("archiveDelete", { id: cur.id }, () => loadPage(true));
 });
-// 库变更（console 侧新增快照 / 本页删除落盘）→ 刷新列表；本页数组因此常新，不再长寿陈旧
-chrome.storage.onChanged.addListener((ch, area) => {
-  if (area === "local" && ch.amsArchive) {
-    archive = ch.amsArchive.newValue || []; renderList(selectedTs);
-  }
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.source === "AMS_DATA" && msg.type === "archiveChanged") loadPage(true, selectedId);
 });
-chrome.storage.local.get("amsArchive", (o) => { archive = (o && o.amsArchive) || []; renderList(); });
+loadPage(true);
 document.addEventListener("i18n:changed", () => renderList());

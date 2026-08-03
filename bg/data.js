@@ -111,3 +111,22 @@ const Data = (() => {
     addArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), getArchive: (id) => SyncStore.getArchive(id),
     seedState, importRecords, exportRecords };
 })();
+
+if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || msg.source !== "AMS_DATA") return;
+  const actions = {
+    historyAdd: async () => { const record = await Data.addHistory(msg.text); return { record, changed: record && "historyChanged" }; },
+    historyPage: () => Data.pageHistory(msg.cursor, msg.limit),
+    historyGet: async () => ({ record: await Data.getHistory(msg.id) }),
+    archiveAdd: async () => ({ record: await Data.addArchive(msg.entry), changed: "archiveChanged" }),
+    archiveDelete: async () => { const record = await Data.deleteArchive(msg.id); return { ok: true, changed: record && "archiveChanged" }; },
+    archivePage: () => Data.pageArchives(msg.cursor, msg.limit),
+    archiveGet: async () => ({ record: await Data.getArchive(msg.id) }),
+  };
+  if (!actions[msg.action]) return;
+  actions[msg.action]().then((value) => {
+    sendResponse({ ok: true, ...value });
+    if (value.changed) chrome.runtime.sendMessage({ source: "AMS_DATA", type: value.changed });
+  }, (error) => sendResponse({ ok: false, code: error.code || "local_write_failed" }));
+  return true;
+});

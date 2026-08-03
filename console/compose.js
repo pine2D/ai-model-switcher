@@ -5,10 +5,10 @@ const elList = document.getElementById("cmp-list");
 const elActions = document.getElementById("cmp-actions");
 const elNameRow = document.getElementById("cmp-name");
 const elConfirm = document.getElementById("cmp-confirm");
-let templates = [], history = [], activeKind = "templates", selectedTemplate = -1;
+let templates = [], history = [], historyCursor = null, activeKind = "templates", selectedTemplate = -1;
 
 function itemLabel(item) {
-  const text = item.text || "";
+  const text = item.text || item.preview || "";
   return item.name || (text.length > 40 ? text.slice(0, 40) + "…" : text);
 }
 function showLibraryRow(row) {
@@ -22,7 +22,7 @@ function syncTemplateActions() {
   document.getElementById("cmp-delete-template").disabled = selectedTemplate < 0;
 }
 function renderLibrary() {
-  const items = activeKind === "templates" ? templates : history.map((text) => ({ text }));
+  const items = activeKind === "templates" ? templates : history;
   elList.replaceChildren();
   if (!items.length) {
     const empty = document.createElement("div");
@@ -35,9 +35,10 @@ function renderLibrary() {
     button.type = "button"; button.className = "cmp-item"; button.setAttribute("role", "option");
     button.setAttribute("aria-selected", String(activeKind === "templates" && index === selectedTemplate));
     const title = document.createElement("strong"); title.textContent = itemLabel(item);
-    const preview = document.createElement("span"); preview.textContent = item.text;
+    const preview = document.createElement("span"); preview.textContent = item.text || item.preview || "";
     button.append(title, preview);
     button.addEventListener("click", () => {
+      if (activeKind === "history" && !item.text) return loadHistoryItem(item.id);
       elText.value = item.text; selectedTemplate = activeKind === "templates" ? index : -1;
       chrome.storage.local.set({ amsConsolePrompt: elText.value });
       renderLibrary(); elText.focus();
@@ -46,10 +47,12 @@ function renderLibrary() {
   });
   document.querySelectorAll("#cmp-tabs [data-kind]").forEach((button) => button.setAttribute("aria-selected", String(button.dataset.kind === activeKind)));
   elActions.hidden = activeKind !== "templates";
+  document.getElementById("cmp-more").hidden = activeKind !== "history" || !historyCursor;
   syncTemplateActions();
 }
 function setKind(kind) {
-  activeKind = kind; selectedTemplate = -1; showLibraryRow(elActions); renderLibrary();
+  activeKind = kind; selectedTemplate = -1; showLibraryRow(elActions);
+  if (kind === "history") loadHistory(true); else renderLibrary();
 }
 document.querySelectorAll("#cmp-tabs [data-kind]").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
 
@@ -72,7 +75,7 @@ function saveTemplate() {
   const text = elText.value.trim();
   if (!text || templates.some((item) => item.text === text)) { showLibraryRow(elActions); syncTemplateActions(); return; }
   const name = document.getElementById("cmp-template-name");
-  templates = [...templates, { name: name.value.trim(), text }];
+  templates = [...templates, { id: crypto.randomUUID(), name: name.value.trim(), text, updatedAt: Date.now() }];
   selectedTemplate = templates.length - 1; name.value = "";
   chrome.storage.local.set({ amsTemplates: templates }); showLibraryRow(elActions); renderLibrary();
 }
@@ -104,12 +107,34 @@ function renderScope(selected) {
   const b = document.createElement("b"); b.textContent = t("cmp_scopeN", chosen.length); el.append(b);
   el.append(document.createTextNode(t("cmp_scopeColon") + chosen.map((s) => s.label).join(" · ")));
 }
-chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates", "amsHistory"], (o) => {
+function dataMessage(action, payload, done) {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action, ...payload }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok) { document.getElementById("cmp-status").textContent = t("cmp_historyLoadFailed"); return; }
+    if (done) done(res);
+  });
+}
+function loadHistory(reset) {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyPage", cursor: reset ? null : historyCursor, limit: 50 }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res || !res.ok) { document.getElementById("cmp-status").textContent = t("cmp_historyLoadFailed"); return; }
+    history = reset ? res.items || [] : history.concat(res.items || []);
+    historyCursor = res.nextCursor || null; document.getElementById("cmp-status").textContent = ""; renderLibrary();
+  });
+}
+function loadHistoryItem(id) {
+  dataMessage("historyGet", { id }, (res) => {
+    if (!res.record || !res.record.text) { document.getElementById("cmp-status").textContent = t("cmp_historyLoadFailed"); return; }
+    history = history.map((item) => item.id === id ? res.record : item);
+    elText.value = res.record.text; chrome.storage.local.set({ amsConsolePrompt: elText.value }); renderLibrary(); elText.focus();
+  });
+}
+document.getElementById("cmp-more").addEventListener("click", () => loadHistory(false));
+chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates"], (o) => {
   const c = (o && o.amsConsole) || {};
   const prompt = o.amsConsolePrompt != null ? o.amsConsolePrompt : c.prompt;
   if (prompt) elText.value = prompt;
-  templates = ((o && o.amsTemplates) || []).map((item) => typeof item === "string" ? { name: "", text: item } : item);
-  history = (o && o.amsHistory) || [];
+  templates = (o && o.amsTemplates) || [];
   renderScope(c.selected || {}); renderLibrary(); elText.focus();
 });
 chrome.storage.onChanged.addListener((ch, area) => {
@@ -120,10 +145,12 @@ chrome.storage.onChanged.addListener((ch, area) => {
   }
   if (ch.amsConsole) renderScope((ch.amsConsole.newValue || {}).selected || {});
   if (ch.amsTemplates) {
-    templates = (ch.amsTemplates.newValue || []).map((item) => typeof item === "string" ? { name: "", text: item } : item);
+    templates = ch.amsTemplates.newValue || [];
     selectedTemplate = Math.min(selectedTemplate, templates.length - 1); renderLibrary();
   }
-  if (ch.amsHistory) { history = ch.amsHistory.newValue || []; if (activeKind === "history") renderLibrary(); }
+});
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.source === "AMS_DATA" && msg.type === "historyChanged" && activeKind === "history") loadHistory(true);
 });
 
 document.addEventListener("i18n:changed", () => {
@@ -138,12 +165,12 @@ elText.addEventListener("keydown", (e) => {
 document.getElementById("ch-send").addEventListener("click", () => {
   const text = elText.value.trim();
   if (!text) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
-  chrome.storage.local.get(["amsConsole", "amsHistory"], (o) => {
+  chrome.storage.local.get(["amsConsole"], (o) => {
     const c = (o && o.amsConsole) || {};
     const sites = SITES.filter((s) => (c.selected || {})[s.host]);
     if (!sites.length) { const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
-    const hist = [text, ...((o && o.amsHistory) || []).filter((x) => x !== text)].slice(0, 20);
-    chrome.storage.local.set({ amsConsolePrompt: elText.value, amsHistory: hist }, () => {
+    chrome.storage.local.set({ amsConsolePrompt: elText.value }, () => {
+      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, () => void chrome.runtime.lastError);
       chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: c.tier || null });
       window.close();
     });

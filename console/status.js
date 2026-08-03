@@ -81,15 +81,15 @@ function buildSummary(sites, results, question) {
   }
   return { md: md.join("\n"), miss, q };
 }
-// 归档快照（amsArchive ≤30 条）：用户点汇总/导出的时刻就是"对比现场定格"的时刻，顺带归档——
-// "上次这个问题各家怎么答"从此可回看（console/archive.html）。与首条同问题的现场重复时替换不追加。
+// 归档快照：用户点汇总/导出的时刻就是"对比现场定格"的时刻，顺带归档——
+// "上次这个问题各家怎么答"从此可回看（console/archive.html）。
 function archiveSummary(sites, results, q) {
   const byHost = {}; results.forEach((r) => { byHost[r.host] = r; });
   const entry = {
     ts: Date.now(), text: q || "",
     results: sites.map((s) => { const r = byHost[s.host] || {}; return { host: s.host, label: s.label, text: r.text || null, state: r.state || null, code: r.code || null }; }),
   };
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "archiveAdd", entry }, () => void chrome.runtime.lastError);
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, () => void chrome.runtime.lastError);
 }
 function copySummary(sites, results, question) {
   const { md, miss, q } = buildSummary(sites, results, question);
