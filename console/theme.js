@@ -16,3 +16,4 @@ chrome.storage.local.get({ amsTheme: "auto" }, (v) => applyTheme(v.amsTheme));
 chrome.storage.onChanged.addListener((c, area) => {
   if (area === "local" && c.amsTheme) applyTheme(c.amsTheme.newValue);
 });
+chrome.runtime.sendMessage({ source: "AMS_SYNC", action: "wake", reason: "surface" }, () => void chrome.runtime.lastError);

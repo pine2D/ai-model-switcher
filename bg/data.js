@@ -84,11 +84,12 @@ const Data = (() => {
     if (Object.keys(values).length) await chrome.storage.local.set(values);
   }
   async function seedState(cloudEmpty) {
-    if (!cloudEmpty) return null;
-    const keys = [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups", "amsHistory", "amsArchive"];
+    const keys = cloudEmpty ? [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups", "amsHistory", "amsArchive"] :
+      ["amsTemplates", "amsGroups", "amsHistory", "amsArchive"];
     const local = await chrome.storage.local.get(keys);
     const changes = {};
-    for (const key of [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups"]) if (key in local)
+    const stateKeys = cloudEmpty ? [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups"] : ["amsTemplates", "amsGroups"];
+    for (const key of stateKeys) if (key in local)
       changes[key] = { newValue: local[key] };
     await noteStorageChanges(changes);
     for (const text of local.amsHistory || []) await addHistory(text);
@@ -106,9 +107,14 @@ const Data = (() => {
     await SyncStore.iterate("archives", (record) => archives.push(record));
     return { history, archives };
   }
-  return { deviceId: getDeviceId, noteStorageChanges, applyRemoteState, addHistory,
-    pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => SyncStore.getHistory(id),
-    addArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), getArchive: (id) => SyncStore.getArchive(id),
+  async function resolve(kind, id) {
+    const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
+    return record?.text == null && record?.fileId && typeof SyncEngine !== "undefined" ?
+      (kind === "history" ? SyncEngine.resolveHistory(id) : SyncEngine.resolveArchive(id)) : record;
+  }
+  return { deviceId: getDeviceId, deviceState, noteStorageChanges, applyRemoteState, addHistory,
+    pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
+    addArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), getArchive: (id) => resolve("archive", id),
     seedState, importRecords, exportRecords };
 })();
 

@@ -139,7 +139,7 @@ const Drive = (() => {
           for (const file of files) {
             await remove(file.id);
             deleted++;
-            if (onProgress) onProgress(deleted);
+            if (onProgress) await onProgress(deleted);
           }
           break;
         }

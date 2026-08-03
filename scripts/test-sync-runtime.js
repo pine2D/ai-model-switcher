@@ -8,7 +8,7 @@ const vm = require("node:vm");
 
 const history = new Map(), archives = new Map(), outbox = new Map(), meta = new Map();
 const SyncStore = {
-  getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value),
+  getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
   putHistory: async (value) => history.set(value.id, value), getHistory: async (id) => history.get(id),
   putArchive: async (value) => archives.set(value.id, value), getArchive: async (id) => archives.get(id),
   enqueue: async (value) => outbox.set(value.key, value), trimBodies: async () => {},
@@ -57,6 +57,55 @@ async function assertDriveError(response, code, retryAfter) {
     error.code === code && (retryAfter === undefined || error.retryAfter === retryAfter));
 }
 
+function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = false, goneOnce = false } = {}) {
+  const calls = [], values = new Map(), records = new Map(), queued = new Map(), fileIndex = new Map();
+  const local = new Map();
+  let localChangeCalls = 0, onChanged, now = 10_000;
+  const store = {
+    getMeta: async (key) => values.get(key), putMeta: async (key, value) => values.set(key, value), deleteMeta: async (key) => values.delete(key),
+    putHistory: async (record) => records.set(`history:${record.id}`, record), getHistory: async (id) => records.get(`history:${id}`),
+    putArchive: async (record) => records.set(`archive:${record.id}`, record), getArchive: async (id) => records.get(`archive:${id}`),
+    enqueue: async (op) => queued.set(op.key, op), completeOutbox: async (key) => queued.delete(key),
+    readyOutbox: async (at) => [...queued.values()].filter((op) => op.nextAt <= at), countOutbox: async () => queued.size,
+    putFile: async (file) => fileIndex.set(file.logicalKey, file), findFile: async (key) => fileIndex.get(key),
+    deleteFile: async (id) => { for (const [key, file] of fileIndex) if (file.fileId === id) fileIndex.delete(key); },
+    trimBodies: async () => {}, iterate: async (kind, visit) => {
+      for (const record of records.values()) if ((kind === "history") === record.textHash) await visit(record);
+    },
+  };
+  const data = {
+    deviceId: async () => "device", noteStorageChanges: async (change) => { localChangeCalls++; return change.amsTheme ? {} : null; },
+    deviceState: async () => ({ schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {} }),
+    applyRemoteState: async () => {}, seedState: async () => {}, importRecords: async (items) => {
+      for (const item of items.history || []) await store.putHistory(item);
+      for (const item of items.archives || []) await store.putArchive(item);
+    }, exportRecords: async () => ({ history: [], archives: [] }),
+    getHistory: (id) => store.getHistory(id), getArchive: (id) => store.getArchive(id),
+  };
+  const drive = {
+    connect: async () => {}, disconnect: async () => {}, getStartToken: async () => { calls.push("token"); return "start"; },
+    listFiles: async () => { calls.push("list"); return files; },
+    listChanges: async (token) => { calls.push(`changes:${token}`); if (goneOnce) { goneOnce = false; throw { status: 410 }; } return { changes, newStartPageToken: "next" }; },
+    download: async (id) => { if (!(id in downloads)) throw { code: "not_found", status: 404 }; return downloads[id]; },
+    upsert: async (_id, _name, props) => {
+      calls.push(props.kind || "state");
+      if (failHistory && props.kind === "history") throw { code: "server_error", status: 500 };
+      return { id: `file-${calls.length}` };
+    }, clearAll: async () => {},
+  };
+  const chrome = {
+    storage: { local: { get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])), set: async (next) => { for (const [key, value] of Object.entries(next)) local.set(key, value); }, remove: async () => {} }, onChanged: { addListener: (fn) => { onChanged = fn; } } },
+    runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} }, lastError: null },
+    alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
+  };
+  const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: {
+    SCHEMA: 1, utf8Preview: (text) => text, retryDelay: () => 500, mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], corrupt: 0 }),
+    mergeHistory: (items) => items, mergeArchives: (items) => items,
+  }, chrome, Date: class extends Date { static now() { return now; } }, setTimeout, clearTimeout, console });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
+  return { sync: scope.sync, calls, queued, records, values, change: (c) => onChanged(c, "local"), localChangeCalls: () => localChangeCalls, now: (value) => { now = value; } };
+}
+
 async function main() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/data.js"), "utf8") + ";this.data=Data", context);
   await context.data.addHistory("question");
@@ -68,6 +117,9 @@ async function main() {
   assert.equal(archives.size, 1);
   await context.data.deleteArchive("uuid");
   assert.ok(archives.get("uuid").deletedAt, "删除必须写 tombstone");
+  history.set("remote", { id: "remote", fileId: "drive-history" });
+  context.SyncEngine = { resolveHistory: async () => ({ id: "remote", text: "restored", fileId: "drive-history" }) };
+  assert.equal((await context.data.getHistory("remote")).text, "restored", "缺正文的历史记录必须按 fileId 补回正文");
 
   const failed = deviceRuntime(true);
   const failedCalls = await Promise.allSettled([failed.data.deviceId(), failed.data.deviceId()]);
@@ -153,6 +205,53 @@ async function main() {
 
   const disconnect = driveRuntime([], true);
   await assert.rejects(disconnect.drive.disconnect(), (error) => error.code === "auth_failed" && error.status === 0);
+
+  const initial = syncRuntime();
+  await initial.sync.connect();
+  assert.deepEqual(initial.calls.slice(0, 3), ["token", "list", "changes:start"], "首次扫描必须先取 token，再全量扫描，再增量补齐");
+  assert.equal(await initial.values.get("pageToken"), "next");
+  await initial.sync.runNow();
+  assert.equal(initial.calls.at(-1), "changes:next", "已有 token 的同步只能走增量 Changes");
+  assert.equal(initial.calls.filter((call) => call === "list").length, 1, "增量同步不得重复全量扫描");
+
+  const expired = syncRuntime({ goneOnce: true });
+  await expired.values.set("pageToken", "expired");
+  await expired.sync.connect();
+  assert.deepEqual(expired.calls, ["changes:expired", "token", "list", "changes:start"], "410 必须重新全量扫描而非上传空库");
+
+  const ordered = syncRuntime({ failHistory: true });
+  await ordered.queued.set("state", { key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  await ordered.queued.set("history:h:device", { key: "history:h:device", kind: "history", entityId: "h", nextAt: 0, attempt: 0 });
+  await ordered.queued.set("archive:a", { key: "archive:a", kind: "archive", entityId: "a", nextAt: 0, attempt: 0 });
+  await ordered.records.set("history:h", { id: "h", textHash: "h", text: "h", deviceId: "device" });
+  await ordered.records.set("archive:a", { id: "a", text: "a", deviceId: "device" });
+  await ordered.sync.connect();
+  assert.equal(ordered.calls.slice(-3).join(","), "state,history,archive", "拉取完成后必须按 state/history/archive 上传");
+  assert.equal(ordered.queued.has("history:h:device"), true, "上传失败不得删队列");
+  assert.equal(ordered.queued.get("history:h:device").attempt, 1);
+  assert.ok(ordered.queued.get("history:h:device").nextAt > 10_000);
+
+  const remote = syncRuntime({ files: [{ id: "remote", appProperties: { app: "polyask", schema: "1", kind: "state", id: "remote" } }], downloads: { remote: { schema: 1, deviceId: "remote", settings: {} } } });
+  await remote.sync.connect();
+  assert.equal(remote.localChangeCalls(), 0, "远端写回不得形成上传回环");
+  const callsBeforeStatus = remote.calls.length;
+  remote.change({ amsSyncStatus: { newValue: {} } });
+  await Promise.resolve();
+  assert.equal(remote.calls.length, callsBeforeStatus, "非白名单状态变更不得调度同步");
+
+  const future = syncRuntime({ files: [{ id: "future", appProperties: { app: "polyask", schema: "2", kind: "state" } }] });
+  await future.queued.set("state", { key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  await future.sync.connect();
+  assert.equal((await future.sync.status()).readOnly, true, "高 schema 必须进入只读");
+  assert.equal(future.calls.includes("state"), false, "只读模式不得上传");
+
+  const damaged = syncRuntime({ files: [
+    { id: "bad", appProperties: { app: "polyask", schema: "1", kind: "history", id: "bad", device: "d" } },
+    { id: "good", appProperties: { app: "polyask", schema: "1", kind: "history", id: "good", device: "d" } },
+  ], downloads: { bad: "not json", good: { schema: 1, id: "good", textHash: "good", text: "ok", createdAt: 1, lastUsedAt: 1 } } });
+  await damaged.sync.connect();
+  assert.equal((await damaged.sync.status()).errorCount, 1, "单条损坏 JSON 必须计错并继续");
+  await require("./test-sync-engine")();
   console.log("sync-runtime tests passed");
 }
 
