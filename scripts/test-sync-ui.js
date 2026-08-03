@@ -39,6 +39,10 @@ for (const id of ["connect", "sync-now", "disconnect", "export", "import-file", 
 }
 assert.ok(fs.readFileSync("scripts/package.sh", "utf8").includes(" options"));
 const syncPage = fs.readFileSync("options/sync.js", "utf8");
+assert.ok(syncPage.includes("showSaveFilePicker"), "导出必须先在点击回调中取得保存句柄");
+assert.ok(syncPage.includes('name: "ams-transfer"'), "导出必须通过迁移端口流式传输");
+assert.ok(syncPage.includes("TextDecoderStream"), "导入必须流式读取 JSONL");
+assert.ok(syncPage.includes("validateImport") && syncPage.includes("importBatch"), "导入必须先全量验证再分批写入");
 assert.ok(syncPage.includes("config.clearProgress") && syncPage.includes("sync_clearProgress"), "清理进度必须作为状态详情呈现");
 assert.ok(syncPage.includes('document.title = `PolyAsk · ${t("sync_title")}`'), "页面标题必须使用 sync_title 本地化");
 for (const id of ["sync-now", "disconnect", "clear-remote"]) assert.match(html, new RegExp(`id="${id}"[^>]*\\shidden`), `首次渲染不得暴露 ${id}`);

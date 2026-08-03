@@ -89,10 +89,9 @@ const SyncEngine = (() => {
     applyingRemote = true;
     try {
       if (Object.keys(remoteStates).length || collected.removedStates.length) await Data.applyRemoteState(state);
-      const local = await Data.exportRecords();
       await Data.importRecords({
-        history: SyncModel.mergeHistory([...(local.history || []), ...collected.history]),
-        archives: archiveWinners([...(local.archives || []), ...collected.archives]),
+        history: collected.history,
+        archives: archiveWinners(collected.archives),
       });
     } finally { applyingRemote = false; }
   }
@@ -215,6 +214,7 @@ const SyncEngine = (() => {
     catch (error) { return failure(error); }
   }
   async function runNow(reason = "manual") { if (!(await config()).connected) return connect(); return wake(reason); }
+  async function runForExport() { return (await config()).connected ? wake("export") : status(); }
   async function clearCache(connected = false) {
     await SyncStore.deleteMeta("pageToken"); await SyncStore.deleteMeta("remoteStates");
     await SyncStore.iterate("files", (file) => forget(file.fileId));
@@ -264,6 +264,6 @@ const SyncEngine = (() => {
     actions[msg.action]().then((value) => respond({ ok: true, value }), (error) => respond({ ok: false, code: error?.code || "sync_failed" }));
     return true;
   });
-  return { init, wake, connect, runNow, disconnect, clearRemote, status, resolveHistory: (id) => resolve("history", id), resolveArchive: (id) => resolve("archive", id) };
+  return { init, wake, connect, runNow, runForExport, disconnect, clearRemote, status, resolveHistory: (id) => resolve("history", id), resolveArchive: (id) => resolve("archive", id) };
 })();
 SyncEngine.init();

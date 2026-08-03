@@ -70,6 +70,12 @@ const SyncStore = (() => {
     const db = await open(), tx = db.transaction(kind), values = await request(tx.objectStore(kind).getAll());
     for (const value of values) await visit(value);
   }
+  async function next(kind, after) {
+    const db = await open(), tx = db.transaction(kind), store = tx.objectStore(kind);
+    const range = after == null ? undefined : IDBKeyRange.lowerBound(after, true);
+    const row = await request(store.openCursor(range));
+    return row ? { key: row.primaryKey, value: row.value } : null;
+  }
 
   async function readyOutbox(now, limit) {
     const db = await open(), tx = db.transaction("outbox"), source = tx.objectStore("outbox").index("next");
@@ -121,6 +127,6 @@ const SyncStore = (() => {
     putHistory: (record) => write("history", record), getHistory: (id) => read("history", id), pageHistory: (cursor, limit) => page("history", "lastUsed", cursor, limit),
     putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => page("archives", "created", cursor, limit, (value) => !value.deletedAt),
     enqueue: (op) => write("outbox", op), readyOutbox, completeOutbox: (key) => erase("outbox", key), countOutbox,
-    putFile: (file) => write("files", file), findFile, deleteFile: (fileId) => erase("files", fileId), trimBodies, iterate,
+    putFile: (file) => write("files", file), findFile, deleteFile: (fileId) => erase("files", fileId), trimBodies, iterate, next,
   };
 })();

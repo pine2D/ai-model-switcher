@@ -96,21 +96,69 @@ const Data = (() => {
     for (const entry of local.amsArchive || []) await addArchive(entry);
     return exportRecords();
   }
-  async function importRecords(records = {}) {
-    const history = records.history || [], archives = records.archives || [];
-    for (const record of history) await SyncStore.putHistory(record);
-    for (const record of archives) await SyncStore.putArchive(record);
+  const stamp = (record = {}) => ({ ...record, updatedAt: Math.max(Number(record.updatedAt) || 0, Number(record.deletedAt) || 0, Number(record.createdAt) || 0) });
+  const newer = (old, next) => !old || SyncModel.compareVersion(stamp(old), stamp(next)) < 0;
+  async function importRecords(records = []) {
+    if (!Array.isArray(records)) {
+      for (const value of records.history || []) {
+        const old = await SyncStore.getHistory(value.id), merged = SyncModel.mergeHistory([old, value])[0];
+        if (merged) await SyncStore.putHistory(merged);
+      }
+      for (const value of records.archives || []) if (newer(await SyncStore.getArchive(value.id), value)) await SyncStore.putArchive(value);
+      return;
+    }
+    const rows = records;
+    const id = await getDeviceId(), state = await deviceState();
+    let stateChanged = false;
+    for (const row of rows) {
+      const value = row?.value || {}, kind = row?.kind;
+      if (kind === "setting") {
+        const next = { value: value.value, updatedAt: value.updatedAt, deviceId: value.deviceId };
+        if (newer(state.settings[value.key], next)) { state.settings[value.key] = next; stateChanged = true; }
+      } else if (kind === "template" || kind === "group") {
+        const bucket = kind === "template" ? state.templates : state.groups;
+        const next = { ...value, deviceId: value.deviceId || id };
+        if (newer(bucket[value.id], next)) { bucket[value.id] = next; stateChanged = true; }
+      } else if (kind === "history") {
+        const next = { ...value, id: value.textHash, deviceId: id, schema: SyncModel.SCHEMA, preview: value.preview || SyncModel.utf8Preview(value.text) };
+        const old = await SyncStore.getHistory(next.id), merged = SyncModel.mergeHistory([old, next])[0];
+        await SyncStore.putHistory(merged);
+        await SyncStore.enqueue({ key: `history:${next.id}:${id}`, kind: "history", entityId: next.id, nextAt: 0, attempt: 0 });
+      } else if (kind === "archive") {
+        const next = { ...value, deviceId: id, schema: SyncModel.SCHEMA, updatedAt: value.updatedAt || value.deletedAt || value.createdAt,
+          preview: value.preview || SyncModel.utf8Preview(value.text || "") };
+        const old = await SyncStore.getArchive(next.id);
+        if (newer(old, next)) await SyncStore.putArchive(next);
+        await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
+      }
+    }
+    if (stateChanged) { await SyncStore.putMeta("deviceState", state); await SyncStore.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 }); }
+    const config = (await chrome.storage.local.get({ amsSyncConfig: {} })).amsSyncConfig || {};
+    if (config.connected && typeof SyncEngine !== "undefined") SyncEngine.wake("import");
   }
-  async function exportRecords() {
-    const history = [], archives = [];
-    await SyncStore.iterate("history", (record) => history.push(record));
-    await SyncStore.iterate("archives", (record) => archives.push(record));
-    return { history, archives };
+  async function* exportRecords() {
+    const state = await deviceState();
+    for (const [key, value] of Object.entries(state.settings)) yield { kind: "setting", value: { key, value: value.value, updatedAt: value.updatedAt, deviceId: value.deviceId } };
+    for (const value of Object.values(state.templates)) if (!value.deletedAt) yield { kind: "template", value };
+    for (const value of Object.values(state.groups)) if (!value.deletedAt) yield { kind: "group", value };
+    for (const store of ["history", "archives"]) {
+      let after = null, item;
+      while ((item = await SyncStore.next(store, after))) {
+        after = item.key;
+        const isHistory = store === "history", resolved = !isHistory && item.value.deletedAt ? item.value : await resolve(isHistory ? "history" : "archive", item.value.id);
+        if (!resolved || isHistory && resolved.text == null || !isHistory && !resolved.deletedAt && (resolved.text == null || !Array.isArray(resolved.results)))
+          throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
+        const value = { ...resolved }; delete value.fileId;
+        yield { kind: isHistory ? "history" : "archive", value };
+      }
+    }
   }
   async function resolve(kind, id) {
     const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
-    return record?.text == null && record?.fileId && typeof SyncEngine !== "undefined" ?
-      (kind === "history" ? SyncEngine.resolveHistory(id) : SyncEngine.resolveArchive(id)) : record;
+    if (record?.text != null || !record?.fileId || typeof SyncEngine === "undefined") return record;
+    const config = (await chrome.storage.local.get({ amsSyncConfig: {} })).amsSyncConfig || {};
+    if (!config.connected) throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
+    return kind === "history" ? SyncEngine.resolveHistory(id) : SyncEngine.resolveArchive(id);
   }
   return { deviceId: getDeviceId, deviceState, noteStorageChanges, applyRemoteState, addHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),

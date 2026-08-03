@@ -8,9 +8,18 @@ const vm = require("node:vm");
 
 const context = vm.createContext({ crypto: require("node:crypto").webcrypto, TextEncoder, Math });
 vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync-model.js"), "utf8") + ";this.model=SyncModel", context);
+const transferSource = fs.existsSync(path.join(__dirname, "..", "bg/transfer.js")) ?
+  fs.readFileSync(path.join(__dirname, "..", "bg/transfer.js"), "utf8") : "";
+vm.runInContext(transferSource + ";this.transfer=typeof Transfer === 'undefined' ? undefined : Transfer", context);
 const M = context.model;
+const Transfer = context.transfer;
 
 async function main() {
+  assert.equal(typeof Transfer, "object", "必须提供迁移包格式校验");
+  assert.equal(Transfer.validateHeader({ format: "polyask-transfer", version: 1, exportedAt: new Date().toISOString() }), true);
+  assert.throws(() => Transfer.validateHeader({ format: "polyask-transfer", version: 2 }), /newer_format/);
+  assert.throws(() => Transfer.validateRecord({ kind: "unknown", value: {} }), /unknown_kind/);
+  assert.throws(() => Transfer.validateRecord({ kind: "history", value: { id: "h" } }), /invalid_record/);
   assert.equal(M.compareVersion({ updatedAt: 2, deviceId: "a" }, { updatedAt: 1, deviceId: "z" }), 1);
   assert.equal(M.compareVersion({ updatedAt: 2, deviceId: "b" }, { updatedAt: 2, deviceId: "a" }), 1);
   assert.ok(new TextEncoder().encode(M.utf8Preview("问".repeat(100))).length <= 96);

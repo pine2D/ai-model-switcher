@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 "use strict";
-
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-
 const history = new Map(), archives = new Map(), outbox = new Map(), meta = new Map();
 const SyncStore = {
   getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
   putHistory: async (value) => history.set(value.id, value), getHistory: async (id) => history.get(id),
   putArchive: async (value) => archives.set(value.id, value), getArchive: async (id) => archives.get(id),
   enqueue: async (value) => outbox.set(value.key, value), trimBodies: async () => {},
+  iterate: async (kind, visit) => { for (const value of (kind === "history" ? history : archives).values()) await visit(value); },
+  next: async (kind, after) => {
+    const item = [...(kind === "history" ? history : archives).entries()].sort(([a], [b]) => a.localeCompare(b)).find(([key]) => after == null || key > after);
+    return item && { key: item[0], value: item[1] };
+  },
 };
-const chrome = { storage: { local: { get: async () => ({}), set: async () => {} } } };
-const context = vm.createContext({ SyncStore, SyncModel: { SCHEMA: 1, hashText: async () => "hash", utf8Preview: (text) => text },
+const chrome = { storage: { local: { get: async (defaults) => ({ ...defaults, amsSyncConfig: { connected: true } }), set: async () => {} } } };
+const context = vm.createContext({ SyncStore, SyncModel: { SCHEMA: 1, hashText: async () => "hash", utf8Preview: (text) => text,
+  compareVersion: (a, b) => Number(a.updatedAt) - Number(b.updatedAt), mergeHistory: (items) => items.filter(Boolean).sort((a, b) => Number(b.lastUsedAt) - Number(a.lastUsedAt)).slice(0, 1) },
   chrome, crypto: { randomUUID: () => "uuid" }, Date });
-
 function deviceRuntime(fail = false) {
   const values = new Map(); let writes = 0, ids = 0;
   const store = {
@@ -28,7 +31,6 @@ function deviceRuntime(fail = false) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/data.js"), "utf8") + ";this.data=Data", scope);
   return { data: scope.data, retry: () => { fail = false; }, writes: () => writes, ids: () => ids };
 }
-
 function driveRuntime(responses, clearFails = false) {
   let tokenCalls = 0, removed = 0, uuids = 0;
   const requests = [];
@@ -50,13 +52,11 @@ function driveRuntime(responses, clearFails = false) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/drive.js"), "utf8") + ";this.drive=Drive", scope);
   return { drive: scope.drive, tokenCalls: () => tokenCalls, removed: () => removed, requests, uuids: () => uuids };
 }
-
 async function assertDriveError(response, code, retryAfter) {
   const runtime = driveRuntime([response]);
   await assert.rejects(runtime.drive.download("missing"), (error) =>
     error.code === code && (retryAfter === undefined || error.retryAfter === retryAfter));
 }
-
 function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = false, goneOnce = false } = {}) {
   const calls = [], values = new Map(), records = new Map(), queued = new Map(), fileIndex = new Map();
   const local = new Map();
@@ -79,7 +79,7 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
     applyRemoteState: async () => {}, seedState: async () => {}, importRecords: async (items) => {
       for (const item of items.history || []) await store.putHistory(item);
       for (const item of items.archives || []) await store.putArchive(item);
-    }, exportRecords: async () => ({ history: [], archives: [] }),
+    }, exportRecords: async function* () {},
     getHistory: (id) => store.getHistory(id), getArchive: (id) => store.getArchive(id),
   };
   const drive = {
@@ -105,6 +105,22 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
   return { sync: scope.sync, calls, queued, records, values, change: (c) => onChanged(c, "local"), localChangeCalls: () => localChangeCalls, now: (value) => { now = value; } };
 }
+function transferRuntime() {
+  const posted = [], messageListeners = [], disconnectListeners = [];
+  let read = 0, synced = 0;
+  const port = { name: "ams-transfer", postMessage: (message) => posted.push(message),
+    onMessage: { addListener: (fn) => messageListeners.push(fn), removeListener: (fn) => messageListeners.splice(messageListeners.indexOf(fn), 1) },
+    onDisconnect: { addListener: (fn) => disconnectListeners.push(fn), removeListener: (fn) => disconnectListeners.splice(disconnectListeners.indexOf(fn), 1) },
+    ack: (seq) => messageListeners.slice().forEach((fn) => fn({ ack: seq })),
+    disconnect: () => disconnectListeners.slice().forEach((fn) => fn()) };
+  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "h", text: "q", textHash: "h", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "a", text: "q", results: [], createdAt: 1 } }; } },
+    SyncEngine: { runForExport: async () => { synced++; } },
+    chrome: { runtime: { onConnect: { addListener: () => {} } } }, Date, console });
+  const file = path.join(__dirname, "..", "bg/transfer.js");
+  const source = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  vm.runInContext(source + ";this.transfer=typeof Transfer === 'undefined' ? undefined : Transfer", scope);
+  return { transfer: scope.transfer, port, posted, reads: () => read, synced: () => synced };
+}
 
 async function main() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/data.js"), "utf8") + ";this.data=Data", context);
@@ -112,14 +128,37 @@ async function main() {
   await context.data.addHistory("question");
   assert.equal(history.size, 1);
   assert.equal(outbox.size, 1, "同设备同文本上传必须折叠");
-
   await context.data.addArchive({ text: "q", results: [] });
   assert.equal(archives.size, 1);
   await context.data.deleteArchive("uuid");
   assert.ok(archives.get("uuid").deletedAt, "删除必须写 tombstone");
   history.set("remote", { id: "remote", fileId: "drive-history" });
-  context.SyncEngine = { resolveHistory: async () => ({ id: "remote", text: "restored", fileId: "drive-history" }) };
+  context.SyncEngine = { resolveHistory: async () => ({ id: "remote", text: "restored", fileId: "drive-history" }), wake: async () => {} };
   assert.equal((await context.data.getHistory("remote")).text, "restored", "缺正文的历史记录必须按 fileId 补回正文");
+  const imported = [{ kind: "template", value: { id: "t", text: "template", updatedAt: 1 } },
+    { kind: "history", value: { id: "h", text: "question", textHash: "h", createdAt: 1, lastUsedAt: 2 } }, { kind: "archive", value: { id: "a", text: "answer", results: [], createdAt: 1 } }];
+  await context.data.importRecords(imported);
+  const activeAfterFirst = { history: history.size, archives: [...archives.values()].filter((value) => !value.deletedAt).length };
+  const outboxAfterFirst = outbox.size;
+  await context.data.importRecords(imported);
+  assert.deepEqual({ history: history.size, archives: [...archives.values()].filter((value) => !value.deletedAt).length }, activeAfterFirst,
+    "重复导入不得增加活跃实体");
+  assert.equal(outbox.size, outboxAfterFirst, "重复导入不得增加 outbox key");
+
+  const streamed = transferRuntime();
+  assert.equal(typeof streamed.transfer, "object", "必须提供迁移包端口");
+  const exporting = streamed.transfer.attachPort(streamed.port);
+  await new Promise(setImmediate);
+  assert.equal(streamed.reads(), 2, "发送 header 前必须预检全部正文");
+  assert.equal(streamed.posted.length, 1, "未收到当前 ack 前不得发送下一行");
+  streamed.port.ack(0);
+  await new Promise(setImmediate);
+  assert.equal(streamed.posted.length, 2, "header ack 后才能发送首条记录");
+  const readsBeforeDisconnect = streamed.reads();
+  streamed.port.disconnect();
+  await exporting;
+  assert.equal(streamed.reads(), readsBeforeDisconnect, "端口断开后不得继续读取导出流");
+  assert.equal(streamed.synced(), 1, "导出前必须只做一次非交互同步");
 
   const failed = deviceRuntime(true);
   const failedCalls = await Promise.allSettled([failed.data.deviceId(), failed.data.deviceId()]);
