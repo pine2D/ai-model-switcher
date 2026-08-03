@@ -59,6 +59,21 @@ function syncRuntime({ entityKind = "archive", readOnly = false, duplicate = fal
     setEntityFile: async (kind, id, fileId, expected, ownerId) => {
       const key = `${kind}:${id}`, value = records.get(key);
       if (value && (expected === undefined || value.fileId === expected)) records.set(key, { ...value, ...(fileId ? { fileId } : {}), ...(ownerId ? { deviceId: ownerId } : {}) });
+    }, hydrateEntity: async (kind, id, expected, body) => {
+      const key = `${kind}:${id}`, current = records.get(key), owns = (value, field) => Object.hasOwn(value || {}, field);
+      const same = current?.fileId === expected.fileId && current?.deviceId === expected.deviceId && (kind === "history" ?
+        current.lastUsedAt === expected.lastUsedAt : current.updatedAt === expected.updatedAt && owns(current, "deletedAt") === owns(expected, "deletedAt") && current.deletedAt === expected.deletedAt);
+      if (!same || current.text != null || kind === "archive" && owns(current, "deletedAt")) return { record: current, hydrated: false };
+      const candidate = { ...body, deviceId: body.deviceId ?? current.deviceId };
+      const time = (value) => kind === "history" ? Number(value.lastUsedAt) || 0 : Math.max(Number(value.updatedAt) || 0, Number(value.deletedAt) || 0, Number(value.createdAt) || 0);
+      let order = time(candidate) - time(current);
+      if (!order && kind === "archive" && owns(candidate, "deletedAt") !== owns(current, "deletedAt")) order = owns(candidate, "deletedAt") ? 1 : -1;
+      if (!order) order = String(candidate.deviceId || "").localeCompare(String(current.deviceId || ""));
+      if (order < 0) return { record: current, hydrated: false };
+      const next = order > 0 ? { ...current, ...candidate, fileId: current.fileId } : { ...candidate, ...current, text: body.text };
+      if (kind === "archive" && owns(candidate, "deletedAt")) { delete next.text; delete next.results; }
+      else if (kind === "archive") next.results = body.results;
+      records.set(key, next); return { record: next, hydrated: true };
     }, iterate: async (_kind, visit) => { for (const file of [...files.values()]) await visit(file); }, trimBodies: async () => {},
   };
   const data = {
@@ -170,6 +185,45 @@ async function main() {
   assert.equal(dead.downloads.filter((id) => id === "dead").length, 1, "后续不得重复请求死 fileId");
   const orphaned = syncRuntime({ deadFile: true }); orphaned.outbox.clear(); orphaned.files.delete("dead");
   assert.equal((await orphaned.sync.resolveArchive("a")).text, "good", "索引已缺失时也必须清理实体中的死 fileId");
+
+  const tombstoneRace = syncRuntime(); tombstoneRace.outbox.clear();
+  tombstoneRace.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
+  tombstoneRace.drive.download = async () => {
+    tombstoneRace.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, deletedAt: 2, fileId: "same", deviceId: "z" });
+    return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "stale", results: [], deviceId: "d" };
+  };
+  const deleted = await tombstoneRace.sync.resolveArchive("a");
+  assert.equal(deleted.deletedAt, 2, "并发 tombstone 必须胜过在途旧正文");
+  assert.equal(Object.hasOwn(deleted, "text"), false, "旧下载不得给 tombstone 回填正文");
+  assert.equal(Object.hasOwn(deleted, "results"), false, "旧下载不得给 tombstone 回填结果");
+
+  const newerTrimmed = syncRuntime(); newerTrimmed.outbox.clear(); let archiveReads = 0;
+  newerTrimmed.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
+  newerTrimmed.drive.download = async () => {
+    if (!archiveReads++) { newerTrimmed.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, fileId: "same", deviceId: "d" });
+      return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "old", results: [], deviceId: "d" }; }
+    return { schema: 1, id: "a", createdAt: 1, updatedAt: 2, text: "new", results: [], deviceId: "d" };
+  };
+  assert.equal((await newerTrimmed.sync.resolveArchive("a")).text, "new", "同 fileId 新版本已裁正文时必须重读新正文");
+  assert.equal(archiveReads, 2);
+
+  const cloudNewer = syncRuntime(); cloudNewer.outbox.clear();
+  cloudNewer.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
+  cloudNewer.drive.download = async () => ({ schema: 1, id: "a", createdAt: 1, updatedAt: 2, text: "fresh", results: [], deviceId: "d" });
+  const fresh = await cloudNewer.sync.resolveArchive("a");
+  assert.equal(fresh.updatedAt, 2, "云端正文版本较新时不得被本地旧 metadata 覆盖");
+  assert.equal(fresh.text, "fresh");
+
+  const historyText = "shared", historyId2 = await model.hashText(historyText), newerHistory = syncRuntime(); let historyReads = 0;
+  newerHistory.outbox.clear(); newerHistory.records.clear();
+  newerHistory.records.set(`history:${historyId2}`, { id: historyId2, textHash: historyId2, createdAt: 1, lastUsedAt: 1, fileId: "history-file", deviceId: "d" });
+  newerHistory.drive.download = async () => {
+    if (!historyReads++) { newerHistory.records.set(`history:${historyId2}`, { id: historyId2, textHash: historyId2, createdAt: 1, lastUsedAt: 2, fileId: "history-file", deviceId: "d" });
+      return { schema: 1, id: historyId2, textHash: historyId2, text: historyText, createdAt: 1, lastUsedAt: 1, deviceId: "d" }; }
+    return { schema: 1, id: historyId2, textHash: historyId2, text: historyText, createdAt: 1, lastUsedAt: 2, deviceId: "d" };
+  };
+  assert.equal((await newerHistory.sync.resolveHistory(historyId2)).lastUsedAt, 2, "history 同 fileId 的新裁剪版本也必须按版本 CAS 重读");
+  assert.equal(historyReads, 2);
 
   const sticky = syncRuntime({ readOnly: true }); await sticky.sync.connect();
   assert.equal((await sticky.sync.status()).readOnly, true, "auth reconnect 不得清 schema readOnly");

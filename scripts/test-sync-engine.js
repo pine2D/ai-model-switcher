@@ -2,13 +2,13 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 
-function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, device = {}, goneOnce = false } = {}) {
+function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false } = {}) {
   const meta = new Map(), index = new Map(), outbox = new Map(queued.map((op) => [op.key, op]));
-  const local = new Map(), calls = [], uploads = [], applied = [], imports = [], seeds = [], events = [];
+  const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [];
   const deviceState = { schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {}, ...device }; let listener, notes = 0, activeChanges = changes;
   const store = {
     getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
-    putFile: async (file) => index.set(file.logicalKey, file), findFile: async (key) => index.get(key),
+    putFile: async (file) => index.set(file.logicalKey, file), findFile: async (key) => index.get(key), getFile: async (id) => [...index.values()].find((file) => file.fileId === id),
     deleteFile: async (id) => { for (const [key, file] of index) if (file.fileId === id) index.delete(key); },
     iterate: async (kind, visit) => { if (kind === "files") for (const file of index.values()) await visit(file); },
     readyOutbox: async (now, limit) => [...outbox.values()].filter((op) => op.nextAt <= now).slice(0, limit),
@@ -25,10 +25,11 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], l
     getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),
   };
   const drive = {
-    connect: async () => {}, disconnect: async () => { calls.push("disconnect"); }, getStartToken: async () => { calls.push("token"); return "start"; },
+    connect: async (interactive) => { auths.push(interactive); }, disconnect: async () => { calls.push("disconnect"); }, getStartToken: async () => { calls.push("token"); return "start"; },
     listFiles: async () => { calls.push("list"); return listed; }, listChanges: async (token) => { calls.push(`changes:${token}`); if (goneOnce) { goneOnce = false; throw { status: 410 }; } return { changes: activeChanges, newStartPageToken: "next" }; },
     download: async (id) => { const body = Array.isArray(bodies[id]) ? bodies[id].shift() : bodies[id]; if (body?.throw) throw body.throw; return body; }, upsert: async (_id, _name, props, body) => { calls.push(`upload:${props.kind}`); uploads.push(body); if (fail && props.kind !== "state") throw { code: "server_error", status: 500 }; return { id: `up-${calls.length}` }; },
-    clearAll: async (progress) => { await progress(1); calls.push(`progress:${local.get("amsSyncConfig").clearProgress}`); if (clearFail) throw { code: "server_error" }; calls.push("clear"); },
+    clearAll: async (progress) => { if (clearAuthOnce) { clearAuthOnce = false; throw { code: "unauthorized" }; }
+      await progress(1); calls.push(`progress:${local.get("amsSyncConfig").clearProgress}`); if (clearFail) throw { code: "server_error" }; calls.push("clear"); },
   };
   const chrome = {
     storage: { local: { get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])), set: async (next) => { for (const [key, value] of Object.entries(next)) local.set(key, value); } }, onChanged: { addListener: (fn) => { listener = fn; } } },
@@ -47,7 +48,7 @@ function runtime({ listed = [], bodies = {}, changes = [], localArchives = [], l
   };
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel, chrome, Date, setTimeout, clearTimeout });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
-  return { sync: scope.sync, calls, uploads, meta, index, outbox, applied, imports, seeds, events, notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
+  return { sync: scope.sync, calls, auths, uploads, meta, index, outbox, applied, imports, seeds, events, notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
 }
 
 module.exports = async function testSyncEngine() {
@@ -58,6 +59,11 @@ module.exports = async function testSyncEngine() {
   assert.equal(initial.applied.at(-1).settings.amsTheme.value, "dark", "远端设置必须先于 seed 合并");
   assert.deepEqual(initial.events.slice(0, 2), ["seed", "apply"], "先 seed 本机集合，再应用远端 state");
   assert.equal(initial.notes(), 0, "远端写回触发 storage change 时不得生成本地 outbox");
+
+  const retained = { id: "retained", appProperties: { app: "polyask", schema: "1", kind: "state", id: "retained" } };
+  const unknownRemoval = runtime({ listed: [retained], changes: [{ fileId: "unknown", removed: true }], bodies: { retained: { schema: 1, deviceId: "retained", settings: {} } } });
+  await unknownRemoval.sync.connect();
+  assert.deepEqual(unknownRemoval.seeds, [false], "未知 removal 不得把仍有 PolyAsk 文件的云端误判为空");
 
   const old = { id: "old", appProperties: { app: "polyask", schema: "1", kind: "state", id: "old" } };
   const newer = { id: "new", appProperties: { app: "polyask", schema: "1", kind: "state", id: "new" } };
@@ -127,4 +133,12 @@ module.exports = async function testSyncEngine() {
   const resumed = runtime(); resumed.local.set("amsSyncConfig", { connected: true, clearRunning: true, clearProgress: 3 });
   await resumed.sync.clearRemote(); assert.equal(resumed.local.get("amsSyncConfig").clearProgress, 4, "中断后重试必须沿用清理进度");
   await resumed.sync.clearRemote(); assert.equal(resumed.local.get("amsSyncConfig").clearProgress, 1, "成功后的新清理必须从零开始");
+  const authClear = runtime({ clearAuthOnce: true });
+  await authClear.sync.connect(); await assert.rejects(authClear.sync.clearRemote(), (error) => error.code === "unauthorized");
+  assert.equal((await authClear.sync.status()).state, "auth", "清云端鉴权失败必须持久化 auth 状态");
+  assert.equal(authClear.local.get("amsSyncConfig").clearRunning, true, "鉴权失败必须保留 clearRunning 以便续跑");
+  await authClear.sync.clearRemote();
+  assert.deepEqual(authClear.auths, [true, true], "鉴权失败后的继续清理必须重新交互授权");
+  assert.equal(authClear.local.get("amsSyncConfig").clearRunning, false);
+  assert.equal(authClear.local.get("amsSyncConfig").readOnly, false);
 };

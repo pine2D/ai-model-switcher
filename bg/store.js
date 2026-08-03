@@ -130,6 +130,37 @@ const SyncStore = (() => {
     }
     await completion;
   }
+  const has = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
+  function sameEntityVersion(kind, current, expected) {
+    if (!current || current.fileId !== expected.fileId || current.deviceId !== expected.deviceId) return false;
+    if (kind === "history") return current.lastUsedAt === expected.lastUsedAt;
+    return current.updatedAt === expected.updatedAt && has(current, "deletedAt") === has(expected, "deletedAt") &&
+      (!has(current, "deletedAt") || current.deletedAt === expected.deletedAt);
+  }
+  function compareEntityVersion(kind, left, right) {
+    const time = (value) => kind === "history" ? Number(value.lastUsedAt) || 0 :
+      Math.max(Number(value.updatedAt) || 0, Number(value.deletedAt) || 0, Number(value.createdAt) || 0);
+    const byTime = time(left) - time(right);
+    if (byTime) return byTime;
+    if (kind === "archive" && has(left, "deletedAt") !== has(right, "deletedAt")) return has(left, "deletedAt") ? 1 : -1;
+    return String(left.deviceId || "").localeCompare(String(right.deviceId || ""));
+  }
+  async function hydrateEntity(kind, id, expected, body) {
+    const name = kind === "history" ? "history" : "archives", db = await open();
+    const tx = db.transaction(name, "readwrite"), store = tx.objectStore(name), completion = done(tx), current = await request(store.get(id));
+    let result = { record: current, hydrated: false };
+    if (sameEntityVersion(kind, current, expected) && current.text == null && !(kind === "archive" && has(current, "deletedAt"))) {
+      const candidate = { ...body, deviceId: body.deviceId ?? current.deviceId };
+      if (compareEntityVersion(kind, candidate, current) >= 0) {
+        const newer = compareEntityVersion(kind, candidate, current) > 0;
+        const next = newer ? { ...current, ...candidate, fileId: current.fileId } : { ...candidate, ...current, text: body.text };
+        if (kind === "archive" && has(candidate, "deletedAt")) { delete next.text; delete next.results; }
+        else if (kind === "archive") next.results = body.results;
+        store.put(next); result = { record: next, hydrated: true };
+      }
+    }
+    await completion; return result;
+  }
   async function trimBodies(historyLimit = 200, archiveLimit = 50) {
     const db = await open(), tx = db.transaction(["history", "archives", "outbox"], "readwrite");
     const completion = done(tx), pending = tx.objectStore("outbox").index("entity");
@@ -163,6 +194,6 @@ const SyncStore = (() => {
     enqueue, readyOutbox, completeOutbox, countOutbox,
     putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
     deleteFile: (fileId) => erase("files", fileId),
-    setEntityFile, trimBodies, iterate, next,
+    setEntityFile, hydrateEntity, trimBodies, iterate, next,
   };
 })();

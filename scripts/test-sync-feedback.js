@@ -42,6 +42,13 @@ async function clearRunningFeedback() {
   assert.equal(page.els["clear-continue"].disabled, false, "失败后继续按钮必须恢复可用");
 }
 
+async function clearAuthFeedback() {
+  const page = await syncPage({ connected: true, clearRunning: true, clearProgress: 3 }, { state: "auth" });
+  assert.equal(page.els["status-title"].textContent, "sync_auth", "清理暂停于鉴权时必须明确显示需重新授权");
+  assert.equal(page.els["clear-continue"].hidden, false, "鉴权暂停时必须显示继续清理按钮");
+  assert.equal(page.els["clear-continue"].disabled, false, "鉴权暂停时继续按钮必须可用");
+}
+
 async function blockedFeedback() {
   const page = await syncPage({ connected: true }, { state: "blocked", reason: "quota", errorCount: 2 });
   assert.match(page.els["status-detail"].textContent, /sync_blockedQuota/, "配额阻断原因必须呈现");
@@ -126,6 +133,7 @@ function archivePageRejects() {
 
 (async () => {
   await clearRunningFeedback();
+  await clearAuthFeedback();
   await blockedFeedback();
   historyRejects();
   historyRace();

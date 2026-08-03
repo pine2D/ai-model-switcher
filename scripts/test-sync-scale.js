@@ -15,7 +15,7 @@ async function assertSyncStreams(total) {
   const meta = new Map(), local = new Map(); let imported = 0, maxBatch = 0, accumulatedCalls = 0, trims = 0;
   const store = {
     getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value),
-    countOutbox: async () => 0, readyOutbox: async () => [], putFile: async () => {}, findFile: async () => null,
+    countOutbox: async () => 0, readyOutbox: async () => [], putFile: async () => {}, findFile: async () => null, getFile: async () => null,
     iterate: async () => {}, trimBodies: async () => { trims++; },
   };
   const data = {

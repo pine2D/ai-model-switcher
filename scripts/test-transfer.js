@@ -13,8 +13,8 @@ function transferRuntime({ runForExport, rows }) {
   vm.runInContext(fs.readFileSync("bg/transfer.js", "utf8") + ";this.transfer=Transfer", scope);
   return scope.transfer;
 }
-function syncRuntime(connected) {
-  const config = { connected }, events = { storage: event(), alarm: event(), message: event(), startup: event() };
+function syncRuntime(connected, readOnly = false) {
+  const config = { connected, readOnly }, events = { storage: event(), alarm: event(), message: event(), startup: event() };
   let notes = 0;
   const store = { countOutbox: async () => 0, getMeta: async () => "token", putMeta: async () => {}, readyOutbox: async () => [], iterate: async () => {}, deleteMeta: async () => {}, deleteFile: async () => {} };
   const chrome = { storage: { local: { get: async (defaults) => ({ ...defaults, amsSyncConfig: config, amsSyncStatus: {} }), set: async () => {} }, onChanged: events.storage }, runtime: { onMessage: events.message, onStartup: events.startup }, alarms: { create: () => {}, onAlarm: events.alarm } };
@@ -36,6 +36,7 @@ async function main() {
 
   await assert.rejects(syncRuntime(true).sync.runForExport(), (error) => error.code === "network_error", "已连接导出必须传播非交互同步失败");
   await assert.doesNotReject(syncRuntime(false).sync.runForExport(), "未连接导出可只使用本地数据");
+  await assert.rejects(syncRuntime(false, true).sync.runForExport(), (error) => error.code === "schema", "断开后高 schema 仍必须阻止不完整导出");
   const guarded = syncRuntime(false);
   await guarded.sync.projectImportedState({});
   assert.equal(guarded.notes(), 0, "导入投影不得回写时间戳或二次排队");

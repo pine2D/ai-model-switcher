@@ -67,7 +67,7 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
     putArchive: async (record) => records.set(`archive:${record.id}`, record), getArchive: async (id) => records.get(`archive:${id}`),
     enqueue: async (op) => queued.set(op.key, op), completeOutbox: async (key) => queued.delete(key),
     readyOutbox: async (at) => [...queued.values()].filter((op) => op.nextAt <= at), countOutbox: async () => queued.size,
-    putFile: async (file) => fileIndex.set(file.logicalKey, file), findFile: async (key) => fileIndex.get(key),
+    putFile: async (file) => fileIndex.set(file.logicalKey, file), findFile: async (key) => fileIndex.get(key), getFile: async (id) => [...fileIndex.values()].find((file) => file.fileId === id),
     deleteFile: async (id) => { for (const [key, file] of fileIndex) if (file.fileId === id) fileIndex.delete(key); },
     trimBodies: async () => {}, iterate: async (kind, visit) => {
       for (const record of records.values()) if ((kind === "history") === record.textHash) await visit(record);

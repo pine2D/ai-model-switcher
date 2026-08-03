@@ -126,7 +126,7 @@ const SyncEngine = (() => {
       await readFile(file, collected, scanId);
     });
     const changes = await visitChanges(token, async (change) => {
-      if (change.removed) cloudCount = Math.max(0, cloudCount - 1);
+      if (change.removed && (await SyncStore.getFile(change.fileId))?.seenAt === scanId) cloudCount = Math.max(0, cloudCount - 1);
       else if (change.file?.appProperties?.app === "polyask" && (!SyncStore.getFile || !await SyncStore.getFile(change.file.id))) cloudCount++;
       await readFile(change.file || change, collected, scanId);
     });
@@ -219,6 +219,7 @@ const SyncEngine = (() => {
   const wake = (reason) => serialize(() => syncOnce(reason));
   async function exportOnce() {
     const saved = await config();
+    if (saved.readOnly) { await setStatus("schema"); throw coded("schema"); }
     if (!saved.connected || saved.clearRunning) return status();
     try { await setStatus("syncing", { reason: "export" }); await pull(); const waiting = await flush();
       if ((await config()).readOnly) throw coded("schema");
@@ -241,11 +242,14 @@ const SyncEngine = (() => {
   const disconnect = () => serialize(disconnectNow);
   async function clearRemoteNow() {
     const saved = await config(), offset = saved.clearRunning ? Number(saved.clearProgress) || 0 : 0;
+    const current = (await chrome.storage.local.get({ [STATUS]: {} }))[STATUS] || {};
+    if (saved.clearRunning && current.state === "auth") await Drive.connect(true);
     await saveConfig({ clearRunning: true, clearProgress: offset });
     await Drive.clearAll(async (progress) => saveConfig({ clearProgress: offset + progress }));
     await disconnectNow(); await saveConfig({ clearRunning: false, readOnly: false });
   }
-  const clearRemote = () => serialize(clearRemoteNow);
+  const clearRemote = () => serialize(async () => { try { return await clearRemoteNow(); }
+    catch (error) { await failure(error); throw error; } });
   async function status() {
     const value = (await chrome.storage.local.get({ [STATUS]: {} }))[STATUS] || {};
     return { state: value.state || "idle", lastSuccessAt: value.lastSuccessAt, pending: await SyncStore.countOutbox(),
@@ -254,14 +258,12 @@ const SyncEngine = (() => {
   async function resolve(kind, id) {
     for (;;) {
       const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
-      if (!record || record.text != null || !record.fileId) return record;
+      if (!record || record.text != null || !record.fileId || kind === "archive" && Object.hasOwn(record, "deletedAt")) return record;
       try { const body = await Drive.download(record.fileId), props = kind === "history" ? { id, device: record.deviceId } : { id };
         if (!await validBody(kind, body, props)) throw { code: "invalid_response" };
-        const latest = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
-        if (!latest || latest.fileId !== record.fileId || latest.text != null) return latest;
-        const merged = { ...body, ...latest, text: body.text, ...(kind === "archive" ? { results: body.results } : {}) };
-        await (kind === "history" ? SyncStore.putHistory(merged) : SyncStore.putArchive(merged));
-        return merged; } catch (error) {
+        const hydrated = await SyncStore.hydrateEntity(kind, id, record, body), latest = hydrated.record;
+        if (hydrated.hydrated || !latest || latest.text != null || !latest.fileId || kind === "archive" && Object.hasOwn(latest, "deletedAt")) return latest;
+      } catch (error) {
         if (error?.code !== "not_found" && error?.status !== 404) throw error;
         await forget(record.fileId, kind === "history" ? `history:${id}:${record.deviceId}` : `archive:${id}`);
         const replacement = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));

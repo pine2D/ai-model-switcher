@@ -27,6 +27,7 @@ function setBusy(value) {
 
 function statusKey() {
   if (notice) return notice;
+  if (config.clearRunning && status.state === "auth") return "sync_auth";
   if (config.clearRunning) return "sync_syncing";
   if (!config.connected) return "sync_disconnected";
   return `sync_${["idle", "syncing", "offline", "auth", "blocked", "waiting", "schema", "error"].includes(status.state) ? status.state : "error"}`;
