@@ -40,4 +40,7 @@ async function main() {
   console.log("sync-model tests passed");
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
