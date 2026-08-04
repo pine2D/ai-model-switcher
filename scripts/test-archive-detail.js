@@ -128,9 +128,30 @@ const ownerOld = root.querySelector("#ar-note"); ownerOld.value = "old-1"; owner
 ownerOld.value = "old-2"; ownerOld.fire("input"); renderOwner();
 const ownerNew = root.querySelector("#ar-note"); ownerNew.value = "new"; ownerNew.fire("input"); const ownerNewTimer = timers.at(-1);
 finishOld(); await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(ownerUpdates.map(({ patch }) => patch.note), ["old-1"], "失效 render 的异步回调不得重提 pending old-2");
 assert.equal(ownerNewTimer.cancelled, false, "旧 render 的在途回调不得取消新 render 的备注定时器");
 if (!ownerNewTimer.cancelled) ownerNewTimer.fn(); await Promise.resolve(); await Promise.resolve();
 assert.equal(ownerUpdates.at(-1).patch.note, "new", "新 render 的定时保存仍应正常执行");
+
+const rearmDrafts = new Map(), rearmUpdates = []; let completeOld;
+const rearmEntry = { ...raceEntry, id: "rearm" };
+const renderRearm = () => scope.detail.render(rearmEntry, { update(id, patch) {
+  rearmUpdates.push({ id, patch });
+  if (patch.note === "old-1") return new Promise((resolve) => { completeOld = () => { renderRearm(); resolve(); }; });
+  return Promise.resolve();
+}, errorText: (item) => item.code, draft: rearmDrafts.get("rearm"), onDraft(id, patch) {
+  rearmDrafts.set(id, { ...(rearmDrafts.get(id) || {}), ...patch });
+} });
+renderRearm();
+const rearmOld = root.querySelector("#ar-note"); rearmOld.value = "old-1"; rearmOld.fire("input"); rearmOld.fire("blur"); await Promise.resolve();
+rearmOld.value = "old-2"; rearmOld.fire("input"); renderRearm();
+const rearmNew = root.querySelector("#ar-note"); rearmNew.value = "new"; rearmNew.fire("input"); const cancelledNewTimer = timers.at(-1);
+const timerCount = timers.length; completeOld(); await new Promise((resolve) => setImmediate(resolve));
+assert.equal(cancelledNewTimer.cancelled, true, "旧请求成功引发的重渲染会取消当前草稿定时器");
+assert.ok(timers.length > timerCount, "携带备注草稿的新 render 应重新安排防抖保存");
+const replacementTimer = timers.at(-1);
+if (!replacementTimer.cancelled) replacementTimer.fn(); await Promise.resolve(); await Promise.resolve();
+assert.deepEqual(rearmUpdates.map(({ patch }) => patch.note), ["old-1", "new"], "重渲染后应仅接续保存新草稿，不得写入 pending old-2");
 
 console.log("archive detail tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

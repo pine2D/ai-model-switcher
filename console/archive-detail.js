@@ -1,6 +1,7 @@
 // console/archive-detail.js — 归档详情与人工评价控件
 const ArchiveDetail = (() => {
   let cancelPendingNote = () => {};
+  let renderGeneration = 0;
   const successful = (result) => typeof result?.text === "string" && result.text.trim();
   const node = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -27,6 +28,7 @@ const ArchiveDetail = (() => {
     return markdown.join("\n");
   }
   function render(entry, { update, errorText, draft = {}, onDraft = () => {} }) {
+    const generation = ++renderGeneration;
     cancelPendingNote();
     const root = document.getElementById("ar-detail");
     const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).then(() => true, () => false);
@@ -62,9 +64,10 @@ const ArchiveDetail = (() => {
     cancelPendingNote = () => { clearTimeout(noteTimer); noteTimer = null; };
     const saveNote = () => {
       clearTimeout(noteTimer); noteTimer = null;
-      if (pendingNote === null || noteSaving) return;
+      if (generation !== renderGeneration || pendingNote === null || noteSaving) return;
       const value = pendingNote; noteSaving = true;
       save({ note: value }).then((ok) => {
+        if (generation !== renderGeneration) return;
         noteSaving = false;
         if (ok && pendingNote === value) pendingNote = null;
         else if (pendingNote !== value) saveNote();
@@ -75,6 +78,7 @@ const ArchiveDetail = (() => {
       clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 400);
     });
     note.addEventListener("blur", saveNote);
+    if (hasNoteDraft) noteTimer = setTimeout(saveNote, 400);
     controls.append(favorite, field(t("arc_tags"), tags), field(t("arc_note"), note)); root.appendChild(controls);
     const nav = node("nav", "ar-sites"); nav.setAttribute("aria-label", t("arc_sites"));
     const sections = [];
