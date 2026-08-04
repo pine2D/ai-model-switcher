@@ -1,4 +1,4 @@
-// popup/popup.js — 当前站模式 + console 入口 + 紧凑设置与快捷键
+// popup/popup.js — 当前站模式 + console 入口 + 快捷键
 applyI18n(); // i18n.js 已在 head 载入并从 localStorage 镜像同步了语言，立即本地化静态文案
 let statusSite = "";
 let statusConnected = false;
@@ -54,46 +54,6 @@ for (const mode of ["think", "fast"]) {
   });
 }
 
-function setupSelect(id, storageKey, fallback) {
-  const root = document.getElementById(id), trigger = root.querySelector(".select-trigger"), menu = root.querySelector(".select-menu");
-  const options = [...menu.querySelectorAll("[data-value]")];
-  function select(value) {
-    const option = options.find((item) => item.dataset.value === value) || options[0];
-    root.dataset.value = option.dataset.value;
-    trigger.querySelector(".select-value").textContent = option.textContent;
-    options.forEach((item) => item.setAttribute("aria-selected", item === option ? "true" : "false"));
-  }
-  function close() { menu.hidden = true; trigger.setAttribute("aria-expanded", "false"); }
-  function open() { menu.hidden = false; trigger.setAttribute("aria-expanded", "true"); }
-  trigger.addEventListener("click", () => menu.hidden ? open() : close());
-  menu.addEventListener("click", (e) => {
-    const option = e.target.closest("[data-value]"); if (!option) return;
-    select(option.dataset.value); close(); trigger.focus(); chrome.storage.local.set({ [storageKey]: option.dataset.value });
-  });
-  root.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { close(); trigger.focus(); return; }
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    if (menu.hidden) { open(); (options.find((item) => item.getAttribute("aria-selected") === "true") || options[0]).focus(); return; }
-    const current = Math.max(0, options.indexOf(document.activeElement));
-    options[(current + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length].focus();
-  });
-  document.addEventListener("click", (e) => { if (!root.contains(e.target)) close(); });
-  document.addEventListener("i18n:changed", () => select(root.dataset.value || fallback));
-  chrome.storage.local.get({ [storageKey]: fallback }, (v) => select(v[storageKey]));
-}
-setupSelect("lang", "amsLang", "auto");
-setupSelect("dm", "displayMode", "handle");
-
-// popup / console / compose 共用 amsTheme，由 theme.js 即时应用
-chrome.storage.local.get({ amsTheme: "auto" }, (v) => {
-  const el = document.querySelector(`input[name=theme][value="${v.amsTheme}"]`);
-  if (el) el.checked = true;
-});
-document.querySelectorAll("input[name=theme]").forEach((r) =>
-  r.addEventListener("change", () => chrome.storage.local.set({ amsTheme: r.value }))
-);
-
 document.getElementById("diag").addEventListener("click", async () => {
   const out = document.getElementById("diagout");
   try {
@@ -141,7 +101,7 @@ buildKeys();
 document.addEventListener("i18n:changed", () => { buildKeys(); renderStatus(); });
 
 document.getElementById("shortcut-help").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
-document.getElementById("sync-settings").addEventListener("click", () => {
+document.getElementById("open-settings").addEventListener("click", () => {
   chrome.runtime.openOptionsPage();
   window.close();
 });
@@ -153,12 +113,5 @@ document.getElementById("open-console").addEventListener("click", async () => {
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openConsole", host });
   window.close();
 });
-
-chrome.storage.local.get({ amsAutoRaise: true }, (v) => {
-  document.getElementById("autoraise").checked = v.amsAutoRaise !== false;
-});
-document.getElementById("autoraise").addEventListener("change", (e) =>
-  chrome.storage.local.set({ amsAutoRaise: e.target.checked })
-);
 
 refreshState();

@@ -36,28 +36,6 @@ button{font:inherit;color:inherit;cursor:pointer;transition:transform .12s var(-
 .segment button.active{background:var(--active);box-shadow:inset 0 0 0 1px var(--active-line);color:var(--active-text);font-weight:700}
 .segment button:disabled{opacity:.45;cursor:default}
 #unsupported{display:none;margin:-3px 0 9px;color:var(--text-3);font-size:11px}
-.settings{border-top:1px solid var(--edge)}
-.row{min-height:43px;display:flex;align-items:center;gap:9px;padding:7px 2px;border-bottom:1px solid var(--edge)}
-.row-icon{display:grid;place-items:center;width:22px;height:24px;flex:none;color:var(--text-3)}.row-icon svg{display:block}
-.label{flex:1;color:var(--text-2)}
-.switch{appearance:none;width:34px;height:19px;padding:2px;border:0;border-radius:999px;background:var(--line);cursor:pointer;transition:background .15s ease,transform .12s var(--ease-out)}
-.switch:after{content:"";display:block;width:15px;height:15px;border-radius:50%;background:#fff;transition:transform .15s}
-.switch:checked{background:var(--active-line)}.switch:checked:after{transform:translateX(15px)}
-.mini-segment{display:flex;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--fill)}
-.mini-segment label{cursor:pointer}.mini-segment input{position:absolute;opacity:0;pointer-events:none}
-.mini-segment span{display:block;padding:4px 7px;border-radius:6px;color:var(--text-3);font-size:11px;transition:background .12s ease,color .12s ease,transform .12s var(--ease-out)}
-.mini-segment input:checked+span{background:var(--active);color:var(--active-text)}
-.select-wrap{position:relative}
-.select-trigger{min-width:76px;padding:5px 20px 5px 8px;border:0;border-radius:7px;background:transparent;color:var(--text-3);font-size:12px;text-align:right}
-.select-trigger:after{content:"";position:absolute;right:7px;top:50%;width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-65%) rotate(45deg)}
-.select-trigger[aria-expanded="true"]{background:var(--fill);color:var(--text-2)}
-.select-menu{position:absolute;z-index:10;top:calc(100% + 4px);right:0;min-width:132px;padding:4px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);box-shadow:0 12px 30px rgba(0,0,0,.35);opacity:1;transform:scale(1);transform-origin:top right;transition:opacity .14s var(--ease-out),transform .14s var(--ease-out),display .14s allow-discrete}
-#dm .select-menu{min-width:156px}.select-menu[hidden]{display:none;opacity:0;transform:scale(.97)}
-@starting-style{.select-menu:not([hidden]){opacity:0;transform:scale(.97)}}
-.select-menu button{position:relative;width:100%;padding:7px 25px 7px 9px;border:0;border-radius:6px;background:transparent;color:var(--text-2);font-size:12px;text-align:left}
-.select-menu button:hover,.select-menu button:focus-visible{background:var(--hover)}
-.select-menu button[aria-selected="true"]{background:var(--active);color:var(--active-text)}
-.select-menu button[aria-selected="true"]:after{content:"";position:absolute;right:10px;top:10px;width:7px;height:4px;border-left:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg)}
 #keys{display:grid;grid-template-columns:1fr auto;gap:6px 9px;padding:10px 2px 2px;color:var(--text-3);font-size:11px}
 .keyrow{display:contents}.keyrow span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 kbd{padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--fill);color:var(--text-2);font:10px ui-monospace,Consolas,monospace}
@@ -65,18 +43,16 @@ kbd{padding:2px 6px;border:1px solid var(--line);border-bottom-width:2px;border-
 .shortcut-title{margin-bottom:5px;color:var(--text-3);font-size:10px;font-weight:700;letter-spacing:.55px;text-transform:uppercase}
 .console-key-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px}
 .console-key{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;color:var(--text-3);font-size:11px}.console-key span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
-.tool{height:36px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-2)}
-.tool:hover{background:var(--hover)}.tool svg{vertical-align:-2px;margin-right:5px;color:var(--text-3)}
+.tools{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+.tool{display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--text-2)}
+.tool:hover{background:var(--hover)}.tool svg{width:16px;height:16px;color:var(--text-3)}
 #diagout{font-size:12px;margin-top:7px}#diagout:empty{display:none}.hint{color:var(--text-3);font-size:11px}
-.ck{display:inline-block;width:9px;height:9px;margin-right:5px;background:center/contain no-repeat}
-.ck.ok{background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M2.5 9l4 4 7-10" fill="none" stroke="%2316a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>')}
-.ck.bad{background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="%23dc2626" stroke-width="3" stroke-linecap="round"/></svg>')}
-button:active:not(:disabled),.switch:active,.mini-segment label:active span{transform:scale(.97)}
+.ck{display:inline-block;width:9px;height:9px;margin-right:5px;mask:center/contain no-repeat;-webkit-mask:center/contain no-repeat}
+.ck.ok{background-color:#16a34a;mask-image:url("../icons/lucide/check.svg");-webkit-mask-image:url("../icons/lucide/check.svg")}
+.ck.bad{background-color:#dc2626;mask-image:url("../icons/lucide/x.svg");-webkit-mask-image:url("../icons/lucide/x.svg")}
+button:active:not(:disabled){transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){
-  button,.switch,.mini-segment span{transition-property:background-color,border-color,color,opacity;transition-duration:.1s}
+  button{transition-property:background-color,border-color,color,opacity;transition-duration:.1s}
   .status-dot{transition:background-color .1s}
-  .switch:after{transition:none}
-  .select-menu{transform:none;transition:opacity .1s ease,display .1s allow-discrete}
-  button:active:not(:disabled),.switch:active,.mini-segment label:active span,.select-menu[hidden]{transform:none}
+  button:active:not(:disabled){transform:none}
 }

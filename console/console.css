@@ -12,8 +12,6 @@
   --name-line:#625dde; --name-fill:#1b1d39;
   --send-bg:#4f46e5; --send-text:#fff;
   --scroll:#414b5d; --scroll-hover:#556176;
-  --status-ok-icon:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M2.5 9l4 4 7-10" fill="none" stroke="%2316a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-  --status-fail-icon:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="%23dc2626" stroke-width="3" stroke-linecap="round"/></svg>');
   --ease-out:cubic-bezier(0.23,1,0.32,1);
 }
 /* 亮色调色板（显式 light 用此块；系统自动用下方 @media，值相同） */
@@ -84,11 +82,12 @@ html,body{margin:0;height:100%;overflow:hidden;font:13px/1.4 -apple-system,"Sego
 .chip.open .d{background:transparent;border:2px solid #16a34a;box-sizing:border-box}
 /* 终态用形状（勾/叉）而非仅红绿色相：色觉障碍用户也能分辨。SVG 背景而非字形字符——
    字形在大字体集环境触发字体回退扫描致卡顿 */
-.chip.done .d,.chip.fail .d{border-radius:0;width:9px;height:9px;background:center/contain no-repeat}
+.chip.done .d,.chip.fail .d,.scope-state{mask:center/contain no-repeat;-webkit-mask:center/contain no-repeat}
+.chip.done .d,.chip.fail .d{border-radius:0;width:9px;height:9px}
 .chip.done{border-color:rgba(22,163,74,.7)}
-.chip.done .d{background-image:var(--status-ok-icon)}
+.chip.done .d{background-color:#16a34a;mask-image:url("../icons/lucide/check.svg");-webkit-mask-image:url("../icons/lucide/check.svg")}
 .chip.fail{border-color:rgba(220,38,38,.7)}
-.chip.fail .d{background-image:var(--status-fail-icon)}
+.chip.fail .d{background-color:#dc2626;mask-image:url("../icons/lucide/x.svg");-webkit-mask-image:url("../icons/lucide/x.svg")}
 /* 失败汇总（全部结果回齐后内联显示）与读屏播报 */
 #failsum{flex:0 1 auto;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--danger)}
 /* 图标按钮群按语义分组：编辑/发送/重试 · 平铺/汇总/导出/归档 · 巡检/新会话/关闭 */
@@ -132,9 +131,9 @@ body.scope{height:100vh;box-sizing:border-box;padding:12px;overflow:auto;backgro
 .scope-site:has(input:checked){border-color:var(--active-line);color:var(--active-text);background:var(--active-bg)}
 .scope-site input{margin:0;accent-color:var(--accent)}
 .scope-site-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.scope-state{width:9px;height:9px;margin-left:auto;flex:none;font-weight:700;color:var(--text-3);background:center/contain no-repeat;opacity:1;transition:opacity .12s var(--ease-out)}
-.scope-site[data-state="ok"] .scope-state{background-image:var(--status-ok-icon)}
-.scope-site[data-state="fail"] .scope-state{background-image:var(--status-fail-icon)}
+.scope-state{width:9px;height:9px;margin-left:auto;flex:none;font-weight:700;color:var(--text-3);opacity:1;transition:opacity .12s var(--ease-out)}
+.scope-site[data-state="ok"] .scope-state{background-color:#16a34a;mask-image:url("../icons/lucide/check.svg");-webkit-mask-image:url("../icons/lucide/check.svg")}
+.scope-site[data-state="fail"] .scope-state{background-color:#dc2626;mask-image:url("../icons/lucide/x.svg");-webkit-mask-image:url("../icons/lucide/x.svg")}
 @starting-style{.scope-site[data-state] .scope-state{opacity:.35}}
 .scope-foot{min-height:42px;padding-top:9px;border-top:1px solid var(--edge)}
 body.scope [hidden]{display:none}

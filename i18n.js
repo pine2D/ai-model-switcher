@@ -197,7 +197,7 @@ const MSG = {
   pop_shortcutUnset:   { en: "not set",                  zh_CN: "未设置",      zh_TW: "未設定" },
   pop_consoleKeys:     { en: "Console shortcuts",        zh_CN: "控制台内快捷键", zh_TW: "主控台內快捷鍵" },
   pop_manageShortcuts: { en: "Manage shortcuts",         zh_CN: "管理快捷键",     zh_TW: "管理快速鍵" },
-  pop_syncSettings:    { en: "Data sync",                zh_CN: "数据同步",       zh_TW: "資料同步" },
+  pop_settings:        { en: "Settings",                 zh_CN: "设置",           zh_TW: "設定" },
   pop_diagShort:       { en: "Diagnose",                 zh_CN: "诊断",           zh_TW: "診斷" },
   pop_shortcutOpen:    { en: "Open / focus console",     zh_CN: "打开 / 聚焦控制台", zh_TW: "開啟 / 聚焦主控台" },
   pop_shortcutThink:   { en: "Switch to deep think",     zh_CN: "切换深度思考",   zh_TW: "切換深度思考" },

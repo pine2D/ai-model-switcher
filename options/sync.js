@@ -1,5 +1,5 @@
 applyI18n();
-document.title = `PolyAsk · ${t("sync_title")}`;
+document.title = `PolyAsk · ${t("settings_title")}`;
 const byId = (id) => document.getElementById(id);
 const controls = [...document.querySelectorAll("[data-sync-control]")];
 let config = {}, status = {}, busy = false, notice = "", clearTimer = null;
@@ -46,7 +46,7 @@ function renderStatus() {
   const reconnect = !!config.connected && !config.clearRunning && status.state === "auth";
   const connected = !!config.connected && !config.clearRunning && !reconnect;
   byId("connect").hidden = connected || !!config.clearRunning;
-  byId("connect").textContent = t(reconnect ? "sync_auth" : "sync_connect");
+  byId("connect").querySelector("span").textContent = t(reconnect ? "sync_auth" : "sync_connect");
   byId("sync-now").hidden = !connected;
   byId("disconnect").hidden = !config.connected || !!config.clearRunning;
   const confirmation = byId("clear-confirmation");
@@ -164,6 +164,6 @@ byId("clear-remote").addEventListener("click", () => {
   byId("clear-continue").focus();
 });
 byId("clear-continue").addEventListener("click", () => run("clearRemote"));
-document.addEventListener("i18n:changed", () => { document.title = `PolyAsk · ${t("sync_title")}`; renderStatus(); });
+document.addEventListener("i18n:changed", () => { document.title = `PolyAsk · ${t("settings_title")}`; renderStatus(); });
 
 refresh().catch(() => { status = { state: "error" }; renderStatus(); });

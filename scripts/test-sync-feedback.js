@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 class El {
-  constructor(id) { this.id = id; this.disabled = this.hidden = false; this.dataset = {}; this.textContent = ""; this.listeners = {}; this.style = {}; this.classList = { add() {}, remove() {} }; }
+  constructor(id) { this.id = id; this.disabled = this.hidden = false; this.dataset = {}; this.textContent = ""; this.label = { textContent: "" }; this.listeners = {}; this.style = {}; this.classList = { add() {}, remove() {} }; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   focus() {}
   setAttribute() {}
@@ -11,6 +11,7 @@ class El {
   replaceChildren() {}
   appendChild() {}
   append() {}
+  querySelector(selector) { return selector === "span" ? this.label : null; }
 }
 function syncPage(config, status, clearReply = Promise.resolve({ ok: true })) {
   const ids = ["connect", "sync-now", "disconnect", "export", "import-file", "clear-remote", "clear-confirmation", "clear-continue", "status-title", "status-detail"];

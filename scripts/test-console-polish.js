@@ -22,6 +22,21 @@ function testVisualSemantics() {
   assert.ok(!html.includes("发送 ▸") && !compose.includes("发送到全部 ▸") && !i18n.includes("▸"),
     "主控制台、Prompt Workspace 与三语文案不应保留发送箭头");
   assert.doesNotMatch(popup, /#app\{[^}]*border-radius/, "popup 根容器不应模拟浏览器外框圆角");
+  const popupHtml = source("popup/popup.html");
+  const popupJs = source("popup/popup.js");
+  for (const id of ["autoraise", "lang", "dm"]) {
+    assert.ok(!popupHtml.includes(`id="${id}"`), `popup 不应保留全局设置 ${id}`);
+  }
+  assert.ok(!popupHtml.includes('name="theme"'), "popup 不应保留主题控件");
+  for (const id of ["shortcut-help", "diag", "open-settings"]) {
+    const button = popupHtml.match(new RegExp(`<button id="${id}"[\\s\\S]*?</button>`))?.[0] || "";
+    assert.match(button, /class="[^"]*tool[^"]*"/);
+    assert.match(button, /data-i18n-title=/);
+    assert.match(button, /data-i18n-aria=/);
+    assert.ok(!/<span[^>]*data-i18n=/.test(button), `${id} 必须为纯图标按钮`);
+  }
+  assert.ok(!popupJs.includes('setupSelect("lang"') && !popupJs.includes('setupSelect("dm"'));
+  assert.ok(popupJs.includes('getElementById("open-settings")'));
   assert.match(css, /#scope-groups button\{[^}]*text-overflow:ellipsis/, "超长自定义分组名应截断");
   assert.match(scope, /button\.title = group\.name/, "截断的分组名应保留完整悬停提示");
 }

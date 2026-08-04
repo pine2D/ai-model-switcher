@@ -1,25 +1,29 @@
 #!/usr/bin/env node
 "use strict";
-
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-
 const source = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
-
 function testPopupLayout() {
   const html = source("popup/popup.html"), css = source("popup/popup.css"), js = source("popup/popup.js");
-  const order = ["site-status", "open-console", "think", "autoraise", "keys", "console-keys", "shortcut-help", "diag", "diagout"];
+  const order = ["site-status", "open-console", "think", "keys", "console-keys", "shortcut-help", "diag", "open-settings", "diagout"];
   const positions = order.map((id) => html.indexOf(`id="${id}"`));
-  assert.ok(positions.every((position) => position >= 0) && positions.every((position, i) => i === 0 || position > positions[i - 1]), "popup 应严格保持 B 版信息顺序");
+  assert.ok(positions.every((position) => position >= 0) && positions.every((position, i) => i === 0 || position > positions[i - 1]), "popup 应保持精简后的信息顺序");
   assert.ok(html.includes('href="popup.css"') && !html.includes("<fieldset"), "popup 应使用 B 版连续控制面，不得退回旧 fieldset 卡片");
   assert.ok(css.includes("body{width:356px") && css.includes("grid-template-columns:70px 1fr"), "popup 应保持 B 版宽度与模式栏比例");
   assert.ok(html.includes('../console/theme.js') && css.includes(':root[data-theme="light"]') && css.includes(':root:not([data-theme])'), "popup 应复用共享主题逻辑并支持显式亮暗主题");
-  assert.ok(!html.includes("<select") && html.match(/role="listbox"/g)?.length === 2 && js.includes('setupSelect("lang"') && js.includes('setupSelect("dm"'), "语言与悬浮控件应使用匹配 B 版的自定义菜单");
+  assert.ok(!html.includes("<select") && !html.includes('role="listbox"') && !js.includes("setupSelect("), "语言与悬浮控件应迁出 popup");
+  for (const id of ["autoraise", "lang", "dm"]) assert.ok(!html.includes(`id="${id}"`), `${id} 不应留在 popup`);
+  assert.ok(!html.includes('name="theme"') && js.includes('getElementById("open-settings")'), "主题与自动置顶应由设置页承接");
+  for (const id of ["shortcut-help", "diag", "open-settings"]) {
+    const button = html.match(new RegExp(`<button id="${id}"[\\s\\S]*?</button>`))?.[0] || "";
+    assert.ok(button.includes('class="tool"') && button.includes("data-i18n-title") && button.includes("data-i18n-aria") && button.includes("<svg") && !button.includes("<span"), `${id} 应为有名称的纯图标按钮`);
+  }
+  assert.ok(css.includes(".tools{display:flex;justify-content:flex-end;gap:6px") && css.includes("width:34px;height:34px;padding:0"), "工具区应右对齐并使用 34px 图标按钮");
   for (const key of ["Alt+C", "Alt+L", "Alt+N", "Alt+P", "Alt+R"]) assert.ok(html.includes(`<kbd>${key}</kbd>`), `popup 应直接展示控制台快捷键 ${key}`);
   assert.ok(!html.includes("pop_denseHint") && !html.includes("shortcut-dialog"), "popup 不应保留无功能宣传语或隐藏式快捷键弹窗");
-  assert.ok(css.includes("--ease-out:cubic-bezier(0.23,1,0.32,1)") && css.includes("transform-origin:top right") && css.includes("@starting-style") && css.includes("@media (prefers-reduced-motion:reduce)"), "popup 应使用克制的弹层与按压反馈并支持 reduced-motion");
+  assert.ok(css.includes("--ease-out:cubic-bezier(0.23,1,0.32,1)") && css.includes("button:active:not(:disabled)") && css.includes("@media (prefers-reduced-motion:reduce)"), "popup 应使用克制的按压反馈并支持 reduced-motion");
   assert.ok(html.includes('class="status checking"') && css.includes(".status.connected .status-dot"), "popup 检测中应为中性状态，连接成功后才变绿");
   assert.ok(js.includes('classList.remove("checking")') && js.includes('classList.toggle("connected"'), "popup 状态机应明确结束 checking");
   const pill = source("content/pill.js"); assert.ok(pill.includes("width:36px;height:24px") && pill.includes(".handle:before") && pill.includes("transition:opacity .16s var(--ease-out)") && pill.includes("prefers-reduced-motion:reduce"), "悬浮把手应扩大命中区并使用克制反馈");
@@ -28,7 +32,6 @@ function testPopupLayout() {
   assert.ok(pill.indexOf(".pill button:active") < pill.indexOf("@media (hover:hover)"), "pill 按压反馈不应只服务精细鼠标");
   const core = source("content/core.js"); assert.ok(core.includes('setAttribute("role", "status")') && core.includes("pointer-events:none") && core.includes("matchMedia(\"(prefers-reduced-motion: reduce)\")") && core.includes(".animate(") && core.includes("exit.finished.then"), "跨站提示应具备状态语义、克制进退场与 reduced-motion");
 }
-
 function testConsoleControls() {
   const js = source("console/library.js"), html = source("console/console.html");
   const css = source("console/console.css");
@@ -47,7 +50,7 @@ function testConsoleControls() {
     const arrow = html.match(new RegExp(`<button id="${id}"[\\s\\S]*?</button>`))?.[0] || "";
     assert.ok(arrow.includes("data-i18n-aria") && arrow.includes('aria-hidden="true"') && arrow.includes("disabled"), `${id} 应为有名称且初始禁用的语义按钮`);
   }
-  assert.ok(css.includes("transition:opacity .12s var(--ease-out)") && css.includes("--status-ok-icon:url("), "溢出箭头和状态图标应复用克制反馈");
+  assert.ok(css.includes("transition:opacity .12s var(--ease-out)") && css.includes('mask-image:url("../icons/lucide/check.svg")') && css.includes('mask-image:url("../icons/lucide/x.svg")'), "溢出箭头和状态图标应使用本地 Lucide mask");
   const consoleJs = source("console/console.js");
   const composeJs = source("console/compose.js");
   const scopeJs = source("console/scope.js");
@@ -62,7 +65,6 @@ function testConsoleControls() {
   assert.ok(!css.includes("@media (hover:hover) and (pointer:fine){button:active"), "console 按压反馈应支持触摸和触控笔");
   assert.ok(!source("popup/popup.css").includes("@media (hover:hover) and (pointer:fine){button:active"), "popup 按压反馈应支持触摸和触控笔");
 }
-
 function testFinalReviewRegressions() {
   const [css, composeHtml, compose, scope, pill, popup] = ["console/console.css", "console/compose.html", "console/compose.js", "console/scope.js", "content/pill.js", "popup/popup.css"].map(source);
   assert.ok(css.indexOf("#ch-foot .scope") < css.indexOf("#ch-foot #ch-scope[data-invalid=\"true\"]"), "范围错误色必须覆盖基础 scope 色");
@@ -79,7 +81,6 @@ function testFinalReviewRegressions() {
   const reducedMotion = popup.match(/@media \(prefers-reduced-motion:reduce\)\{([\s\S]*?)\n\}/)?.[1] || "";
   assert.ok(reducedMotion.includes(".status-dot{transition:background-color .1s}"), "reduced-motion 下状态圆点只保留背景色过渡");
 }
-
 function testCompanionResponsibilities() {
   const compose = source("console/compose.html");
   assert.ok(!compose.includes("<select") && compose.includes('id="cmp-tab-templates"') && compose.includes('id="cmp-tab-history"'), "编辑窗应使用自定义模板/历史列表");
@@ -94,7 +95,6 @@ function testCompanionResponsibilities() {
   assert.ok(!archive.includes("<select") && archive.includes('id="ar-list"') && archive.includes('role="listbox"'), "归档应使用自定义可访问列表");
   for (const id of ["ar-capture", "ar-copy", "ar-export", "ar-del"]) assert.ok(archive.includes(`id="${id}"`), `归档窗应提供 ${id}`);
 }
-
 function testScopeControls() {
   const js = source("console/scope.js");
   const start = js.indexOf("// SCOPE_LOGIC_START");

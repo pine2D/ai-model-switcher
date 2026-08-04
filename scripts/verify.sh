@@ -4,14 +4,21 @@ set -euo pipefail
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
+existing_files() {
+  git ls-files -z --cached --others --exclude-standard -- "$1" |
+    while IFS= read -r -d '' file; do
+      [ -f "$file" ] && printf '%s\0' "$file"
+    done
+}
+
 echo "[syntax] 检查 JavaScript"
-mapfile -t JS_FILES < <(git ls-files --cached --others --exclude-standard -- '*.js')
+mapfile -d '' -t JS_FILES < <(existing_files '*.js')
 for file in "${JS_FILES[@]}"; do
   node --check "$file"
 done
 
 echo "[json] 检查 JSON"
-mapfile -t JSON_FILES < <(git ls-files --cached --others --exclude-standard -- '*.json')
+mapfile -d '' -t JSON_FILES < <(existing_files '*.json')
 for file in "${JSON_FILES[@]}"; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$file"
 done
@@ -25,6 +32,7 @@ done
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-background.js
 node scripts/test-console-polish.js
+node scripts/test-icon-system.js
 
 echo "[test] 站点模型适配"
 node scripts/test-claude-model.js
@@ -42,6 +50,7 @@ node scripts/test-sync-ui.js
 node scripts/test-sync-feedback.js
 node scripts/test-sync-integrity.js
 node scripts/test-sync-scale.js
+node scripts/test-options-ui.js
 
 git diff --check
 echo "[verify] 全部通过"
