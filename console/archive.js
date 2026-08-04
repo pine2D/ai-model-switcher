@@ -190,7 +190,7 @@ function loadEntry(entry) {
     }
     document.getElementById("ar-status").textContent = "";
     archive = archive.map((item) => item.id === entry.id ? res.record : item);
-    if (selectedId === entry.id) renderList(entry.id);
+    showCurrent();
   });
 }
 document.getElementById("ar-more").addEventListener("click", () => loadPage(false));

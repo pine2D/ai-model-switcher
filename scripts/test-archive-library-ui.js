@@ -214,7 +214,7 @@ async function draftsSurviveRefreshAndLateCallbacks() {
 function distinctEmptyAndLoadStates() {
   const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
-  const gets = [];
+  const gets = [], rendered = [];
   let nextItems = [];
   const chrome = {
     runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
@@ -226,7 +226,7 @@ function distinctEmptyAndLoadStates() {
   const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
     createElement: () => new El(), createTextNode: () => new El() };
   const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
-    t: (key) => key, applyI18n() {}, ArchiveDetail: { render() {}, entryMarkdown: () => "" }, crypto: { randomUUID: () => "state" } });
+    t: (key) => key, applyI18n() {}, ArchiveDetail: { render(entry) { rendered.push(entry); }, entryMarkdown: () => "" }, crypto: { randomUUID: () => "state" } });
   vm.runInContext(js, context);
   assert.equal(els["ar-detail"]["data-empty"], "arc_empty", "空结果库应显示空库状态");
 
@@ -242,9 +242,9 @@ function distinctEmptyAndLoadStates() {
   assert.equal(els["ar-detail"]["data-empty"], "arc_loading", "云端正文加载期间应显示加载状态");
   gets.shift()({ ok: false });
   assert.equal(els["ar-detail"]["data-empty"], "arc_loadFailed", "云端正文加载失败应显示失败状态");
-  els["ar-list"].children[0].fire("click");
-  gets.shift()({ ok: true, record: { ...nextItems[0], results: [] } });
-  assert.equal(els["ar-status"].textContent, "", "正文重载成功应清除旧失败状态");
+  const focusedButton = els["ar-list"].children[0]; focusedButton.fire("click");
+  gets.shift()({ ok: true, record: { ...nextItems[0], results: [{ host: "a.test", label: "Alpha", text: "Drive body" }] } });
+  assert.equal(els["ar-status"].textContent, "", "正文重载成功应清除旧失败状态"); assert.equal(els["ar-list"].children[0], focusedButton, "正文回填不得替换焦点按钮"); assert.equal(rendered.at(-1).results[0].text, "Drive body", "详情应使用返回正文");
 }
 
 function latestEntryLoadWins() {
