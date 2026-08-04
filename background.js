@@ -121,7 +121,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       const results = await collectAll(msg.sites || []);
       return await active() ? { results } : { results: [], code: "stale_run" };
     })()
-      .then(sendResponse).catch(() => sendResponse({ results: [] })); return true;
+      .then(sendResponse).catch(() => sendResponse({ results: [], code: "error" })); return true;
   } // 只读收集回答，同上
   // 回应完成时刻：console 据此解除按钮忙碌态（操作可能在串行链里排队最长 ~22s，无反馈像卡死）
   if (msg.action === "closeAll") { cancelPendingSends(); serializeOp(closeAll).then(() => sendResponse({}), () => sendResponse({})); return true; }

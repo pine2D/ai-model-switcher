@@ -22,7 +22,7 @@ class El {
   constructor() { this.listeners = {}; this.classList = { add() {}, remove() {} }; this.children = []; this.value = ""; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   fire(type) { for (const fn of this.listeners[type] || []) fn({ currentTarget: this }); }
-  setAttribute(key, value) { this[key] = value; }
+  setAttribute(key, value) { this[key] = value; } removeAttribute(key) { delete this[key]; }
   replaceChildren(...children) { this.children = children; }
   appendChild(child) { this.children.push(child); }
   append(...children) { this.children.push(...children); }

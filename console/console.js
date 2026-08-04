@@ -158,9 +158,11 @@ document.getElementById("send").addEventListener("click", async () => {
 document.getElementById("collect").addEventListener("click", () => {
   const sites = chosen(); if (!sites.length) return;
   const run = lastSend && { ...lastSend };
-  const question = run?.text || elPrompt.value.trim();
+  const matchesRun = run && Array.isArray(run.hosts) && sites.every((site) => run.hosts.includes(site.host));
+  const question = matchesRun ? run.text : elPrompt.value.trim();
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (resp) => {
-    if (!resp?.code) copySummary(sites, resp?.results || [], question, run);
+    if (chrome.runtime.lastError || resp?.code || !Array.isArray(resp?.results)) { flashNote(t("con_collectFail")); return; }
+    copySummary(sites, resp.results, question, matchesRun ? run : { text: question, task: question, source: null });
   });
 });
 document.getElementById("archive").addEventListener("click", () => {

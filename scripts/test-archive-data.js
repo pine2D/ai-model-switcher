@@ -75,6 +75,32 @@ async function main() {
   const winner = await Promise.race([fastUpdate.then(() => "fast"), new Promise((resolve) => setImmediate(() => resolve("blocked")))]);
   releaseArchivePut(); await Promise.all([slowUpdate, fastUpdate]);
   assert.equal(winner, "fast", "不同归档不得共用全局写锁");
+
+  const importUpdate = await data.addArchive({ id: "00000000-0000-4000-8000-000000000007", text: "import update", results: [] });
+  const staleForUpdate = { ...importUpdate, updatedAt: importUpdate.updatedAt + 1, deviceId: "remote" };
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const importingUpdate = data.importRecords({ archives: [staleForUpdate] }); await new Promise(setImmediate);
+  const newerUpdate = data.updateArchive(importUpdate.id, { note: "newer local" }); await new Promise(setImmediate);
+  releaseArchivePut(); await Promise.all([importingUpdate, newerUpdate]);
+  assert.equal(archives.get(importUpdate.id).note, "newer local", "陈旧 Drive 导入不得覆盖并发完成的本地更新");
+
+  const importDelete = await data.addArchive({ id: "00000000-0000-4000-8000-000000000008", text: "import delete", results: [] });
+  const staleForDelete = { kind: "archive", value: { ...importDelete, updatedAt: importDelete.updatedAt + 1, deviceId: "remote" } };
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const importingDelete = data.importRecords([staleForDelete]); await new Promise(setImmediate);
+  const newerDelete = data.deleteArchive(importDelete.id); await new Promise(setImmediate);
+  releaseArchivePut(); await Promise.all([importingDelete, newerDelete]);
+  assert.equal(Object.hasOwn(archives.get(importDelete.id), "deletedAt"), true, "陈旧迁移导入不得复活并发删除的归档");
+
+  const importSlow = await data.addArchive({ id: "00000000-0000-4000-8000-000000000009", text: "import slow", results: [] });
+  const importFast = await data.addArchive({ id: "00000000-0000-4000-8000-000000000010", text: "import fast", results: [] });
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const slowImport = data.importRecords({ archives: [{ ...importSlow, updatedAt: importSlow.updatedAt + 1, deviceId: "remote" }] }); await new Promise(setImmediate);
+  const independentUpdate = data.updateArchive(importFast.id, { note: "independent" });
+  const independentWinner = await Promise.race([independentUpdate.then(() => "fast"), new Promise((resolve) => setImmediate(() => resolve("blocked")))]);
+  releaseArchivePut(); await Promise.all([slowImport, independentUpdate]);
+  assert.equal(independentWinner, "fast", "归档导入队列不得阻塞其他 id");
+
   const response = await new Promise((resolve) => dataMessageListener({ source: "AMS_DATA", action: "archiveUpdate", id: added.id,
     patch: { note: "messaged" }, changeToken: "request-token" }, null, resolve));
   assert.equal(response.changeToken, "request-token");

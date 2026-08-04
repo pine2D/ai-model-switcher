@@ -44,4 +44,11 @@ for (const patch of [{ host: "h".repeat(257) }, { label: "l".repeat(257) }, { co
 }
 assert.throws(() => model.update({ ...updated, resultPreviews: [null] }, { note: "safe" }, { now: 30, deviceId: "x" }), /invalid_record/);
 assert.equal(model.validMetadata(model.normalize({ text: "Q", source: null, results: [] }, { id: "null-source", now: 1, deviceId: "d" })), true);
+const localeScope = vm.createContext({ console, URL });
+vm.runInContext('String.prototype.toLocaleLowerCase = function () { return String(this).replaceAll("I", "ı").toLowerCase(); }', localeScope);
+vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8") + ";this.model=ArchiveModel", localeScope);
+const localeRecord = localeScope.model.normalize({ text: "ISTANBUL", results: [] }, { id: "locale", now: 1, deviceId: "d" });
+vm.runInContext('String.prototype.toLocaleLowerCase = function () { return String(this).toLowerCase(); }', localeScope);
+assert.equal(localeScope.model.validMetadata(localeRecord), true, "一个 locale 生成的归档在另一个 locale 下仍应有效");
+assert.equal(localeScope.model.matches(localeRecord, { query: "ISTANBUL" }), true, "跨 locale 后仍应搜索到原记录");
 console.log("archive-model tests passed");

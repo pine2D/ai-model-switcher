@@ -57,7 +57,7 @@ const ArchiveDetail = (() => {
     tags.addEventListener("input", () => onDraft(entry.id, { tags: tags.value }));
     tags.addEventListener("change", saveTags);
     tags.addEventListener("keydown", (event) => { if (event.key === "Enter") saveTags(); });
-    const note = node("textarea", "ar-note"); note.id = "ar-note";
+    const note = node("textarea", "ar-note"); note.id = "ar-note"; note.maxLength = 4000;
     const hasNoteDraft = Object.prototype.hasOwnProperty.call(draft, "note");
     note.value = hasNoteDraft ? draft.note : entry.note || "";
     note.setAttribute("aria-label", t("arc_note"));

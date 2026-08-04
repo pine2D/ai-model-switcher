@@ -141,9 +141,10 @@ const Data = (() => {
         const old = await SyncStore.getHistory(value.id), merged = SyncModel.mergeHistory([old, value])[0];
         if (merged) await SyncStore.putHistory(merged);
       }
-      for (const value of records.archives || []) if (newer(await SyncStore.getArchive(value.id), value)) {
-        await SyncStore.putArchive(value); archiveChanges++;
-      }
+      for (const value of records.archives || []) if (await mutateArchive(value.id, async () => {
+        if (!newer(await SyncStore.getArchive(value.id), value)) return false;
+        await SyncStore.putArchive(value); return true;
+      })) archiveChanges++;
       return { archives: archiveChanges };
     }
     const rows = records;
@@ -166,9 +167,13 @@ const Data = (() => {
       } else if (kind === "archive") {
         const next = { ...value, deviceId: id, schema: SyncModel.SCHEMA, updatedAt: value.updatedAt || value.deletedAt || value.createdAt,
           preview: value.preview || SyncModel.utf8Preview(value.text || "") };
-        const old = await SyncStore.getArchive(next.id);
-        if (newer(old, next)) { await SyncStore.putArchive(next); archiveChanges++; }
-        await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
+        if (await mutateArchive(next.id, async () => {
+          const old = await SyncStore.getArchive(next.id);
+          const changed = newer(old, next);
+          if (changed) await SyncStore.putArchive(next);
+          await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
+          return changed;
+        })) archiveChanges++;
       }
     }
     if (stateChanged) {

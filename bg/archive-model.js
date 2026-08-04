@@ -26,7 +26,7 @@ const ArchiveModel = (() => {
   function searchable(value) {
     return [value.task, value.source?.title, value.source?.url, value.note,
       ...(value.tags || []), ...(value.results || []).map((item) => item.label),
-      ...(value.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLocaleLowerCase();
+      ...(value.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLowerCase();
   }
   function normalize(entry = {}, { id, now, deviceId }) {
     const results = Array.isArray(entry.results) ? entry.results : [], task = clean(entry.task || entry.text);
@@ -56,7 +56,7 @@ const ArchiveModel = (() => {
     return next;
   }
   function matches(record, filters = {}) {
-    const query = clean(filters.query).toLocaleLowerCase(), tag = clean(filters.tag);
+    const query = clean(filters.query).toLowerCase(), tag = clean(filters.tag);
     return (!query || String(record.searchText || searchable(record)).includes(query)) &&
       (!filters.favorite || record.favorite === true) && (!tag || (record.tags || []).includes(tag));
   }

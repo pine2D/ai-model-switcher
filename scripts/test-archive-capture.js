@@ -3,6 +3,9 @@
 const assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm");
 const source = (file) => fs.readFileSync(file, "utf8");
 const plain = (value) => JSON.parse(JSON.stringify(value));
+const archiveHtml = source("console/archive.html"), archiveCss = source("console/archive.css");
+assert.match(archiveHtml, /id="ar-list"[^>]+data-i18n-aria=/, "结果列表容器必须保留可访问名称");
+assert.match(archiveCss, /\.ar-item\[aria-current="true"\]/, "当前结果按钮必须保留可见选中态");
 
 async function preservesRunMetadata() {
   const saved = {}, pushed = [], now = 1720000000000;
@@ -46,21 +49,27 @@ async function staleRunDoesNotReplaceMetadata() {
 }
 
 class El {
-  constructor() { this.disabled = this.hidden = false; this.textContent = ""; this.style = {}; this.listeners = {}; this.attrs = {}; this.dataset = {}; const names = new Set(); this.classList = { add: (...v) => v.forEach((x) => names.add(x)), remove: (...v) => v.forEach((x) => names.delete(x)), toggle: (x, on) => on ? names.add(x) : names.delete(x), contains: (x) => names.has(x) }; }
+  constructor() { this.disabled = this.hidden = false; this.textContent = ""; this.style = {}; this.listeners = {}; this.attrs = {}; this.dataset = {}; this.children = []; const names = new Set(); this.classList = { add: (...v) => v.forEach((x) => names.add(x)), remove: (...v) => v.forEach((x) => names.delete(x)), toggle: (x, on) => on ? names.add(x) : names.delete(x), contains: (x) => names.has(x) }; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
   setAttribute(key, value) { this.attrs[key] = String(value); } getAttribute(key) { return this.attrs[key] || null; }
-  removeAttribute(key) { delete this.attrs[key]; } replaceChildren() {} appendChild() {} append() {} click() {} querySelectorAll() { return []; } focus() {} scrollBy() {} setPointerCapture() {}
+  removeAttribute(key) { delete this.attrs[key]; } replaceChildren(...children) { this.children = children; } appendChild(child) { this.children.push(child); } append(...children) { this.children.push(...children); } click() {} querySelectorAll() { return []; } focus() {} scrollBy() {} setPointerCapture() {}
 }
 function archiveCaptureUsesRunIdentity() {
   const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
   let selected = { a: true }, prompt = "Fallback task", added = [];
   const run = { runId: "run-1", text: "Full prompt", task: "Question", source: { kind: "page", title: "Source", url: "https://example.test", truncated: false, capturedAt: 1 }, hosts: ["a"], tier: "think", sentAt: 2 };
-  let collectRunId, stale = false;
+  let collectRunId, runtimeFailure = false;
+  let collectResponse = { results: [{ host: "a", text: "Answer" }] };
   const chrome = {
     runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
-      if (message.source === "AMS_CONSOLE") { collectRunId = message.runId; return done(stale ? { results: [], code: "stale_run" } : { results: [{ host: message.sites[0].host, text: "Answer" }] }); }
+      if (message.source === "AMS_CONSOLE") {
+        collectRunId = message.runId; chrome.runtime.lastError = runtimeFailure ? { message: "disconnected" } : null;
+        done(collectResponse); chrome.runtime.lastError = null; return;
+      }
       if (message.action === "archiveAdd") { added.push(message.entry); return done({ ok: true, record: { id: String(added.length) } }); }
+      if (message.action === "archiveSearch") return done({ ok: true, items: [
+        { id: "saved-a", ts: 2, task: "Saved A", results: [] }, { id: "saved-b", ts: 1, task: "Saved B", results: [] }], nextCursor: null });
       done({ ok: true, items: [] });
     } },
     storage: {
@@ -69,20 +78,34 @@ function archiveCaptureUsesRunIdentity() {
     },
   };
   const context = { chrome, document: { documentElement: {}, getElementById: (id) => els[id], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() },
-    URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, SITES: [{ host: "a", label: "A" }, { host: "b", label: "B" }], t: (key) => key, applyI18n() {}, setTimeout, Date };
+    URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, SITES: [{ host: "a", label: "A" }, { host: "b", label: "B" }], t: (key) => key, applyI18n() {}, ArchiveDetail: { render() {}, entryMarkdown: () => "" }, setTimeout, Date };
   vm.runInNewContext(source("console/archive.js"), context);
+  const listButtons = [...els["ar-list"].children];
+  for (const button of listButtons) { assert.equal(button.getAttribute("role"), null); assert.equal(button.getAttribute("aria-selected"), null); }
+  assert.equal(listButtons[0].getAttribute("aria-current"), "true", "当前结果按钮应使用 aria-current");
+  listButtons[1].listeners.click[0]();
+  assert.equal(els["ar-list"].children[0], listButtons[0], "选择结果不得替换列表按钮节点");
+  assert.equal(els["ar-list"].children[1], listButtons[1], "被点击的焦点节点必须继续存活");
+  assert.equal(listButtons[0].getAttribute("aria-current"), null);
+  assert.equal(listButtons[1].getAttribute("aria-current"), "true", "点击后应就地转移当前项状态");
   els["ar-capture"].listeners.click[0]({ currentTarget: els["ar-capture"] });
   assert.deepEqual(plain(added[0]), { ts: added[0].ts, text: "Full prompt", task: "Question", source: run.source,
     results: [{ host: "a", label: "A", text: "Answer", state: null, code: null }] });
   assert.equal(collectRunId, "run-1", "采集请求必须携带稳定运行身份");
-  stale = true; run.runId = "run-2";
+  collectResponse = { results: [], code: "stale_run" }; run.runId = "run-2";
   els["ar-capture"].listeners.click[0]({ currentTarget: els["ar-capture"] });
   assert.equal(added.length, 1, "同 host 的新运行不得保存旧采集回调");
-  stale = false;
+  collectResponse = { results: [{ host: "a", text: "Answer" }] };
   run.runId = null; prompt = "Fallback task";
   els["ar-capture"].listeners.click[0]({ currentTarget: els["ar-capture"] });
   assert.equal(added[1].task, "Fallback task");
   assert.equal(added[1].source, null);
+  for (const failure of [{ response: undefined }, { response: { results: [] }, runtime: true }, { response: { results: [], code: "error" } }]) {
+    collectResponse = failure.response; runtimeFailure = !!failure.runtime;
+    els["ar-capture"].listeners.click[0]({ currentTarget: els["ar-capture"] });
+    assert.equal(added.length, 2, "采集失败不得调用 archiveAdd");
+    assert.equal(els["ar-status"].textContent, "arc_saveFailed");
+  }
 }
 
 function runClearedResetsChips() {
@@ -100,15 +123,15 @@ function runClearedResetsChips() {
 
 async function collectClickKeepsClickedRun() {
   const ids = ["sites", "tier", "prompt", "sites-l", "sites-r", "bar", "group", "tile", "send", "collect", "archive", "newsession", "closeall", "compose", "retry", "failsum", "live"];
-  const elements = Object.fromEntries(ids.map((id) => [id, new El()])), receivers = []; let collectDone, added;
+  const elements = Object.fromEntries(ids.map((id) => [id, new El()])), receivers = [], added = []; let collectDone, clipboardWrites = 0;
   elements.tier.value = "think"; elements.prompt.value = "Draft";
   const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receivers.push(fn); } }, sendMessage(message, done) {
     if (message.action === "collect") { collectDone = done; return; }
-    if (message.action === "archiveAdd") { added = message.entry; return done?.({ ok: true }); }
+    if (message.action === "archiveAdd") { added.push(message.entry); return done?.({ ok: true }); }
     done?.({ ok: true, items: [] });
   } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true }, tier: "think" }, amsConsolePrompt: "Draft" }); }, set() {} }, onChanged: { addListener() {} } } };
   const context = { chrome, document: { documentElement: {}, activeElement: null, getElementById: (id) => elements[id], querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() },
-    window: { addEventListener() {} }, navigator: { clipboard: { writeText: () => Promise.resolve() } }, ResizeObserver: class { observe() {} }, SITES: [{ host: "a", label: "A", on: true }],
+    window: { addEventListener() {} }, navigator: { clipboard: { writeText: () => { clipboardWrites++; return Promise.resolve(); } } }, ResizeObserver: class { observe() {} }, SITES: [{ host: "a", label: "A", on: true }, { host: "b", label: "B" }],
     t: (key) => key, applyI18n() {}, syncTierButtons() {}, syncGroupSelect() {}, history: [], histCursor: -1, histDraft: "", pendingImages: [], pushHistory() {}, imagePayloads: async () => [], setPendingImages() {}, setTimeout: () => 0, clearTimeout() {}, Date, Map, console };
   vm.runInNewContext(source("console/console.js"), context); vm.runInNewContext(source("console/status.js"), context);
   const sourceMeta = { kind: "selection", title: "Source", url: "https://example.test", truncated: false, capturedAt: 3 };
@@ -116,10 +139,40 @@ async function collectClickKeepsClickedRun() {
   receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run, hasImage: false }));
   elements.collect.listeners.click[0]();
   receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: { ...run, runId: "run-2", text: "New prompt", task: "New task", source: null }, hasImage: false }));
-  collectDone({ results: [{ host: "a", text: "Answer" }] }); await Promise.resolve(); await Promise.resolve();
-  assert.equal(added.text, "Full prompt");
-  assert.equal(added.task, "Question");
-  assert.deepEqual(plain(added.source), sourceMeta);
+  collectDone({ results: [{ host: "a", text: "Answer" }] }); await new Promise(setImmediate);
+  assert.equal(added[0].text, "Full prompt");
+  assert.equal(added[0].task, "Question");
+  assert.deepEqual(plain(added[0].source), sourceMeta);
+  vm.runInNewContext("selected.b = true", context);
+  elements.collect.listeners.click[0]();
+  collectDone({ results: [{ host: "a", text: "A" }, { host: "b", text: "B" }] }); await new Promise(setImmediate);
+  assert.equal(added[1].text, "Draft", "采集范围超出运行 hosts 时应使用当前输入");
+  assert.equal(added[1].task, "Draft");
+  assert.equal(added[1].source, null, "采集范围超出运行 hosts 时不得继承旧来源");
+  for (const failure of [{ response: undefined }, { response: { results: [] }, runtime: true }, { response: { results: [], code: "error" } }]) {
+    elements.collect.listeners.click[0]();
+    chrome.runtime.lastError = failure.runtime ? { message: "disconnected" } : null;
+    collectDone(failure.response); chrome.runtime.lastError = null;
+    await new Promise(setImmediate);
+    assert.equal(clipboardWrites, 2, "采集失败不得写剪贴板");
+    assert.equal(added.length, 2, "采集失败不得自动归档");
+    assert.equal(elements.failsum.textContent, "con_collectFail");
+  }
+}
+
+async function collectExceptionHasCode() {
+  let receive, response;
+  const chrome = {
+    runtime: { lastError: null, onStartup: { addListener() {} }, onMessage: { addListener(fn) { receive = fn; } }, sendMessage() {} },
+    commands: { onCommand: { addListener() {} } }, windows: { onRemoved: { addListener() {} } },
+    storage: { session: { get(_key, done) { done({}); } }, local: {} },
+  };
+  const context = vm.createContext({ chrome, importScripts() {}, console, Date, setTimeout, clearTimeout,
+    currentSendEpoch: () => 0, collectAll: async () => { throw new Error("boom"); } });
+  vm.runInContext(source("background.js"), context);
+  receive({ source: "AMS_CONSOLE", action: "collect", sites: [{ host: "a" }] }, null, (value) => { response = value; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(plain(response), { results: [], code: "error" }, "后台采集异常必须返回稳定失败码");
 }
 
 async function collectRejectsRunThatChangesDuringRead() {
@@ -190,6 +243,7 @@ async function closeAllClearsRun() {
   await preservesRunMetadata();
   await retryKeepsLogicalRun();
   await staleRunDoesNotReplaceMetadata();
+  await collectExceptionHasCode();
   archiveCaptureUsesRunIdentity();
   runClearedResetsChips();
   await collectClickKeepsClickedRun();

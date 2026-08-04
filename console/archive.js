@@ -57,10 +57,10 @@ function siteLabels(entry) {
 }
 function matchesFilters(record) {
   const clean = (value) => String(value || "").trim();
-  const query = clean(filters.query).toLocaleLowerCase(), tag = clean(filters.tag);
+  const query = clean(filters.query).toLowerCase(), tag = clean(filters.tag);
   const fallback = [record.task, record.source?.title, record.source?.url, record.note,
     ...(record.tags || []), ...(record.results || []).map((item) => item.label),
-    ...(record.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLocaleLowerCase();
+    ...(record.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLowerCase();
   return (!query || String(record.searchText || fallback).includes(query)) &&
     (!filters.favorite || record.favorite === true) && (!tag || (record.tags || []).includes(tag));
 }
@@ -89,8 +89,8 @@ function renderList(preferredId, updateDetail = true) {
   elList.replaceChildren();
   archive.forEach((entry) => {
     const button = document.createElement("button");
-    button.type = "button"; button.className = "ar-item"; button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(entry.id === selectedId));
+    button.type = "button"; button.className = "ar-item";
+    if (entry.id === selectedId) button.setAttribute("aria-current", "true");
     const date = document.createElement("time"); date.textContent = new Date(entry.ts).toLocaleString(document.documentElement.lang || undefined);
     const question = document.createElement("span");
     const text = entry.task || entry.preview || entry.text || "";
@@ -105,7 +105,12 @@ function renderList(preferredId, updateDetail = true) {
       }
       button.appendChild(badges);
     }
-    button.addEventListener("click", () => { selectedId = entry.id; renderList(entry.id); });
+    button.addEventListener("click", () => {
+      selectedId = entry.id; disarmDel();
+      for (const item of elList.children) item.removeAttribute("aria-current");
+      button.setAttribute("aria-current", "true"); showCurrent();
+      const current = currentEntry(); if (current && !current.results) loadEntry(current);
+    });
     elList.appendChild(button);
   });
   document.getElementById("ar-more").hidden = !archiveCursor;
@@ -219,8 +224,8 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
       const fallback = (value && value.amsConsolePrompt) || "";
       button.disabled = true; document.getElementById("ar-status").textContent = t("arc_capturing");
       chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (response) => {
-        if (response?.code) { button.disabled = false; document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
-        const byHost = {}; ((response && response.results) || []).forEach((result) => { byHost[result.host] = result; });
+        if (chrome.runtime.lastError || response?.code || !Array.isArray(response?.results)) { button.disabled = false; document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
+        const byHost = {}; response.results.forEach((result) => { byHost[result.host] = result; });
         const entry = {
           ts: Date.now(), text: matches ? run.text : fallback, task: matches ? run.task : fallback, source: matches ? run.source || null : null,
           results: sites.map((site) => {

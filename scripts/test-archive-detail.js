@@ -50,6 +50,7 @@ assert.equal(root.querySelector(".ar-winner").textContent, "Clear best answer");
 assert.equal(root.querySelector("#ar-favorite").getAttribute("aria-pressed"), "true");
 assert.equal(root.querySelector("#ar-tags").value, "work");
 assert.equal(root.querySelector("#ar-note").value, "private note");
+assert.equal(root.querySelector("#ar-note").maxLength, 4000, "备注输入应在前端限制为后端允许的 4000 字符");
 assert.match(root.querySelector(".ar-captured")?.textContent || "", /^Captured: /, "详情应显示采集时间");
 assert.equal(root.querySelector(".ar-captured")?.getAttribute("datetime"), new Date(entry.ts).toISOString());
 assert.doesNotThrow(() => scope.detail.render({ ...entry, ts: 1e100 }, { update: async () => entry, errorText: (item) => item.code }),
