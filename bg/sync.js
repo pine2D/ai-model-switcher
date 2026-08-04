@@ -92,6 +92,7 @@ const SyncEngine = (() => {
     const { stateFileId, ...saved } = await config();
     await chrome.storage.local.set({ [CONFIG]: { ...saved, ...(fileId ? { stateFileId: fileId } : {}) } });
   }
+  const notifyArchives = (collected) => { if (collected.archiveChanges) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" }); };
   async function applyCollected(collected, replaceStates = false, seen = null) {
     const remoteStates = stateMap(replaceStates ? {} : await SyncStore.getMeta("remoteStates"), collected, seen);
     await SyncStore.putMeta("remoteStates", remoteStates);
@@ -101,7 +102,6 @@ const SyncEngine = (() => {
     errorCount += state.corrupt || 0;
     if (state.readOnly) await saveConfig({ readOnly: true });
     if (Object.keys(remoteStates).length || collected.removedStates.length) await Data.applyRemoteState(state, suppressProjection);
-    if (collected.archiveChanges) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" });
     await SyncStore.trimBodies?.(200, 50);
   }
   async function saveToken(token) { await SyncStore.putMeta("pageToken", token); await saveConfig({ pageToken: token }); }
@@ -112,16 +112,16 @@ const SyncEngine = (() => {
     const result = await Drive.listChanges(token); for (const change of result.changes || []) await visit(change); return result;
   }
   async function changesSince(token) {
-    const later = { states: [], removedStates: [], futureFiles: new Set(), archiveChanges: 0 };
+    const later = { states: [], removedStates: [], futureFiles: new Set(), archiveChanges: 0 }; try {
     const changes = await visitChanges(token, (change) => readFile(change.file || change, later));
     await applyCollected(later);
-    await saveToken(changes.newStartPageToken || token);
+    await saveToken(changes.newStartPageToken || token); } finally { notifyArchives(later); }
   }
   const stamp = (item) => ({ ...item, updatedAt: Math.max(Number(item.updatedAt) || 0, Number(item.deletedAt) || 0, Number(item.createdAt) || 0) });
   function mergeBucket(a = {}, b = {}) { const out = { ...a }; for (const [id, item] of Object.entries(b)) if (!out[id] || SyncModel.compareVersion(stamp(out[id]), stamp(item)) < 0) out[id] = item; return out; }
   async function fullScan(token, firstConnect) {
     const collected = { states: [], removedStates: [], futureFiles: new Set(), archiveChanges: 0 }, scanId = `${Date.now()}-${Math.random()}`;
-    let cloudCount = 0;
+    let cloudCount = 0; try {
     await visitFiles(async (file) => {
       if (file.appProperties?.app === "polyask") cloudCount++;
       await readFile(file, collected, scanId);
@@ -144,7 +144,7 @@ const SyncEngine = (() => {
     }
     await applyCollected(collected, true, new Set(collected.states.map((item) => item.fileId)));
     await saveConfig({ readOnly: collected.futureFiles.size > 0 });
-    await saveToken(changes.newStartPageToken || token);
+    await saveToken(changes.newStartPageToken || token); } finally { notifyArchives(collected); }
   }
   async function pull() {
     const token = await SyncStore.getMeta("pageToken") || (await config()).pageToken;

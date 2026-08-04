@@ -112,6 +112,16 @@ module.exports = async function testSyncEngine() {
   assert.deepEqual(JSON.parse(JSON.stringify(live.broadcasts)), [{ source: "AMS_DATA", type: "archiveChanged" }], "同批归档变化只能发送一次无 token 广播");
   const unchanged = runtime({ listed: [liveFiles[0]], bodies: { "file-one": liveArchive("one") }, archiveImportChanged: false });
   await unchanged.sync.connect(); assert.deepEqual(unchanged.broadcasts, [], "未实际写入归档时不得广播");
+  for (const mode of ["full", "incremental"]) {
+    const options = { bodies: { "file-one": liveArchive("one"), "file-two": { throw: { code: "network_error" } } },
+      ...(mode === "full" ? { listed: liveFiles } : { changes: liveFiles.map((file) => ({ file })) }) };
+    const interrupted = runtime(options); if (mode === "incremental") interrupted.meta.set("pageToken", "current");
+    await interrupted.sync.connect();
+    assert.equal(interrupted.imports.length, 1, `${mode} 中断前的有效归档必须已经写入`);
+    assert.deepEqual(JSON.parse(JSON.stringify(interrupted.broadcasts)), [{ source: "AMS_DATA", type: "archiveChanged" }], `${mode} 后续失败时仍必须广播一次`);
+    assert.equal((await interrupted.sync.status()).state, "offline", `${mode} 后续网络错误不能被通知逻辑吞掉`);
+    assert.equal(interrupted.meta.get("pageToken"), mode === "incremental" ? "current" : undefined, `${mode} 失败不得推进分页 token`);
+  }
   const incomplete = liveArchive("missing"); delete incomplete.synthesis;
   const invalidLive = runtime({ listed: [{ id: "file-missing", appProperties: { app: "polyask", schema: "1", kind: "archive", id: "missing" } }], bodies: { "file-missing": incomplete } });
   await invalidLive.sync.connect();
