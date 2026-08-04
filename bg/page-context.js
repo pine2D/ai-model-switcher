@@ -122,5 +122,5 @@ const PageContext = (() => {
   });
   chrome.contextMenus.onClicked.addListener((info, tab) => { void handleClick(info, tab).catch(() => {}); });
 
-  return { MENU_SELECTION, MENU_PAGE, installMenus, handleClick, capText, extractForTest: extractPage };
+  return { MENU_SELECTION, MENU_PAGE, menuCopy: MENU_COPY, installMenus, handleClick, capText, extractForTest: extractPage };
 })();

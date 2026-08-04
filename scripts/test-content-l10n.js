@@ -35,10 +35,40 @@ function messages() {
 }
 
 const rows = messages();
+const sourceKeys = ["cmp_source", "cmp_sourceSelection", "cmp_sourcePage", "cmp_sourceRemove", "cmp_sourceDetail",
+  "cmp_sourceCount", "cmp_sourceTruncated", "cmp_contextDenied", "cmp_contextEmpty", "cmp_sourceReplaceQuestion",
+  "cmp_sourceReplace", "cmp_sourceKeep", "cmp_payloadSource", "cmp_payloadUrl", "cmp_referenceNotice",
+  "cmp_referenceStart", "cmp_referenceEnd", "cmp_sendSave"];
+for (const key of sourceKeys) assert.ok(rows[key], `missing webpage context copy: ${key}`);
+assert.deepEqual(JSON.parse(JSON.stringify(rows.cmp_sendSave)), {
+  en: "Sending saves this content to question history and to Google Drive when sync is enabled.",
+  zh_CN: "发送后，此内容会保存到提问历史；启用同步时还会上传到 Google Drive。",
+  zh_TW: "傳送後，此內容會儲存到提問記錄；啟用同步時也會上傳到 Google Drive。",
+});
 for (const [key, row] of Object.entries(rows)) {
   assert.deepEqual(Object.keys(row).sort(), [...LANGS].sort(), `${key}: locale coverage differs`);
   for (const lang of LANGS) assert.deepEqual(placeholders(row[lang]), placeholders(row.en), `${key}.${lang}: placeholders differ`);
   assert.doesNotMatch(row.en, /[—–]/, `${key}.en: replace long dashes`);
+}
+
+const menuScope = {
+  chrome: {
+    contextMenus: { onClicked: { addListener() {} } },
+    i18n: { getUILanguage: () => "en" },
+    runtime: { onInstalled: { addListener() {} }, onStartup: { addListener() {} } },
+    storage: { local: {}, session: {}, onChanged: { addListener() {} } },
+  },
+  openCompose: async () => {},
+};
+vm.runInNewContext(`${fs.readFileSync("bg/page-context.js", "utf8")}\nglobalThis.menuCopy = PageContext.menuCopy;`, menuScope);
+assert.deepEqual(JSON.parse(JSON.stringify(menuScope.menuCopy)), {
+  selection: { en: "Compare selection with PolyAsk", zh_CN: "用 PolyAsk 比较所选内容", zh_TW: "用 PolyAsk 比較所選內容" },
+  page: { en: "Compare this page with PolyAsk", zh_CN: "用 PolyAsk 比较当前网页", zh_TW: "用 PolyAsk 比較目前網頁" },
+});
+for (const [kind, row] of Object.entries(menuScope.menuCopy)) {
+  assert.deepEqual(Object.keys(row).sort(), [...LANGS].sort(), `PageContext.menuCopy.${kind}: locale coverage differs`);
+  for (const lang of LANGS) assert.deepEqual(placeholders(row[lang]), placeholders(row.en), `PageContext.menuCopy.${kind}.${lang}: placeholders differ`);
+  assert.doesNotMatch(row.en, /[—–]/, `PageContext.menuCopy.${kind}.en: replace long dashes`);
 }
 
 assert.deepEqual(JSON.parse(JSON.stringify(rows.arc_title)), { en: "Result library", zh_CN: "结果库", zh_TW: "結果庫" });
