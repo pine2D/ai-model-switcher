@@ -17,16 +17,26 @@ function syncPage(config, status, clearReply = Promise.resolve({ ok: true })) {
   const ids = ["connect", "sync-now", "disconnect", "export", "import-file", "clear-remote", "clear-confirmation", "clear-continue", "status-title", "status-detail"];
   const els = Object.fromEntries(ids.map((id) => [id, new El(id)]));
   const controls = ["connect", "sync-now", "disconnect", "export", "clear-remote", "clear-continue"].map((id) => els[id]);
-  let clearCalls = 0;
+  let clearCalls = 0, storageChanged;
   const chrome = { runtime: { sendMessage(message) {
     if (message.source === "AMS_SYNC" && message.action === "status") return Promise.resolve({ ok: true, value: status });
     if (message.source === "AMS_SYNC" && message.action === "clearRemote") return typeof clearReply === "function" ? clearReply(++clearCalls) : (++clearCalls, clearReply);
     return Promise.resolve({ ok: true });
-  } }, storage: { local: { get: () => Promise.resolve({ amsSyncConfig: config }), set() {} } } };
+  } }, storage: { local: { get: () => Promise.resolve({ amsSyncConfig: config }), set() {} },
+    onChanged: { addListener(fn) { storageChanged = fn; } } } };
   const context = { chrome, document: { title: "", getElementById: (id) => els[id], querySelectorAll: () => controls, addEventListener() {} },
     applyI18n() {}, t: (key, value) => value == null ? key : `${key}:${value}`, Intl, TextDecoderStream, window: {}, setInterval() {}, clearInterval() {}, setTimeout() {}, console };
   vm.runInNewContext(fs.readFileSync("options/sync.js", "utf8") + "\nglobalThis.testApi={renderStatus,run,setState:(c,s)=>{config=c;status=s;busy=false;notice='';renderStatus();}};", context);
-  return new Promise((resolve) => setImmediate(() => resolve({ els, clearCalls: () => clearCalls, api: context.testApi })));
+  return new Promise((resolve) => setImmediate(() => resolve({ els, clearCalls: () => clearCalls, api: context.testApi,
+    changeStatus(next) { status = next; storageChanged?.({ amsSyncStatus: { newValue: next } }, "local"); } })));
+}
+
+async function syncStatusTracksStorage() {
+  const page = await syncPage({ connected: true }, { state: "syncing", lastSuccessAt: 1 });
+  assert.equal(page.els["status-title"].textContent, "sync_syncing");
+  page.changeStatus({ state: "idle", lastSuccessAt: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(page.els["status-title"].textContent, "sync_idle", "后台同步完成后设置页必须实时退出同步中");
 }
 
 async function clearRunningFeedback() {
@@ -133,6 +143,7 @@ function archivePageRejects() {
 }
 
 (async () => {
+  await syncStatusTracksStorage();
   await clearRunningFeedback();
   await clearAuthFeedback();
   await blockedFeedback();

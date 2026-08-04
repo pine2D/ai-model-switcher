@@ -126,7 +126,7 @@
       },
     },
 
-    // 千问：快速/思考都用 Qwen3.8-Max-Preview，仅用 composer「思考」按钮区分档位；
+    // 千问：快速/思考都用 Qwen3.8-Max，仅用 composer「思考」按钮区分档位；
     // composer「思考」按钮无 aria-pressed，状态靠 class：text-theme=开 / text-primary=关
     "qianwen.com": {
       // 模型下拉触发器：aria-haspopup 属性由前端延迟水合，新加载页面一段时间内只有纯文本节点，
@@ -183,12 +183,12 @@
         const m = this._trigger();
         const t = m ? m.textContent || "" : "";
         const b = this._thinkBtn();
-        if (!b || !/Qwen3\.8-Max-Preview/i.test(t)) return null;
+        if (!b || !/Qwen3\.8-Max(?!-Preview)/i.test(t)) return null;
         const on = (b.className || "").split(/\s+/).includes("text-theme");
         return on ? "think" : "fast";
       },
-      think: async function () { await this._selectModel(/Qwen3\.8-Max-Preview/i); await this._setThink(true); },
-      fast: async function () { await this._selectModel(/Qwen3\.8-Max-Preview/i); await this._setThink(false); },
+      think: async function () { await this._selectModel(/Qwen3\.8-Max(?!-Preview)/i); await this._setThink(true); },
+      fast: async function () { await this._selectModel(/Qwen3\.8-Max(?!-Preview)/i); await this._setThink(false); },
       // 动态 input 需可信菜单点击，合成 drop/paste 被忽略（2026-07-23 真机），明确报 unsupported。
       // 最后一条回答（真机审计锚点 2026-07：.answer-common-card，正文在 .qk-markdown）。
       // 思考档思考段也是 .qk-markdown（祖先 thinkingContent-<hash>，CSS-module 后缀会变故用

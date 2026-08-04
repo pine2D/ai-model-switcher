@@ -37,7 +37,7 @@
 | Gemini (gemini.google.com) | 3.1 Pro + Thinking: Extended | 3.6 Flash |
 | DeepSeek (chat.deepseek.com) | Expert + DeepThink 开 | Instant + DeepThink 关 |
 | 豆包 (doubao.com) | 专家 | 快速 |
-| 千问 (qianwen.com) | Qwen3.8-Max-Preview + 思考开 | Qwen3.8-Max-Preview + 思考关 |
+| 千问 (qianwen.com) | Qwen3.8-Max + 思考开 | Qwen3.8-Max + 思考关 |
 | Kimi (kimi.com) | K3 + Thinking Max | K2.6 |
 | 元宝 (yuanbao.tencent.com) | Deep Thinking 开 | Deep Thinking 关 |
 | 智谱清言 (chatglm.cn) | 深度思考：深度 | 快速 |

@@ -36,6 +36,7 @@ node scripts/test-icon-system.js
 
 echo "[test] 站点模型适配"
 node scripts/test-claude-model.js
+node scripts/test-qwen-adapter.js
 
 echo "[test] 图片载荷与群发消息契约"
 node scripts/test-image.js

@@ -165,5 +165,8 @@ byId("clear-remote").addEventListener("click", () => {
 });
 byId("clear-continue").addEventListener("click", () => run("clearRemote"));
 document.addEventListener("i18n:changed", () => { document.title = `PolyAsk · ${t("settings_title")}`; renderStatus(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.amsSyncStatus) refresh().catch(() => {});
+});
 
 refresh().catch(() => { status = { state: "error" }; renderStatus(); });
