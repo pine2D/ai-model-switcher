@@ -1,6 +1,7 @@
 // bg/data.js — 本地记录与设备状态协议
 const Data = (() => {
   const SETTINGS = ["amsLang", "amsTheme", "displayMode", "amsAutoRaise"];
+  const archiveUpdates = new Map();
   let cachedDeviceId, deviceIdOpening;
   const scheduleLocal = () => { if (typeof SyncEngine !== "undefined") SyncEngine.scheduleLocal?.(); };
   async function getDeviceId() {
@@ -45,7 +46,7 @@ const Data = (() => {
     scheduleLocal();
     return record;
   }
-  async function updateArchive(id, patch) {
+  async function writeArchiveUpdate(id, patch) {
     const current = await resolve("archive", id);
     if (!current || Object.hasOwn(current, "deletedAt")) throw Object.assign(new Error("not_found"), { code: "not_found" });
     const record = ArchiveModel.update(current, patch, { now: Date.now(), deviceId: await getDeviceId() });
@@ -53,6 +54,11 @@ const Data = (() => {
     await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
     scheduleLocal();
     return record;
+  }
+  function updateArchive(id, patch) {
+    const run = (archiveUpdates.get(id) || Promise.resolve()).catch(() => {}).then(() => writeArchiveUpdate(id, patch));
+    archiveUpdates.set(id, run);
+    return run.finally(() => { if (archiveUpdates.get(id) === run) archiveUpdates.delete(id); });
   }
   function searchArchives(cursor, limit = 50, filters = {}) {
     const query = { query: String(filters.query || "").trim(), favorite: !!filters.favorite, tag: String(filters.tag || "").trim() };

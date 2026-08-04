@@ -3,9 +3,13 @@
 const assert = require("node:assert"), fs = require("node:fs"), vm = require("node:vm");
 
 const archives = new Map(), outbox = new Map(), meta = new Map();
+let blockArchivePut = false, releaseArchivePut, archivePutGate;
 const SyncStore = {
   getArchive: async (id) => archives.get(id),
-  putArchive: async (row) => (archives.set(row.id, row), row),
+  putArchive: async (row) => {
+    if (blockArchivePut) { blockArchivePut = false; await archivePutGate; }
+    archives.set(row.id, row); return row;
+  },
   enqueue: async (row) => (outbox.set(row.key, row), row),
   trimBodies: async () => {},
   searchArchives: async (_cursor, limit, accept) => {
@@ -33,6 +37,15 @@ async function main() {
   const page = await data.searchArchives(null, 50, { query: "keep", favorite: true, tag: "work" });
   assert.deepEqual(page.items.map((item) => item.id), [added.id]);
   assert.deepEqual(await data.archiveTags(), ["work"]);
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const concurrent = [data.updateArchive(added.id, { favorite: false }), data.updateArchive(added.id, { note: "parallel" })];
+  await new Promise(setImmediate); releaseArchivePut(); await Promise.all(concurrent);
+  assert.equal(archives.get(added.id).favorite, false);
+  assert.equal(archives.get(added.id).note, "parallel", "同一归档的并发 patch 不得相互覆盖");
+  const failed = data.updateArchive(added.id, { favorite: "invalid" });
+  const afterFailure = data.updateArchive(added.id, { tags: ["after-failure"] });
+  await assert.rejects(failed, /invalid_favorite/);
+  assert.deepEqual((await afterFailure).tags, ["after-failure"], "失败更新不得永久锁住同一归档");
   console.log("archive-data tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

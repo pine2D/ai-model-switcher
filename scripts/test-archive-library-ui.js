@@ -65,9 +65,10 @@ async function updateOnlyAppliesAfterSuccess() {
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
   const pending = [], renders = [];
   const record = { id: "entry", ts: 1, task: "Question", text: "Question", results: [], favorite: false, tags: [], note: "", winnerHost: null };
+  const other = { ...record, id: "other", task: "Other" };
   const chrome = {
     runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
-      if (message.action === "archiveSearch") return done({ ok: true, items: [record], nextCursor: null });
+      if (message.action === "archiveSearch") return done({ ok: true, items: [record, other], nextCursor: null });
       if (message.action === "archiveTags") return done({ ok: true, tags: [] });
       if (message.action === "archiveUpdate") pending.push({ message, done });
     } },
@@ -81,14 +82,20 @@ async function updateOnlyAppliesAfterSuccess() {
   vm.runInContext(js, context);
   assert.equal(renders.length, 1, "已加载条目应交给详情渲染器");
 
-  const saved = renders[0].options.update({ favorite: true });
+  const saved = renders[0].options.update("entry", { favorite: true });
   assert.equal(typeof saved?.then, "function", "详情更新必须返回 Promise");
+  assert.deepEqual(JSON.parse(JSON.stringify(pending[0].message)), { source: "AMS_DATA", action: "archiveUpdate", id: "entry", patch: { favorite: true } });
   assert.equal(vm.runInContext("archive[0].favorite", context), false, "响应成功前不得替换本地记录");
+  els["ar-list"].children[1].fire("click");
+  assert.equal(vm.runInContext("selectedId", context), "other");
+  const rendersBeforeResponse = renders.length;
   pending.shift().done({ ok: true, record: { ...record, favorite: true } });
   assert.equal((await saved).favorite, true);
   assert.equal(vm.runInContext("archive[0].favorite", context), true);
+  assert.equal(vm.runInContext("selectedId", context), "other", "A 的迟到响应不得把选择从 B 切回 A");
+  assert.equal(renders.length, rendersBeforeResponse, "A 的迟到响应不得重绘并丢失 B 的详情输入");
 
-  const failed = renders.at(-1).options.update({ tags: ["draft"] });
+  const failed = renders.at(-1).options.update("other", { tags: ["draft"] });
   pending.shift().done({ ok: false });
   await assert.rejects(failed);
   assert.equal(els["ar-status"].textContent, "arc_updateFailed");

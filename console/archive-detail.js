@@ -8,9 +8,15 @@ const ArchiveDetail = (() => {
     return element;
   };
   const field = (text, control) => { const label = node("label", "ar-field", text); label.appendChild(control); return label; };
+  function sourceUrl(source) {
+    try { const url = new URL(source?.url); return ["http:", "https:"].includes(url.protocol) ? url.href : null; } catch (_) { return null; }
+  }
+  const markdownText = (value) => String(value).replace(/[\r\n]+/g, " ").replace(/[\\[\]]/g, "\\$&");
+  const markdownUrl = (value) => value.replace(/[()]/g, (char) => char === "(" ? "%28" : "%29").replace(/\s/g, (char) => encodeURIComponent(char));
   function entryMarkdown(entry, errorText = (result) => result.code || t("con_errNoAnswer")) {
     const markdown = ["# " + t("arc_question"), "\n" + (entry.task || entry.text || "")];
-    if (entry.source?.url) markdown.push("\n**" + t("arc_source") + "**: [" + (entry.source.title || entry.source.url) + "](" + entry.source.url + ")");
+    const url = sourceUrl(entry.source);
+    if (url) markdown.push("\n**" + t("arc_source") + "**: [" + markdownText(entry.source.title || url) + "](" + markdownUrl(url) + ")");
     for (const result of entry.results || []) {
       const tier = result.state === "think" ? " · " + t("con_mdThink") : result.state === "fast" ? " · " + t("con_mdFast") : "";
       markdown.push("\n## " + result.label + tier);
@@ -21,12 +27,13 @@ const ArchiveDetail = (() => {
   }
   function render(entry, { update, errorText }) {
     const root = document.getElementById("ar-detail");
-    const save = (patch) => Promise.resolve().then(() => update(patch)).catch(() => {});
+    const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).catch(() => {});
     root.replaceChildren(node("h1", "ar-question", entry.task || entry.text || ""));
-    if (entry.source?.url) {
+    const url = sourceUrl(entry.source);
+    if (url) {
       const source = node("div", "ar-source", t("arc_source") + ": ");
-      const link = node("a", "", entry.source.title || entry.source.url);
-      link.setAttribute("href", entry.source.url); link.setAttribute("target", "_blank"); link.setAttribute("rel", "noopener");
+      const link = node("a", "", entry.source.title || url);
+      link.setAttribute("href", url); link.setAttribute("target", "_blank"); link.setAttribute("rel", "noopener");
       source.appendChild(link); root.appendChild(source);
     }
     const controls = node("div", "ar-controls");

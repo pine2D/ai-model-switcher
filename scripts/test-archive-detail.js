@@ -35,7 +35,7 @@ const messages = { arc_favorite: "Favorite", arc_tags: "Tags", arc_note: "Privat
 const t = (key, ...values) => values.reduce((text, value, index) => text.replaceAll(`{${index}}`, value), messages[key] || key);
 const renderMd = (md, box) => { box.textContent = md; };
 const timers = [];
-const scope = vm.createContext({ document, t, renderMd, setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {}, console });
+const scope = vm.createContext({ document, t, renderMd, setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {}, console, URL });
 vm.runInContext(fs.readFileSync("console/archive-detail.js", "utf8") + ";this.detail=ArchiveDetail", scope);
 
 (async () => {
@@ -55,24 +55,35 @@ assert.doesNotMatch(scope.detail.entryMarkdown({ ...entry, winnerHost: "b.test" 
 const updates = [];
 const editable = { ...entry, favorite: false, winnerHost: null,
   source: { kind: "page", title: "Source", url: "https://example.test" } };
-scope.detail.render(editable, { update: (patch) => { updates.push(patch); return Promise.reject(new Error("save failed")); }, errorText: (item) => item.code });
+const rejectUpdate = (id, patch) => { updates.push({ id, patch }); return Promise.reject(new Error("save failed")); };
+scope.detail.render(editable, { update: rejectUpdate, errorText: (item) => item.code });
 assert.equal(root.querySelectorAll(".ar-sites").length, 1, "详情应提供站点导航");
-assert.match(scope.detail.entryMarkdown(editable), /\[Source\]\(https:\/\/example\.test\)/);
+assert.equal(root.querySelector("a").getAttribute("href"), "https://example.test/");
+assert.match(scope.detail.entryMarkdown(editable), /\[Source\]\(https:\/\/example\.test\/\)/);
+const hostileSource = { ...editable, source: { kind: "page", title: "Bad [title]\\\nnext", url: "https://example.test/a (b)?q=hello world" } };
+const safeMarkdown = scope.detail.entryMarkdown(hostileSource);
+assert.match(safeMarkdown, /\[Bad \\\[title\\\]\\\\ next\]\(https:\/\/example\.test\/a%20%28b%29\?q=hello%20world\)/);
+assert.doesNotMatch(safeMarkdown, /\]\(javascript:/);
+scope.detail.render({ ...editable, source: { kind: "page", title: "Bad", url: "javascript:alert(1)" } }, { update: rejectUpdate, errorText: (item) => item.code });
+assert.equal(root.querySelectorAll("a").length, 0, "未验证的来源 URL 不得创建链接");
+scope.detail.render(editable, { update: rejectUpdate, errorText: (item) => item.code });
 
-root.querySelector("#ar-favorite").fire("click");
+const favorite = root.querySelector("#ar-favorite"); favorite.fire("click");
 const tags = root.querySelector("#ar-tags"); tags.value = "work, urgent"; tags.fire("keydown", { key: "Enter" });
-root.querySelector(".ar-winner").fire("click");
+const winner = root.querySelector(".ar-winner"); winner.fire("click");
 const note = root.querySelector("#ar-note"); note.value = "unsaved draft"; note.fire("input");
-assert.equal(timers.at(-1).ms, 400, "备注应防抖 400ms"); timers.at(-1).fn();
+assert.equal(timers.at(-1).ms, 400, "备注应防抖 400ms");
+scope.detail.render({ ...editable, id: "y", task: "Other" }, { update: rejectUpdate, errorText: (item) => item.code });
+timers.at(-1).fn();
 await Promise.resolve();
-assert.deepEqual(updates.map((patch) => JSON.stringify(patch)), [
-  JSON.stringify({ favorite: true }), JSON.stringify({ tags: ["work", "urgent"] }),
-  JSON.stringify({ winnerHost: "a.test" }), JSON.stringify({ note: "unsaved draft" }),
+assert.deepEqual(updates.map(({ id, patch }) => [id, JSON.stringify(patch)]), [
+  ["x", JSON.stringify({ favorite: true })], ["x", JSON.stringify({ tags: ["work", "urgent"] })],
+  ["x", JSON.stringify({ winnerHost: "a.test" })], ["x", JSON.stringify({ note: "unsaved draft" })],
 ]);
 assert.equal(tags.value, "work, urgent", "标签保存失败后保留输入");
 assert.equal(note.value, "unsaved draft", "备注保存失败后保留输入");
-assert.equal(root.querySelector("#ar-favorite").getAttribute("aria-pressed"), "false", "收藏失败后保留原状态");
-assert.equal(root.querySelector(".ar-winner").getAttribute("aria-pressed"), "false", "胜出答案失败后保留原状态");
+assert.equal(favorite.getAttribute("aria-pressed"), "false", "收藏失败后保留原状态");
+assert.equal(winner.getAttribute("aria-pressed"), "false", "胜出答案失败后保留原状态");
 
 console.log("archive detail tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -9,7 +9,7 @@ function port() {
 }
 function transferRuntime({ runForExport, rows }) {
   const chrome = { runtime: { onConnect: event(), onMessage: event() } };
-  const scope = vm.createContext({ chrome, SyncEngine: { runForExport }, Data: { exportRecords: rows }, SyncModel: { hashText: async (text) => text }, crypto: require("node:crypto").webcrypto, Date });
+  const scope = vm.createContext({ chrome, SyncEngine: { runForExport }, Data: { exportRecords: rows }, SyncModel: { hashText: async (text) => text }, crypto: require("node:crypto").webcrypto, Date, URL });
   vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8"), scope);
   vm.runInContext(fs.readFileSync("bg/transfer.js", "utf8") + ";this.transfer=Transfer", scope);
   return scope.transfer;
@@ -51,6 +51,10 @@ async function main() {
   invalid({ note: "x".repeat(4001) });
   invalid({ tags: Array(21).fill("work") });
   invalid({ winnerHost: "b" });
+  for (const url of ["javascript:alert(1)", "data:text/plain,x", "not a url"])
+    invalid({ source: { kind: "page", title: "Bad", url } });
+  assert.doesNotThrow(() => transferRuntime({ runForExport: async () => {}, rows: async function* () {} })
+    .validateRecord({ kind: "archive", value: { ...archive, source: { kind: "selection", title: "Web", url: "https://example.test/path" } } }));
   console.log("transfer tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

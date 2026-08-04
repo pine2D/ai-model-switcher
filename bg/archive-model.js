@@ -13,7 +13,10 @@ const ArchiveModel = (() => {
   function cleanSource(value) {
     if (value == null) return null;
     if (!object(value) || !["page", "selection"].includes(value.kind) || typeof value.url !== "string") throw new Error("invalid_source");
-    return { kind: value.kind, title: clean(value.title), url: value.url, truncated: !!value.truncated,
+    let url;
+    try { url = new URL(value.url); } catch (_) { throw new Error("invalid_source"); }
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("invalid_source");
+    return { kind: value.kind, title: clean(value.title), url: url.href, truncated: !!value.truncated,
       capturedAt: Number.isSafeInteger(value.capturedAt) ? value.capturedAt : 0 };
   }
   const successful = (value) => (value.results || []).filter((item) => item && typeof item.text === "string" && item.text.trim());

@@ -47,10 +47,11 @@ function currentEntry() {
   return archive.find((entry) => entry.id === selectedId) || null;
 }
 function replaceEntry(record) {
+  const updateDetail = selectedId === record.id;
   archive = archive.map((entry) => entry.id === record.id ? record : entry);
-  renderList(record.id);
+  renderList(undefined, updateDetail);
 }
-function renderList(preferredId) {
+function renderList(preferredId, updateDetail = true) {
   selectedId = archive.some((entry) => entry.id === preferredId) ? preferredId
     : archive.some((entry) => entry.id === selectedId) ? selectedId : archive[0] && archive[0].id;
   disarmDel();
@@ -75,6 +76,7 @@ function renderList(preferredId) {
     elList.appendChild(button);
   });
   document.getElementById("ar-more").hidden = !archiveCursor;
+  if (!updateDetail) return;
   elDetail.setAttribute("data-empty", t("arc_empty")); showCurrent();
   const current = currentEntry(); if (current && !current.results) loadEntry(current);
 }
@@ -122,10 +124,9 @@ function loadTags() {
     if (selected && !filters.tag) refreshSearch();
   });
 }
-function savePatch(patch) {
-  const entry = currentEntry(); if (!entry) return;
+function savePatch(id, patch) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveUpdate", id: entry.id, patch }, (res) => {
+    chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveUpdate", id, patch }, (res) => {
       if (chrome.runtime.lastError || !res?.ok || !res.record) {
         document.getElementById("ar-status").textContent = t("arc_updateFailed"); reject(new Error("archive_update_failed")); return;
       }
