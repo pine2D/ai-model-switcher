@@ -7,7 +7,7 @@ let composeWinId = null;
 let scopeWinId = null;       // 站点范围伴侣窗（失焦即关，不改变 console 高度）
 let archiveWinId = null;     // 归档查看窗（与伴侣窗同款受管：随 console 联动、closeAll 一起关）
 let raiseTimer = null;       // consoleFocused 抬窗去抖句柄（见 scheduleRaise）
-importScripts("bg/windows.js", "bg/panels.js", "bg/broadcast.js",
+importScripts("bg/windows.js", "bg/panels.js", "bg/page-context.js", "bg/broadcast.js",
   "bg/sync-model.js", "bg/archive-model.js", "bg/store.js", "bg/data.js", "bg/drive.js", "bg/sync.js", "bg/transfer.js");
 
 // 窗口 id 仅本次浏览器会话有效：重启后 id 重排，陈旧登记可能撞上无关 popup（如 OAuth 弹窗）
