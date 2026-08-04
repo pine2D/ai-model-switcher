@@ -12,6 +12,7 @@ let archive = [];
 let archiveCursor = null, selectedId = null;
 let filters = { query: "", favorite: false, tag: "" }, searchToken = 0, searchTimer, pageToken = null;
 const ownChangeTokens = new Set();
+const drafts = new Map();
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
   submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow",
   not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
@@ -47,9 +48,38 @@ function renderMd(md, box) {
 function currentEntry() {
   return archive.find((entry) => entry.id === selectedId) || null;
 }
+function hasFilters() { return !!(String(filters.query).trim() || filters.favorite || String(filters.tag).trim()); }
+function siteLabels(entry) {
+  const results = [...(entry.results || []), ...(entry.resultPreviews || [])];
+  const hosts = entry.hosts?.length ? entry.hosts : results.map((item) => item.host);
+  return [...new Set(hosts)].map((host) => results.find((item) => item.host === host)?.label ||
+    SITES.find((site) => site.host === host)?.label || host).filter(Boolean);
+}
+function matchesFilters(record) {
+  const clean = (value) => String(value || "").trim();
+  const query = clean(filters.query).toLocaleLowerCase(), tag = clean(filters.tag);
+  const fallback = [record.task, record.source?.title, record.source?.url, record.note,
+    ...(record.tags || []), ...(record.results || []).map((item) => item.label),
+    ...(record.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLocaleLowerCase();
+  return (!query || String(record.searchText || fallback).includes(query)) &&
+    (!filters.favorite || record.favorite === true) && (!tag || (record.tags || []).includes(tag));
+}
+function rememberDraft(id, patch) {
+  drafts.set(id, { ...(drafts.get(id) || {}), ...patch });
+}
+function clearConfirmedDraft(id, patch) {
+  const draft = drafts.get(id); if (!draft) return;
+  if (Object.prototype.hasOwnProperty.call(patch, "note") && draft.note === patch.note) delete draft.note;
+  if (Object.prototype.hasOwnProperty.call(patch, "tags") && Object.prototype.hasOwnProperty.call(draft, "tags")) {
+    const tags = draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+    if (JSON.stringify(tags) === JSON.stringify(patch.tags)) delete draft.tags;
+  }
+  if (!Object.keys(draft).length) drafts.delete(id);
+}
 function replaceEntry(record) {
   const updateDetail = selectedId === record.id;
-  archive = archive.map((entry) => entry.id === record.id ? record : entry);
+  archive = matchesFilters(record) ? archive.map((entry) => entry.id === record.id ? record : entry)
+    : archive.filter((entry) => entry.id !== record.id);
   renderList(undefined, updateDetail);
 }
 function renderList(preferredId, updateDetail = true) {
@@ -66,6 +96,8 @@ function renderList(preferredId, updateDetail = true) {
     const text = entry.task || entry.preview || entry.text || "";
     question.textContent = text.length > 52 ? text.slice(0, 52) + "…" : (text || "—");
     button.append(date, question);
+    const sites = siteLabels(entry);
+    if (sites.length) { const meta = document.createElement("span"); meta.className = "ar-item-sites"; meta.textContent = sites.join(" · "); button.appendChild(meta); }
     if (entry.favorite || entry.tags?.length) {
       const badges = document.createElement("div"); badges.className = "ar-badges";
       for (const text of [...(entry.favorite ? [t("arc_favorites")] : []), ...(entry.tags || [])]) {
@@ -78,13 +110,14 @@ function renderList(preferredId, updateDetail = true) {
   });
   document.getElementById("ar-more").hidden = !archiveCursor;
   if (!updateDetail) return;
-  elDetail.setAttribute("data-empty", t("arc_empty")); showCurrent();
+  showCurrent();
   const current = currentEntry(); if (current && !current.results) loadEntry(current);
 }
-function showCurrent() {
+function showCurrent(state) {
   const e = currentEntry();
   elDetail.replaceChildren();
-  if (e && e.results) ArchiveDetail.render(e, { update: savePatch, errorText: resultError });
+  elDetail.setAttribute("data-empty", t(state || (e ? "arc_loading" : hasFilters() ? "arc_noMatches" : "arc_empty")));
+  if (e && e.results) ArchiveDetail.render(e, { update: savePatch, errorText: resultError, draft: drafts.get(e.id), onDraft: rememberDraft });
   elCopy.disabled = elExport.disabled = elDel.disabled = !e || !e.results;
 }
 function dataMessage(action, payload, done) {
@@ -100,14 +133,14 @@ function loadPage(reset, preferredId, token = searchToken) {
     void chrome.runtime.lastError;
     if (!reset && pageToken === token) pageToken = null;
     if (token !== searchToken) return;
-    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); if (reset) showCurrent("arc_loadFailed"); return; }
     archive = reset ? res.items || [] : archive.concat(res.items || []);
     archiveCursor = res.nextCursor || null; document.getElementById("ar-status").textContent = ""; renderList(preferredId);
   });
 }
 function refreshSearch(preferredId, delay = 0) {
   const token = ++searchToken, preferred = preferredId || selectedId;
-  archive = []; archiveCursor = null; elList.replaceChildren(); document.getElementById("ar-more").hidden = true; showCurrent();
+  archive = []; archiveCursor = null; elList.replaceChildren(); document.getElementById("ar-more").hidden = true; showCurrent("arc_loading");
   if (searchTimer) clearTimeout(searchTimer);
   const run = () => loadPage(true, preferred, token);
   searchTimer = delay ? setTimeout(run, delay) : (run(), null);
@@ -121,8 +154,8 @@ function loadTags() {
     const all = document.createElement("option"); all.value = ""; all.textContent = t("arc_allTags");
     elTag.replaceChildren(all);
     for (const tag of tags) { const option = document.createElement("option"); option.value = tag; option.textContent = tag; elTag.appendChild(option); }
-    filters.tag = tags.includes(selected) ? selected : ""; elTag.value = filters.tag;
-    if (selected && !filters.tag) refreshSearch();
+    if (selected && !tags.includes(selected)) { const option = document.createElement("option"); option.value = selected; option.textContent = selected; elTag.appendChild(option); }
+    filters.tag = selected; elTag.value = selected;
   });
 }
 function savePatch(id, patch) {
@@ -135,7 +168,7 @@ function savePatch(id, patch) {
         ownChangeTokens.delete(changeToken);
         document.getElementById("ar-status").textContent = t("arc_updateFailed"); reject(new Error("archive_update_failed")); return;
       }
-      replaceEntry(res.record); loadTags(); document.getElementById("ar-status").textContent = ""; resolve(res.record);
+      clearConfirmedDraft(id, patch); replaceEntry(res.record); loadTags(); document.getElementById("ar-status").textContent = ""; resolve(res.record);
     });
   });
 }
@@ -143,8 +176,9 @@ function loadEntry(entry) {
   if (entry.results) return;
   chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveGet", id: entry.id }, (res) => {
     void chrome.runtime.lastError;
-    if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
-    if (!res.record || !res.record.results) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
+    if (!res || !res.ok || !res.record?.results) {
+      document.getElementById("ar-status").textContent = t("arc_loadFailed"); if (selectedId === entry.id) showCurrent("arc_loadFailed"); return;
+    }
     archive = archive.map((item) => item.id === entry.id ? res.record : item);
     if (selectedId === entry.id) renderList(entry.id);
   });

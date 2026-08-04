@@ -25,10 +25,15 @@ const ArchiveDetail = (() => {
     }
     return markdown.join("\n");
   }
-  function render(entry, { update, errorText }) {
+  function render(entry, { update, errorText, draft = {}, onDraft = () => {} }) {
     const root = document.getElementById("ar-detail");
     const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).catch(() => {});
     root.replaceChildren(node("h1", "ar-question", entry.task || entry.text || ""));
+    const capturedAt = Number(entry.ts || entry.createdAt);
+    if (Number.isFinite(capturedAt) && capturedAt > 0) {
+      const captured = node("time", "ar-captured", t("arc_capturedAt", new Date(capturedAt).toLocaleString(document.documentElement.lang || undefined)));
+      captured.setAttribute("datetime", new Date(capturedAt).toISOString()); root.appendChild(captured);
+    }
     const url = sourceUrl(entry.source);
     if (url) {
       const source = node("div", "ar-source", t("arc_source") + ": ");
@@ -40,15 +45,18 @@ const ArchiveDetail = (() => {
     const favorite = node("button", "ar-favorite", t("arc_favorites"));
     favorite.id = "ar-favorite"; favorite.type = "button"; favorite.setAttribute("aria-pressed", String(!!entry.favorite));
     favorite.addEventListener("click", () => save({ favorite: !entry.favorite }));
-    const tags = node("input", "ar-tags"); tags.id = "ar-tags"; tags.value = (entry.tags || []).join(", ");
+    const tags = node("input", "ar-tags"); tags.id = "ar-tags";
+    tags.value = Object.prototype.hasOwnProperty.call(draft, "tags") ? draft.tags : (entry.tags || []).join(", ");
     tags.setAttribute("aria-label", t("arc_tags"));
-    const saveTags = () => save({ tags: tags.value.split(",").map((tag) => tag.trim()).filter(Boolean) });
+    const saveTags = () => { onDraft(entry.id, { tags: tags.value }); return save({ tags: tags.value.split(",").map((tag) => tag.trim()).filter(Boolean) }); };
+    tags.addEventListener("input", () => onDraft(entry.id, { tags: tags.value }));
     tags.addEventListener("change", saveTags);
     tags.addEventListener("keydown", (event) => { if (event.key === "Enter") saveTags(); });
-    const note = node("textarea", "ar-note"); note.id = "ar-note"; note.value = entry.note || "";
+    const note = node("textarea", "ar-note"); note.id = "ar-note";
+    note.value = Object.prototype.hasOwnProperty.call(draft, "note") ? draft.note : entry.note || "";
     note.setAttribute("aria-label", t("arc_note"));
     let noteTimer;
-    note.addEventListener("input", () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => save({ note: note.value }), 400); });
+    note.addEventListener("input", () => { onDraft(entry.id, { note: note.value }); clearTimeout(noteTimer); noteTimer = setTimeout(() => save({ note: note.value }), 400); });
     controls.append(favorite, field(t("arc_tags"), tags), field(t("arc_note"), note)); root.appendChild(controls);
     const nav = node("nav", "ar-sites"); nav.setAttribute("aria-label", t("arc_sites"));
     const sections = [];

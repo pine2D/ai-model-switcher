@@ -14,6 +14,7 @@ assert.ok(js.includes('action: "archiveSearch"'), "结果库应使用 archiveSea
 assert.ok(js.includes('action: "archiveTags"'), "结果库应加载 archiveTags");
 assert.ok(js.includes("searchToken"), "stale search callbacks must be ignored");
 assert.ok(!html.includes("<svg") || (html.match(/<svg/g) || []).length === 1, "do not add nonessential icons");
+assert.match(html, /id="ar-detail"[^>]+data-empty="[^"]+"/, "详情区应保留无脚本 HTML fallback");
 
 class El {
   constructor() { this.listeners = {}; this.classList = { add() {}, remove() {} }; this.children = []; this.value = ""; }
@@ -123,5 +124,125 @@ async function updateOnlyAppliesAfterSuccess() {
   assert.equal(searches, searchesBeforeFailedChange + 3, "外部或无 token 的 archiveChanged 必须正常刷新");
 }
 
+async function updatesRespectActiveFilters() {
+  const cases = [
+    { name: "favorite", filters: { query: "", favorite: true, tag: "" }, patch: { favorite: false }, updated: { favorite: false } },
+    { name: "tag", filters: { query: "", favorite: false, tag: "keep" }, patch: { tags: [] }, updated: { tags: [], searchText: "question" }, only: true },
+    { name: "query", filters: { query: "needle", favorite: false, tag: "" }, patch: { note: "gone" }, updated: { note: "gone", searchText: "question gone" }, only: true },
+  ];
+  for (const testCase of cases) {
+    const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+    const els = Object.fromEntries(ids.map((id) => [id, new El()]));
+    const pending = [], renders = [];
+    const record = { id: "entry", ts: 1, task: "Question", results: [], favorite: true, tags: ["keep"], note: "needle", searchText: "question needle keep" };
+    const other = { ...record, id: "other", task: "Other", searchText: "other needle keep" };
+    const chrome = {
+      runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+        if (message.action === "archiveSearch") return done({ ok: true, items: testCase.only ? [record] : [record, other], nextCursor: null });
+        if (message.action === "archiveTags") return done({ ok: true, tags: testCase.name === "tag" ? [] : ["keep"] });
+        if (message.action === "archiveUpdate") pending.push(done);
+      } }, storage: { local: { get() {} }, session: { get() {} } },
+    };
+    const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
+      createElement: () => new El(), createTextNode: () => new El() };
+    const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
+      t: (key) => key, applyI18n() {}, ArchiveDetail: { render(entry, options) { renders.push({ entry, options }); }, entryMarkdown: () => "" },
+      crypto: { randomUUID: () => "filter-change" } });
+    vm.runInContext(js, context);
+    vm.runInContext(`filters = ${JSON.stringify(testCase.filters)}; renderList("entry")`, context);
+    const promise = renders.at(-1).options.update("entry", testCase.patch);
+    pending.shift()({ ok: true, record: { ...record, ...testCase.updated } });
+    await promise;
+    assert.deepEqual(vm.runInContext("archive.map((entry) => entry.id)", context), testCase.only ? [] : ["other"], `${testCase.name} 更新后不匹配的记录应立即移出列表`);
+    assert.equal(vm.runInContext("selectedId", context), testCase.only ? undefined : "other", `${testCase.name} 更新后应安全调整选择`);
+    if (testCase.only) assert.equal(els["ar-detail"]["data-empty"], "arc_noMatches", "筛选结果被移空后应显示无匹配状态");
+    if (testCase.name === "tag") assert.equal(els["ar-tag"].value, "keep", "移除最后一个当前标签后仍应保留筛选上下文");
+  }
+}
+
+async function draftsSurviveRefreshAndLateCallbacks() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El()]));
+  const pending = [], renders = [], listeners = [];
+  let tokenSeq = 0;
+  const entry = { id: "entry", ts: 1, task: "Question", results: [], favorite: false, tags: [], note: "", searchText: "question" };
+  const other = { ...entry, id: "other", task: "Other", searchText: "other" };
+  const chrome = {
+    runtime: { lastError: null, onMessage: { addListener(fn) { listeners.push(fn); } }, sendMessage(message, done) {
+      if (message.action === "archiveSearch") return done({ ok: true, items: [entry, other], nextCursor: null });
+      if (message.action === "archiveTags") return done({ ok: true, tags: ["draft-tag"] });
+      if (message.action === "archiveUpdate") pending.push({ message, done });
+    } }, storage: { local: { get() {} }, session: { get() {} } },
+  };
+  const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
+    createElement: () => new El(), createTextNode: () => new El() };
+  const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
+    t: (key) => key, applyI18n() {}, ArchiveDetail: { render(record, options) { renders.push({ record, options }); }, entryMarkdown: () => "" },
+    crypto: { randomUUID: () => `draft-${++tokenSeq}` } });
+  vm.runInContext(js, context);
+
+  let detail = renders.at(-1).options;
+  detail.onDraft("entry", { tags: "draft-tag", note: "older" });
+  const olderSave = detail.update("entry", { note: "older" });
+  detail.onDraft("entry", { note: "newer" });
+  pending.shift().done({ ok: true, record: { ...entry, note: "older", searchText: "question older" } });
+  await olderSave;
+  assert.equal(renders.at(-1).options.draft.note, "newer", "迟到成功回调不得覆盖更新的草稿");
+
+  detail = renders.at(-1).options;
+  const failed = detail.update("entry", { note: "newer" });
+  pending.shift().done({ ok: false });
+  await assert.rejects(failed);
+  els["ar-list"].children[1].fire("click");
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged" }));
+  els["ar-list"].children[0].fire("click");
+  detail = renders.at(-1).options;
+  assert.deepEqual(JSON.parse(JSON.stringify(detail.draft)), { tags: "draft-tag", note: "newer" }, "失败、切换记录和外部刷新后应恢复原记录草稿");
+
+  const noteRetry = detail.update("entry", { note: "newer" });
+  pending.shift().done({ ok: true, record: { ...entry, note: "newer", searchText: "question newer" } });
+  await noteRetry;
+  assert.deepEqual(JSON.parse(JSON.stringify(renders.at(-1).options.draft)), { tags: "draft-tag" }, "备注成功只能清除已确认的备注草稿");
+  const tagRetry = renders.at(-1).options.update("entry", { tags: ["draft-tag"] });
+  pending.shift().done({ ok: true, record: { ...entry, tags: ["draft-tag"], searchText: "question draft-tag" } });
+  await tagRetry;
+  assert.equal(renders.at(-1).options.draft, undefined, "标签成功后应清除对应草稿");
+}
+
+function distinctEmptyAndLoadStates() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El()]));
+  const gets = [];
+  let nextItems = [];
+  const chrome = {
+    runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+      if (message.action === "archiveSearch") return done({ ok: true, items: nextItems, nextCursor: null });
+      if (message.action === "archiveTags") return done({ ok: true, tags: [] });
+      if (message.action === "archiveGet") gets.push(done);
+    } }, storage: { local: { get() {} }, session: { get() {} } },
+  };
+  const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
+    createElement: () => new El(), createTextNode: () => new El() };
+  const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
+    t: (key) => key, applyI18n() {}, ArchiveDetail: { render() {}, entryMarkdown: () => "" }, crypto: { randomUUID: () => "state" } });
+  vm.runInContext(js, context);
+  assert.equal(els["ar-detail"]["data-empty"], "arc_empty", "空结果库应显示空库状态");
+
+  els["ar-favorites"].fire("click");
+  assert.equal(els["ar-detail"]["data-empty"], "arc_noMatches", "启用筛选但无结果时应显示无匹配状态");
+
+  nextItems = [{ id: "remote", ts: 1, task: "Remote", favorite: false, tags: [], searchText: "remote",
+    hosts: ["a.test", "b.test"], resultPreviews: [{ host: "a.test", label: "Alpha", text: "answer" }] }];
+  els["ar-favorites"].fire("click");
+  assert.equal(gets.length, 1, "元数据记录应按需加载正文");
+  const sites = els["ar-list"].children[0].children.find((child) => child.className === "ar-item-sites");
+  assert.equal(sites?.textContent, "Alpha · b.test", "列表应紧凑显示所有涉及站点并复用可用标签");
+  assert.equal(els["ar-detail"]["data-empty"], "arc_loading", "云端正文加载期间应显示加载状态");
+  gets.shift()({ ok: false });
+  assert.equal(els["ar-detail"]["data-empty"], "arc_loadFailed", "云端正文加载失败应显示失败状态");
+}
+
 loadMoreIsSingleFlight();
-updateOnlyAppliesAfterSuccess().then(() => console.log("archive library UI contract tests passed"), (error) => { console.error(error); process.exitCode = 1; });
+distinctEmptyAndLoadStates();
+Promise.all([updateOnlyAppliesAfterSuccess(), updatesRespectActiveFilters(), draftsSurviveRefreshAndLateCallbacks()])
+  .then(() => console.log("archive library UI contract tests passed"), (error) => { console.error(error); process.exitCode = 1; });
