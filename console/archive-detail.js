@@ -27,12 +27,12 @@ const ArchiveDetail = (() => {
   }
   function render(entry, { update, errorText, draft = {}, onDraft = () => {} }) {
     const root = document.getElementById("ar-detail");
-    const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).catch(() => {});
+    const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).then(() => true, () => false);
     root.replaceChildren(node("h1", "ar-question", entry.task || entry.text || ""));
-    const capturedAt = Number(entry.ts || entry.createdAt);
-    if (Number.isFinite(capturedAt) && capturedAt > 0) {
-      const captured = node("time", "ar-captured", t("arc_capturedAt", new Date(capturedAt).toLocaleString(document.documentElement.lang || undefined)));
-      captured.setAttribute("datetime", new Date(capturedAt).toISOString()); root.appendChild(captured);
+    const capturedAt = new Date(Number(entry.ts || entry.createdAt));
+    if (capturedAt.getTime() > 0) {
+      const captured = node("time", "ar-captured", t("arc_capturedAt", capturedAt.toLocaleString(document.documentElement.lang || undefined)));
+      captured.setAttribute("datetime", capturedAt.toISOString()); root.appendChild(captured);
     }
     const url = sourceUrl(entry.source);
     if (url) {
@@ -53,10 +53,25 @@ const ArchiveDetail = (() => {
     tags.addEventListener("change", saveTags);
     tags.addEventListener("keydown", (event) => { if (event.key === "Enter") saveTags(); });
     const note = node("textarea", "ar-note"); note.id = "ar-note";
-    note.value = Object.prototype.hasOwnProperty.call(draft, "note") ? draft.note : entry.note || "";
+    const hasNoteDraft = Object.prototype.hasOwnProperty.call(draft, "note");
+    note.value = hasNoteDraft ? draft.note : entry.note || "";
     note.setAttribute("aria-label", t("arc_note"));
-    let noteTimer;
-    note.addEventListener("input", () => { onDraft(entry.id, { note: note.value }); clearTimeout(noteTimer); noteTimer = setTimeout(() => save({ note: note.value }), 400); });
+    let noteTimer, noteSaving = false, pendingNote = hasNoteDraft ? note.value : null;
+    const saveNote = () => {
+      clearTimeout(noteTimer); noteTimer = null;
+      if (pendingNote === null || noteSaving) return;
+      const value = pendingNote; noteSaving = true;
+      save({ note: value }).then((ok) => {
+        noteSaving = false;
+        if (ok && pendingNote === value) pendingNote = null;
+        else if (pendingNote !== value) saveNote();
+      });
+    };
+    note.addEventListener("input", () => {
+      onDraft(entry.id, { note: note.value }); pendingNote = note.value;
+      clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 400);
+    });
+    note.addEventListener("blur", saveNote);
     controls.append(favorite, field(t("arc_tags"), tags), field(t("arc_note"), note)); root.appendChild(controls);
     const nav = node("nav", "ar-sites"); nav.setAttribute("aria-label", t("arc_sites"));
     const sections = [];

@@ -10,7 +10,7 @@ const elFavorites = document.getElementById("ar-favorites");
 const elTag = document.getElementById("ar-tag");
 let archive = [];
 let archiveCursor = null, selectedId = null;
-let filters = { query: "", favorite: false, tag: "" }, searchToken = 0, searchTimer, pageToken = null;
+let filters = { query: "", favorite: false, tag: "" }, searchToken = 0, searchTimer, pageToken = null, entryLoadToken = 0;
 const ownChangeTokens = new Set();
 const drafts = new Map();
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
@@ -139,6 +139,7 @@ function loadPage(reset, preferredId, token = searchToken) {
   });
 }
 function refreshSearch(preferredId, delay = 0) {
+  entryLoadToken++;
   const token = ++searchToken, preferred = preferredId || selectedId;
   archive = []; archiveCursor = null; elList.replaceChildren(); document.getElementById("ar-more").hidden = true; showCurrent("arc_loading");
   if (searchTimer) clearTimeout(searchTimer);
@@ -174,11 +175,14 @@ function savePatch(id, patch) {
 }
 function loadEntry(entry) {
   if (entry.results) return;
+  const token = ++entryLoadToken;
   chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveGet", id: entry.id }, (res) => {
     void chrome.runtime.lastError;
+    if (token !== entryLoadToken || selectedId !== entry.id) return;
     if (!res || !res.ok || !res.record?.results) {
       document.getElementById("ar-status").textContent = t("arc_loadFailed"); if (selectedId === entry.id) showCurrent("arc_loadFailed"); return;
     }
+    document.getElementById("ar-status").textContent = "";
     archive = archive.map((item) => item.id === entry.id ? res.record : item);
     if (selectedId === entry.id) renderList(entry.id);
   });

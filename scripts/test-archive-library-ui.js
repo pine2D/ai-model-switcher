@@ -14,7 +14,9 @@ assert.ok(js.includes('action: "archiveSearch"'), "结果库应使用 archiveSea
 assert.ok(js.includes('action: "archiveTags"'), "结果库应加载 archiveTags");
 assert.ok(js.includes("searchToken"), "stale search callbacks must be ignored");
 assert.ok(!html.includes("<svg") || (html.match(/<svg/g) || []).length === 1, "do not add nonessential icons");
-assert.match(html, /id="ar-detail"[^>]+data-empty="[^"]+"/, "详情区应保留无脚本 HTML fallback");
+assert.equal(html.match(/<html lang="([^"]+)"/)?.[1], "en");
+assert.equal(html.match(/id="ar-detail"[^>]+data-empty="([^"]+)"/)?.[1], "Loading saved result…",
+  "详情区静态 fallback 应与声明的英文页面语言一致");
 
 class El {
   constructor() { this.listeners = {}; this.classList = { add() {}, remove() {} }; this.children = []; this.value = ""; }
@@ -240,9 +242,59 @@ function distinctEmptyAndLoadStates() {
   assert.equal(els["ar-detail"]["data-empty"], "arc_loading", "云端正文加载期间应显示加载状态");
   gets.shift()({ ok: false });
   assert.equal(els["ar-detail"]["data-empty"], "arc_loadFailed", "云端正文加载失败应显示失败状态");
+  els["ar-list"].children[0].fire("click");
+  gets.shift()({ ok: true, record: { ...nextItems[0], results: [] } });
+  assert.equal(els["ar-status"].textContent, "", "正文重载成功应清除旧失败状态");
 }
 
+function latestEntryLoadWins() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El()]));
+  const gets = [], renders = [];
+  const a = { id: "a", ts: 1, task: "A", favorite: false, tags: [], searchText: "a" };
+  const b = { ...a, id: "b", task: "B", searchText: "b" };
+  const chrome = {
+    runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+      if (message.action === "archiveSearch") return done({ ok: true, items: [a, b], nextCursor: null });
+      if (message.action === "archiveTags") return done({ ok: true, tags: [] });
+      if (message.action === "archiveGet") gets.push({ id: message.id, done });
+    } }, storage: { local: { get() {} }, session: { get() {} } },
+  };
+  const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
+    createElement: () => new El(), createTextNode: () => new El() };
+  const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
+    t: (key) => key, applyI18n() {}, ArchiveDetail: { render(record) { renders.push(record); }, entryMarkdown: () => "" }, crypto: { randomUUID: () => "load" } });
+  vm.runInContext(js, context);
+  els["ar-list"].children[1].fire("click");
+  gets[1].done({ ok: false });
+  els["ar-list"].children[0].fire("click");
+  assert.deepEqual(gets.map((request) => request.id), ["a", "b", "a"], "A→B→A 应创建三次独立正文请求");
+  gets[2].done({ ok: true, record: { ...a, note: "fresh", results: [] } });
+  assert.equal(renders.at(-1).note, "fresh");
+  assert.equal(els["ar-status"].textContent, "", "最新 A 请求成功应清除 B 的旧失败状态");
+  gets[0].done({ ok: false });
+  assert.equal(els["ar-status"].textContent, "", "最早 A 请求的迟到失败不得覆盖最新成功");
+  assert.notEqual(els["ar-detail"]["data-empty"], "arc_loadFailed", "迟到失败不得清空已加载详情");
+}
+function refreshInvalidatesEntryLoad() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El()])), gets = [], searches = [];
+  const a = { id: "a", ts: 1, task: "A", favorite: false, tags: [], searchText: "a" }; let firstSearch = true;
+  const chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+      if (message.action === "archiveSearch" && firstSearch) { firstSearch = false; return done({ ok: true, items: [a], nextCursor: null }); }
+      if (message.action === "archiveSearch") return searches.push(done);
+      if (message.action === "archiveTags") return done({ ok: true, tags: [] });
+      if (message.action === "archiveGet") gets.push(done);
+    } }, storage: { local: { get() {} }, session: { get() {} } } };
+  const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() };
+  const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout, t: (key) => key,
+    applyI18n() {}, ArchiveDetail: { render() {}, entryMarkdown: () => "" }, crypto: { randomUUID: () => "refresh" } });
+  vm.runInContext(js, context); els["ar-favorites"].fire("click"); assert.equal(els["ar-detail"]["data-empty"], "arc_loading", "筛选搜索未返回时应保持加载状态");
+  gets.shift()({ ok: false }); assert.equal(els["ar-status"].textContent || "", "", "刷新前的正文失败不得显示为当前错误"); assert.equal(els["ar-detail"]["data-empty"], "arc_loading", "刷新前的正文失败不得覆盖新搜索加载态");
+  searches.shift()({ ok: true, items: [], nextCursor: null }); assert.equal(els["ar-detail"]["data-empty"], "arc_noMatches", "新筛选搜索回调应正常落地");
+}
 loadMoreIsSingleFlight();
 distinctEmptyAndLoadStates();
-Promise.all([updateOnlyAppliesAfterSuccess(), updatesRespectActiveFilters(), draftsSurviveRefreshAndLateCallbacks()])
-  .then(() => console.log("archive library UI contract tests passed"), (error) => { console.error(error); process.exitCode = 1; });
+latestEntryLoadWins();
+refreshInvalidatesEntryLoad();
+Promise.all([updateOnlyAppliesAfterSuccess(), updatesRespectActiveFilters(), draftsSurviveRefreshAndLateCallbacks()]).then(() => console.log("archive library UI contract tests passed"), (error) => { console.error(error); process.exitCode = 1; });

@@ -35,7 +35,9 @@ const messages = { arc_favorites: "Favorites", arc_tags: "Tags", arc_note: "Note
 const t = (key, ...values) => values.reduce((text, value, index) => text.replaceAll(`{${index}}`, value), messages[key] || key);
 const renderMd = (md, box) => { box.textContent = md; };
 const timers = [];
-const scope = vm.createContext({ document, t, renderMd, setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {}, console, URL });
+const scope = vm.createContext({ document, t, renderMd,
+  setTimeout(fn, ms) { timers.push({ fn, ms, cancelled: false }); return timers.length; },
+  clearTimeout(id) { if (timers[id - 1]) timers[id - 1].cancelled = true; }, console, URL });
 vm.runInContext(fs.readFileSync("console/archive-detail.js", "utf8") + ";this.detail=ArchiveDetail", scope);
 
 (async () => {
@@ -50,6 +52,10 @@ assert.equal(root.querySelector("#ar-tags").value, "work");
 assert.equal(root.querySelector("#ar-note").value, "private note");
 assert.match(root.querySelector(".ar-captured")?.textContent || "", /^Captured: /, "详情应显示采集时间");
 assert.equal(root.querySelector(".ar-captured")?.getAttribute("datetime"), new Date(entry.ts).toISOString());
+assert.doesNotThrow(() => scope.detail.render({ ...entry, ts: 1e100 }, { update: async () => entry, errorText: (item) => item.code }),
+  "超出 Date 范围的采集时间不得中断详情渲染");
+assert.equal(root.querySelector(".ar-captured"), null, "无效采集时间不应渲染 time");
+scope.detail.render(entry, { update: async () => entry, errorText: (item) => item.code });
 const markdown = scope.detail.entryMarkdown(entry);
 assert.match(markdown, /Best answer: A/);
 assert.doesNotMatch(markdown, /private note/);
@@ -75,15 +81,19 @@ assert.doesNotMatch(safeMarkdown, /\]\(javascript:/);
 scope.detail.render({ ...editable, source: { kind: "page", title: "Bad", url: "javascript:alert(1)" } }, { update: rejectUpdate, errorText: (item) => item.code });
 assert.equal(root.querySelectorAll("a").length, 0, "未验证的来源 URL 不得创建链接");
 renderEditable(editable);
+root.querySelector("#ar-note").fire("blur");
+await Promise.resolve();
+assert.equal(updates.length, 0, "无草稿且内容未变化时 blur 不应写入");
 
 const favorite = root.querySelector("#ar-favorite"); favorite.fire("click");
 const tags = root.querySelector("#ar-tags"); tags.value = "work, urgent"; tags.fire("input"); tags.fire("keydown", { key: "Enter" });
 const winner = root.querySelector(".ar-winner"); winner.fire("click");
 const note = root.querySelector("#ar-note"); note.value = "unsaved draft"; note.fire("input");
 assert.equal(timers.at(-1).ms, 400, "备注应防抖 400ms");
+const scheduledNote = timers.at(-1); note.fire("blur");
 renderEditable({ ...editable, id: "y", task: "Other" });
-timers.at(-1).fn();
-await Promise.resolve();
+if (!scheduledNote.cancelled) scheduledNote.fn();
+await Promise.resolve(); await Promise.resolve();
 assert.deepEqual(updates.map(({ id, patch }) => [id, JSON.stringify(patch)]), [
   ["x", JSON.stringify({ favorite: true })], ["x", JSON.stringify({ tags: ["work", "urgent"] })],
   ["x", JSON.stringify({ winnerHost: "a.test" })], ["x", JSON.stringify({ note: "unsaved draft" })],
@@ -91,6 +101,9 @@ assert.deepEqual(updates.map(({ id, patch }) => [id, JSON.stringify(patch)]), [
 renderEditable(editable);
 assert.equal(root.querySelector("#ar-tags").value, "work, urgent", "重新渲染原记录后仍应恢复标签草稿");
 assert.equal(root.querySelector("#ar-note").value, "unsaved draft", "重新渲染原记录后仍应恢复备注草稿");
+const restoredNote = root.querySelector("#ar-note"); restoredNote.fire("blur"); restoredNote.fire("blur");
+await Promise.resolve(); await Promise.resolve();
+assert.equal(updates.filter(({ patch }) => patch.note === "unsaved draft").length, 2, "恢复的备注草稿应可通过真实 blur 事件重试且同次失焦不重复写入");
 assert.equal(favorite.getAttribute("aria-pressed"), "false", "收藏失败后保留原状态");
 assert.equal(winner.getAttribute("aria-pressed"), "false", "胜出答案失败后保留原状态");
 
