@@ -93,7 +93,7 @@ assert.equal(timers.at(-1).ms, 400, "备注应防抖 400ms");
 const scheduledNote = timers.at(-1); note.fire("blur");
 renderEditable({ ...editable, id: "y", task: "Other" });
 if (!scheduledNote.cancelled) scheduledNote.fn();
-await Promise.resolve(); await Promise.resolve();
+await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(updates.map(({ id, patch }) => [id, JSON.stringify(patch)]), [
   ["x", JSON.stringify({ favorite: true })], ["x", JSON.stringify({ tags: ["work", "urgent"] })],
   ["x", JSON.stringify({ winnerHost: "a.test" })], ["x", JSON.stringify({ note: "unsaved draft" })],
@@ -152,6 +152,37 @@ assert.ok(timers.length > timerCount, "携带备注草稿的新 render 应重新
 const replacementTimer = timers.at(-1);
 if (!replacementTimer.cancelled) replacementTimer.fn(); await Promise.resolve(); await Promise.resolve();
 assert.deepEqual(rearmUpdates.map(({ patch }) => patch.note), ["old-1", "new"], "重渲染后应仅接续保存新草稿，不得写入 pending old-2");
+
+const dedupeDrafts = new Map(), dedupeUpdates = []; let rejectSame, finishRetry;
+const renderDedupe = (id = "dedupe") => scope.detail.render({ ...raceEntry, id }, { update(recordId, patch) {
+  dedupeUpdates.push({ id: recordId, patch });
+  if (dedupeUpdates.length === 1) return new Promise((_, reject) => { rejectSame = reject; });
+  if (dedupeUpdates.length === 2) return new Promise((resolve) => { finishRetry = resolve; });
+  return Promise.resolve();
+}, errorText: (item) => item.code, draft: dedupeDrafts.get(id), onDraft(recordId, patch) {
+  dedupeDrafts.set(recordId, { ...(dedupeDrafts.get(recordId) || {}), ...patch });
+} });
+renderDedupe();
+const firstSame = root.querySelector("#ar-note"); firstSame.value = "same"; firstSame.fire("input"); firstSame.fire("blur"); await Promise.resolve();
+const duplicateTimerStart = timers.length; renderDedupe();
+for (const timer of timers.slice(duplicateTimerStart)) if (!timer.cancelled) timer.fn();
+await Promise.resolve(); await Promise.resolve();
+assert.deepEqual(dedupeUpdates.map(({ patch }) => patch.note), ["same"], "同记录同备注在途时，重渲染不得重复保存");
+root.querySelector("#ar-note").fire("blur"); await Promise.resolve();
+assert.equal(dedupeUpdates.length, 1, "同值请求 settle 前，blur 也不得绕过去重重复保存");
+rejectSame(new Error("save failed")); await new Promise((resolve) => setImmediate(resolve));
+root.querySelector("#ar-note").fire("blur"); await Promise.resolve();
+assert.deepEqual(dedupeUpdates.map(({ patch }) => patch.note), ["same", "same"], "在途请求失败释放后，blur 应允许重试同一草稿");
+dedupeDrafts.set("dedupe-other", { note: "same" });
+const otherTimerStart = timers.length; renderDedupe("dedupe-other");
+for (const timer of timers.slice(otherTimerStart)) if (!timer.cancelled) timer.fn();
+await Promise.resolve(); await Promise.resolve();
+assert.equal(dedupeUpdates.at(-1).id, "dedupe-other", "不同记录的同值草稿不得被阻塞");
+renderDedupe();
+const differentValue = root.querySelector("#ar-note"); differentValue.value = "different"; differentValue.fire("input"); differentValue.fire("blur");
+await Promise.resolve(); await Promise.resolve();
+assert.equal(dedupeUpdates.at(-1).patch.note, "different", "同记录的新值不得被旧值的在途请求阻塞");
+finishRetry(); await new Promise((resolve) => setImmediate(resolve));
 
 console.log("archive detail tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

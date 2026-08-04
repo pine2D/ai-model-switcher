@@ -2,6 +2,7 @@
 const ArchiveDetail = (() => {
   let cancelPendingNote = () => {};
   let renderGeneration = 0;
+  const savingNotes = new Set();
   const successful = (result) => typeof result?.text === "string" && result.text.trim();
   const node = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -60,13 +61,17 @@ const ArchiveDetail = (() => {
     const hasNoteDraft = Object.prototype.hasOwnProperty.call(draft, "note");
     note.value = hasNoteDraft ? draft.note : entry.note || "";
     note.setAttribute("aria-label", t("arc_note"));
+    const noteKey = (value) => JSON.stringify([entry.id, value]);
     let noteTimer, noteSaving = false, pendingNote = hasNoteDraft ? note.value : null;
     cancelPendingNote = () => { clearTimeout(noteTimer); noteTimer = null; };
     const saveNote = () => {
       clearTimeout(noteTimer); noteTimer = null;
       if (generation !== renderGeneration || pendingNote === null || noteSaving) return;
-      const value = pendingNote; noteSaving = true;
+      const value = pendingNote, key = noteKey(value);
+      if (savingNotes.has(key)) return;
+      noteSaving = true; savingNotes.add(key);
       save({ note: value }).then((ok) => {
+        savingNotes.delete(key);
         if (generation !== renderGeneration) return;
         noteSaving = false;
         if (ok && pendingNote === value) pendingNote = null;
@@ -78,7 +83,7 @@ const ArchiveDetail = (() => {
       clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 400);
     });
     note.addEventListener("blur", saveNote);
-    if (hasNoteDraft) noteTimer = setTimeout(saveNote, 400);
+    if (hasNoteDraft && !savingNotes.has(noteKey(note.value))) noteTimer = setTimeout(saveNote, 400);
     controls.append(favorite, field(t("arc_tags"), tags), field(t("arc_note"), note)); root.appendChild(controls);
     const nav = node("nav", "ar-sites"); nav.setAttribute("aria-label", t("arc_sites"));
     const sections = [];
