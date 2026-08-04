@@ -19,6 +19,20 @@ async function preservesRunMetadata() {
   assert.equal(pushed.find((item) => item.type === "sendStart").task, "Question");
 }
 
+async function staleRunDoesNotReplaceMetadata() {
+  let sets = 0;
+  const pushed = [];
+  const chrome = {
+    runtime: { lastError: null, sendMessage(message, done) { pushed.push(message); done?.(); } },
+    storage: { session: { set: async () => { sets++; } } },
+  };
+  const context = vm.createContext({ chrome, Date, setTimeout, clearTimeout, URL, console });
+  vm.runInContext(source("bg/broadcast.js"), context);
+  await vm.runInContext('sendAll([], "Stale prompt", "think", false, 1, [], { task: "Stale task", source: null })', context);
+  assert.equal(sets, 0, "过期请求不得覆盖 amsLastRun");
+  assert.equal(pushed.some((item) => item.type === "sendStart"), false, "过期请求不得开始进度广播");
+}
+
 class El {
   constructor() { this.disabled = this.hidden = false; this.textContent = ""; this.style = {}; this.listeners = {}; this.classList = { add() {}, remove() {} }; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
@@ -79,6 +93,7 @@ function sourcesForwardRunMetadata() {
 
 (async () => {
   await preservesRunMetadata();
+  await staleRunDoesNotReplaceMetadata();
   archiveCaptureUsesMatchingRun();
   summaryKeepsRunMetadata();
   sourcesForwardRunMetadata();

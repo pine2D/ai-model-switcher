@@ -72,10 +72,10 @@ async function openTile(sites, prune = true) {
 // 发送到全部：有站点尚无窗口则先平铺，再逐站等页面就绪后提交。
 // 用户初次使用无需先点「平铺」：勾选 → 输入 → Enter 即可一步开窗+群发。
 async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), images = [], run = {}) {
+  if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   const runMeta = { text, task: String(run.task || text), source: run.source || null,
     hosts: sites.map((site) => site.host), tier: tier || null, sentAt: Date.now() };
   await chrome.storage.session.set({ amsLastRun: runMeta });
-  if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   const wins = await getWindows();
   let anyMissing = false;
   for (const s of sites) { if ((await popupWindowForHost(s.host, wins)) == null) { anyMissing = true; break; } }
