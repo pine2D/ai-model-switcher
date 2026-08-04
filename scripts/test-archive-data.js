@@ -4,6 +4,8 @@ const assert = require("node:assert"), fs = require("node:fs"), vm = require("no
 
 const archives = new Map(), outbox = new Map(), meta = new Map();
 let blockArchivePut = false, releaseArchivePut, archivePutGate;
+let dataMessageListener;
+const broadcasts = [];
 const SyncStore = {
   getArchive: async (id) => archives.get(id),
   putArchive: async (row) => {
@@ -20,7 +22,9 @@ const SyncStore = {
   getMeta: async (key) => meta.get(key),
   putMeta: async (key, value) => meta.set(key, value),
 };
-const chrome = { storage: { local: { get: async (defaults) => defaults, set: async () => {} } } };
+const chrome = { storage: { local: { get: async (defaults) => defaults, set: async () => {} } }, runtime: {
+  onMessage: { addListener(fn) { dataMessageListener = fn; } }, sendMessage(message) { broadcasts.push(message); },
+} };
 const scope = vm.createContext({ SyncStore, SyncModel: { SCHEMA: 1, utf8Preview: (text) => text }, chrome,
   crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" }, Date });
 vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8") + ";this.model=ArchiveModel", scope);
@@ -46,6 +50,11 @@ async function main() {
   const afterFailure = data.updateArchive(added.id, { tags: ["after-failure"] });
   await assert.rejects(failed, /invalid_favorite/);
   assert.deepEqual((await afterFailure).tags, ["after-failure"], "失败更新不得永久锁住同一归档");
+  const response = await new Promise((resolve) => dataMessageListener({ source: "AMS_DATA", action: "archiveUpdate", id: added.id,
+    patch: { note: "messaged" }, changeToken: "request-token" }, null, resolve));
+  assert.equal(response.changeToken, "request-token");
+  assert.deepEqual(broadcasts.at(-1), { source: "AMS_DATA", type: "archiveChanged", changeToken: "request-token" });
+  assert.equal(Object.hasOwn(archives.get(added.id), "changeToken"), false, "change token 不得进入归档记录");
   console.log("archive-data tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

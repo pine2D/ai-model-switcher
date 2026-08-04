@@ -11,6 +11,7 @@ const elTag = document.getElementById("ar-tag");
 let archive = [];
 let archiveCursor = null, selectedId = null;
 let filters = { query: "", favorite: false, tag: "" }, searchToken = 0, searchTimer, pageToken = null;
+const ownChangeTokens = new Set();
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
   submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow",
   not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
@@ -125,9 +126,13 @@ function loadTags() {
   });
 }
 function savePatch(id, patch) {
+  const changeToken = crypto.randomUUID();
+  if (ownChangeTokens.size >= 100) ownChangeTokens.delete(ownChangeTokens.values().next().value);
+  ownChangeTokens.add(changeToken);
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveUpdate", id, patch }, (res) => {
+    chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveUpdate", id, patch, changeToken }, (res) => {
       if (chrome.runtime.lastError || !res?.ok || !res.record) {
+        ownChangeTokens.delete(changeToken);
         document.getElementById("ar-status").textContent = t("arc_updateFailed"); reject(new Error("archive_update_failed")); return;
       }
       replaceEntry(res.record); loadTags(); document.getElementById("ar-status").textContent = ""; resolve(res.record);
@@ -212,7 +217,10 @@ elDel.addEventListener("click", () => {
   dataMessage("archiveDelete", { id: cur.id }, () => { loadTags(); refreshSearch(); });
 });
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.source === "AMS_DATA" && msg.type === "archiveChanged") { loadTags(); refreshSearch(selectedId); }
+  if (msg && msg.source === "AMS_DATA" && msg.type === "archiveChanged") {
+    if (msg.changeToken && ownChangeTokens.delete(msg.changeToken)) return;
+    loadTags(); refreshSearch(selectedId);
+  }
 });
 refreshSearch(); loadTags();
 document.addEventListener("i18n:changed", () => { renderList(); loadTags(); });

@@ -63,12 +63,13 @@ function loadMoreIsSingleFlight() {
 async function updateOnlyAppliesAfterSuccess() {
   const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
-  const pending = [], renders = [];
+  const pending = [], renders = [], listeners = [];
+  let searches = 0, tokenSeq = 0;
   const record = { id: "entry", ts: 1, task: "Question", text: "Question", results: [], favorite: false, tags: [], note: "", winnerHost: null };
   const other = { ...record, id: "other", task: "Other" };
   const chrome = {
-    runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
-      if (message.action === "archiveSearch") return done({ ok: true, items: [record, other], nextCursor: null });
+    runtime: { lastError: null, onMessage: { addListener(fn) { listeners.push(fn); } }, sendMessage(message, done) {
+      if (message.action === "archiveSearch") { searches++; return done({ ok: true, items: [record, other], nextCursor: null }); }
       if (message.action === "archiveTags") return done({ ok: true, tags: [] });
       if (message.action === "archiveUpdate") pending.push({ message, done });
     } },
@@ -78,13 +79,15 @@ async function updateOnlyAppliesAfterSuccess() {
     createElement: () => new El(), createTextNode: () => new El() };
   const ArchiveDetail = { render(entry, options) { renders.push({ entry, options }); }, entryMarkdown: () => "markdown" };
   const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
-    t: (key) => key, applyI18n() {}, ArchiveDetail });
+    t: (key) => key, applyI18n() {}, ArchiveDetail, crypto: { randomUUID: () => `change-${++tokenSeq}` } });
   vm.runInContext(js, context);
   assert.equal(renders.length, 1, "已加载条目应交给详情渲染器");
 
   const saved = renders[0].options.update("entry", { favorite: true });
   assert.equal(typeof saved?.then, "function", "详情更新必须返回 Promise");
-  assert.deepEqual(JSON.parse(JSON.stringify(pending[0].message)), { source: "AMS_DATA", action: "archiveUpdate", id: "entry", patch: { favorite: true } });
+  assert.deepEqual(JSON.parse(JSON.stringify(pending[0].message)), { source: "AMS_DATA", action: "archiveUpdate", id: "entry",
+    patch: { favorite: true }, changeToken: "change-1" });
+  const ownToken = pending[0].message.changeToken;
   assert.equal(vm.runInContext("archive[0].favorite", context), false, "响应成功前不得替换本地记录");
   els["ar-list"].children[1].fire("click");
   assert.equal(vm.runInContext("selectedId", context), "other");
@@ -94,12 +97,30 @@ async function updateOnlyAppliesAfterSuccess() {
   assert.equal(vm.runInContext("archive[0].favorite", context), true);
   assert.equal(vm.runInContext("selectedId", context), "other", "A 的迟到响应不得把选择从 B 切回 A");
   assert.equal(renders.length, rendersBeforeResponse, "A 的迟到响应不得重绘并丢失 B 的详情输入");
+  const searchesBeforeChange = searches;
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged", changeToken: ownToken }));
+  assert.equal(searches, searchesBeforeChange, "本页 archiveUpdate 的 archiveChanged 回流不得刷新 B");
+  assert.equal(renders.length, rendersBeforeResponse, "本页 archiveChanged 回流不得重绘并丢失 B 的详情输入");
+
+  const earlyChange = renders.at(-1).options.update("other", { note: "early-change" });
+  const earlyToken = pending[0].message.changeToken, searchesBeforeEarlyChange = searches;
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged", changeToken: earlyToken }));
+  assert.equal(searches, searchesBeforeEarlyChange, "广播先于响应时也不得刷新当前详情");
+  pending.shift().done({ ok: true, record: { ...other, note: "early-change" } });
+  await earlyChange;
 
   const failed = renders.at(-1).options.update("other", { tags: ["draft"] });
+  const failedToken = pending[0].message.changeToken;
   pending.shift().done({ ok: false });
   await assert.rejects(failed);
   assert.equal(els["ar-status"].textContent, "arc_updateFailed");
   assert.deepEqual(vm.runInContext("archive[0].tags", context), [], "失败更新不得替换本地记录");
+  const searchesBeforeFailedChange = searches;
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged", changeToken: failedToken }));
+  assert.equal(searches, searchesBeforeFailedChange + 1, "失败请求清理 token 后不得误吞后续外部变化");
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged", changeToken: "external" }));
+  listeners.forEach((listener) => listener({ source: "AMS_DATA", type: "archiveChanged" }));
+  assert.equal(searches, searchesBeforeFailedChange + 3, "外部或无 token 的 archiveChanged 必须正常刷新");
 }
 
 loadMoreIsSingleFlight();

@@ -215,12 +215,14 @@ if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addList
     archiveGet: async () => ({ record: await Data.getArchive(msg.id) }),
     archiveSearch: () => Data.searchArchives(msg.cursor, msg.limit, msg.filters || {}),
     archiveTags: async () => ({ tags: await Data.archiveTags() }),
-    archiveUpdate: async () => ({ record: await Data.updateArchive(msg.id, msg.patch), changed: "archiveChanged" }),
+    archiveUpdate: async () => ({ record: await Data.updateArchive(msg.id, msg.patch), changed: "archiveChanged",
+      changeToken: typeof msg.changeToken === "string" ? msg.changeToken : undefined }),
   };
   if (!Object.hasOwn(actions, msg.action)) return;
   actions[msg.action]().then((value) => {
     sendResponse({ ok: true, ...value });
-    if (value.changed) chrome.runtime.sendMessage({ source: "AMS_DATA", type: value.changed });
+    if (value.changed) chrome.runtime.sendMessage({ source: "AMS_DATA", type: value.changed,
+      ...(value.changeToken ? { changeToken: value.changeToken } : {}) });
   }, (error) => sendResponse({ ok: false, code: error.code || "local_write_failed" }));
   return true;
 });
