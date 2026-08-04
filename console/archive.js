@@ -122,22 +122,27 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
     const state = (value && value.amsConsole) || {};
     const sites = SITES.filter((site) => (state.selected || {})[site.host]);
     if (!sites.length) { document.getElementById("ar-status").textContent = t("arc_noSites"); return; }
-    button.disabled = true; document.getElementById("ar-status").textContent = t("arc_capturing");
-    chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites }, (response) => {
-      const byHost = {}; ((response && response.results) || []).forEach((result) => { byHost[result.host] = result; });
-      const entry = {
-        ts: Date.now(), text: (value && value.amsConsolePrompt) || "",
-        results: sites.map((site) => {
-          const result = byHost[site.host] || {};
-          return { host: site.host, label: site.label, text: result.text || null, state: result.state || null, code: result.code || null };
-        }),
-      };
-      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (res) => {
-        button.disabled = false;
-        if (chrome.runtime.lastError || !res?.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
-        selectedId = res.record.id;
-        document.getElementById("ar-status").textContent = t("arc_captured", sites.length);
-        loadPage(true, selectedId);
+    chrome.storage.session.get("amsLastRun", (session) => {
+      const run = session && session.amsLastRun;
+      const matches = Array.isArray(run?.hosts) && run.hosts.length === sites.length && sites.every((site) => run.hosts.includes(site.host));
+      const fallback = (value && value.amsConsolePrompt) || "";
+      button.disabled = true; document.getElementById("ar-status").textContent = t("arc_capturing");
+      chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites }, (response) => {
+        const byHost = {}; ((response && response.results) || []).forEach((result) => { byHost[result.host] = result; });
+        const entry = {
+          ts: Date.now(), text: matches ? run.text : fallback, task: matches ? run.task : fallback, source: matches ? run.source || null : null,
+          results: sites.map((site) => {
+            const result = byHost[site.host] || {};
+            return { host: site.host, label: site.label, text: result.text || null, state: result.state || null, code: result.code || null };
+          }),
+        };
+        chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (res) => {
+          button.disabled = false;
+          if (chrome.runtime.lastError || !res?.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
+          selectedId = res.record.id;
+          document.getElementById("ar-status").textContent = t("arc_captured", sites.length);
+          loadPage(true, selectedId);
+        });
       });
     });
   });

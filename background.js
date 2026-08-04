@@ -107,7 +107,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "openTile") { serializeOp(() => openTile(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "sendAll") {
     const epoch = currentSendEpoch();
-    serializeOp(() => sendAll(msg.sites || [], msg.text || "", msg.tier || null, msg.tile !== false, epoch, msg.images || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true;
+    serializeOp(() => sendAll(msg.sites || [], msg.text || "", msg.tier || null, msg.tile !== false, epoch, msg.images || [], msg.run || {})).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true;
   }
   if (msg.action === "checkup") { serializeOp(() => checkupAll(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "collect") { collectAll(msg.sites || []).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; } // 只读收集回答，同上

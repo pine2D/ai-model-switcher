@@ -71,7 +71,10 @@ async function openTile(sites, prune = true) {
 
 // 发送到全部：有站点尚无窗口则先平铺，再逐站等页面就绪后提交。
 // 用户初次使用无需先点「平铺」：勾选 → 输入 → Enter 即可一步开窗+群发。
-async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), images = []) {
+async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), images = [], run = {}) {
+  const runMeta = { text, task: String(run.task || text), source: run.source || null,
+    hosts: sites.map((site) => site.host), tier: tier || null, sentAt: Date.now() };
+  await chrome.storage.session.set({ amsLastRun: runMeta });
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   const wins = await getWindows();
   let anyMissing = false;
@@ -79,7 +82,8 @@ async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(
   if (tile && anyMissing) await openTile(sites, false); // 隐式开窗不 prune/不重排；retry 传 tile=false 连开窗也免
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   // 进度起点（console/compose 发起都统一）；带 text/tier 让 console 重建 lastSend（compose 发起的失败也能一键重试）
-  pushBroadcast({ type: "sendStart", hosts: sites.map((s) => s.host), text, tier, hasImage: images.length > 0 });
+  pushBroadcast({ type: "sendStart", hosts: runMeta.hosts, text, task: runMeta.task,
+    source: runMeta.source, tier, hasImage: images.length > 0 });
   const wins2 = await getWindows(); // 开窗失败或 retry 不开窗：缺窗站立即报 no_window，不空转到 timeout
   const results = await Promise.all(sites.map(async (s) => {
     if ((await popupWindowForHost(s.host, wins2)) == null) {

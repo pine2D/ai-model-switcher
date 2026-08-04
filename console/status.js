@@ -46,7 +46,7 @@ function applyResults(results) {
 
 // 逐站实时回填：sendAll 期间每站一完成，background 即推单站结果，立刻更新该站圆点（不等全部）
 let progress = { total: 0, done: 0 };
-let lastSend = null; // {text, tier, hasImage, images}
+let lastSend = null; // {text, task, source, tier, hasImage, images}
 const elSend = document.getElementById("send");
 function updateSendLabel() {
   elSend.textContent = (progress.total && progress.done < progress.total) ? t("con_sending", progress.done, progress.total) : t("con_sendAll");
@@ -86,7 +86,7 @@ function buildSummary(sites, results, question) {
 function archiveSummary(sites, results, q) {
   const byHost = {}; results.forEach((r) => { byHost[r.host] = r; });
   const entry = {
-    ts: Date.now(), text: q || "",
+    ts: Date.now(), text: lastSend?.text || q || "", task: lastSend?.task || q || "", source: lastSend?.source || null,
     results: sites.map((s) => { const r = byHost[s.host] || {}; return { host: s.host, label: s.label, text: r.text || null, state: r.state || null, code: r.code || null }; }),
   };
   return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (result) => resolve(!chrome.runtime.lastError && !!result?.ok)));
@@ -144,7 +144,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "sendStart") {
     ignoreResults = false; // 新一轮群发开始，恢复接收结果
     const images = msg.hasImage && lastSend && lastSend.text === msg.text ? lastSend.images : null;
-    if (msg.text) lastSend = { text: msg.text, tier: msg.tier || null, hasImage: !!msg.hasImage, images };
+    if (msg.text) lastSend = { text: msg.text, task: msg.task || msg.text, source: msg.source || null, tier: msg.tier || null, hasImage: !!msg.hasImage, images };
     progress = { total: msg.hosts.length, done: 0 };
     msg.hosts.forEach((h) => setDot(h, "send", t("con_sendingDot")));
     armDotTimeouts(msg.hosts, msg.hasImage ? 95000 : undefined);

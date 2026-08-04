@@ -147,10 +147,10 @@ document.getElementById("send").addEventListener("click", async () => {
   try { if (sentImages.length) images = await imagePayloads(sentImages); }
   catch (e) { elSend.disabled = false; flashNote(t("con_imageRead")); return; }
   pushHistory(text);
-  lastSend = { text, tier: elTier.value || null, hasImage: images.length > 0, images };
+  lastSend = { text, task: text, source: null, tier: elTier.value || null, hasImage: images.length > 0, images };
   const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, images.length ? 95000 : 48000);
   sites.forEach((s) => setDot(s.host, "send", t("con_sendingTile")));
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images }, (resp) => {
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images, run: { task: text, source: null } }, (resp) => {
     clearTimeout(reEnableTimer); elSend.disabled = false; applyResults(resp && resp.results);
   });
   if (pendingImages === sentImages) setPendingImages([], false);
@@ -221,7 +221,7 @@ document.getElementById("retry").addEventListener("click", (e) => {
   const sites = SITES.filter((s) => failHosts.includes(s.host));
   if (!sites.length) return;
   const free = busy(e.currentTarget);
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, images: lastSend.images || [], tile: false }, (resp) => { free(); applyResults(resp && resp.results); });
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, images: lastSend.images || [], tile: false, run: { task: lastSend.task, source: lastSend.source } }, (resp) => { free(); applyResults(resp && resp.results); });
 });
 
 // 伴侣窗编辑 → 经 storage 回填细条输入框（本框未编辑时才更新，防回环）
