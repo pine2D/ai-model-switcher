@@ -155,10 +155,11 @@ async function collectClickKeepsClickedRun() {
   assert.equal(added[1].task, "Question");
   assert.deepEqual(plain(added[1].source), sourceMeta);
   vm.runInNewContext("selected.b = true", context);
-  elements.collect.listeners.click[0](); getDone();
+  elements.prompt.value = "Clicked mismatch";
+  elements.collect.listeners.click[0](); getDone(); elements.prompt.value = "Edited mismatch";
   collectDone({ results: [{ host: "a", text: "A" }, { host: "b", text: "B" }] }); await new Promise(setImmediate);
-  assert.equal(added[2].text, "Draft", "采集范围超出运行 hosts 时应使用当前输入");
-  assert.equal(added[2].task, "Draft");
+  assert.equal(added[2].text, "Clicked mismatch", "采集范围超出运行 hosts 时必须冻结当前输入");
+  assert.equal(added[2].task, "Clicked mismatch");
   assert.equal(added[2].source, null, "采集范围超出运行 hosts 时不得继承旧来源");
   for (const failure of [{ response: undefined }, { response: { results: [] }, runtime: true }, { response: { results: [], code: "error" } }]) {
     elements.collect.listeners.click[0]();
@@ -169,6 +170,17 @@ async function collectClickKeepsClickedRun() {
     assert.equal(added.length, 3, "采集失败不得自动归档");
     assert.equal(elements.failsum.textContent, "con_collectFail");
   }
+  vm.runInNewContext("lastSend = null; selected.b = false", context);
+  sessionRun = null; elements.prompt.value = "Clicked fallback";
+  elements.collect.listeners.click[0](); await Promise.resolve();
+  elements.prompt.value = "Edited before run"; getDone(); await new Promise(setImmediate);
+  const emptyRunMessage = collectMessages.at(-1);
+  assert.equal(Object.hasOwn(emptyRunMessage, "runId"), true, "确认无运行时必须显式锁定 null 身份");
+  assert.equal(emptyRunMessage.runId, null);
+  elements.prompt.value = "Edited before answer";
+  collectDone({ results: [{ host: "a", text: "Fallback" }] }); await new Promise(setImmediate);
+  assert.equal(added.at(-1).task, "Clicked fallback", "fallback 问题必须在点击时冻结");
+  assert.equal(added.at(-1).source, null);
 }
 
 async function collectExceptionHasCode() {

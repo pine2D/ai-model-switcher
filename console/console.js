@@ -165,18 +165,20 @@ document.getElementById("send").addEventListener("click", async () => {
 });
 document.getElementById("collect").addEventListener("click", () => {
   const sites = chosen(); if (!sites.length) return;
-  const collect = (run, snapshot) => {
+  const fallback = elPrompt.value.trim();
+  const collect = (run, snapshot, checked) => {
     const matches = typeof run?.runId === "string" && Array.isArray(run.hosts) && sites.every((site) => run.hosts.includes(site.host));
     const message = { source: "AMS_CONSOLE", action: "collect", sites };
     if (typeof run?.runId === "string") message.runId = run.runId;
+    else if (checked) message.runId = null;
     chrome.runtime.sendMessage(message, (resp) => {
       if (chrome.runtime.lastError || resp?.code || !Array.isArray(resp?.results)) { flashNote(t("con_collectFail")); return; }
-      Promise.resolve(matches ? snapshot : null).then((archive) => copySummary(sites, resp.results, matches ? run.text : elPrompt.value.trim(), archive));
+      Promise.resolve(matches ? snapshot : null).then((archive) => copySummary(sites, resp.results, matches ? run.text : fallback, archive));
     });
   };
   const run = lastSend?.runId && { ...lastSend };
   if (run) { collect(run, archiveRun(run)); return; }
-  archiveRun(null).then((restored) => collect(restored, restored));
+  archiveRun(null).then((restored) => collect(restored, restored, true));
 });
 document.getElementById("archive").addEventListener("click", () => {
   // 受管归档窗（与伴侣窗同款）：幂等打开、随 console 联动最小化/抬前、closeAll 一起关
