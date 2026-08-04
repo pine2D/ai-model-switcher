@@ -107,5 +107,30 @@ assert.equal(updates.filter(({ patch }) => patch.note === "unsaved draft").lengt
 assert.equal(favorite.getAttribute("aria-pressed"), "false", "收藏失败后保留原状态");
 assert.equal(winner.getAttribute("aria-pressed"), "false", "胜出答案失败后保留原状态");
 
+const raceUpdates = [], raceDrafts = new Map(), raceEntry = { ...editable, id: "race", note: "" };
+const renderRace = () => scope.detail.render(raceEntry, { update(id, patch) { raceUpdates.push({ id, patch }); return Promise.resolve(); },
+  errorText: (item) => item.code, draft: raceDrafts.get("race"), onDraft(id, patch) { raceDrafts.set(id, { ...(raceDrafts.get(id) || {}), ...patch }); } });
+renderRace();
+const oldNote = root.querySelector("#ar-note"); oldNote.value = "old"; oldNote.fire("input"); const oldTimer = timers.at(-1);
+renderRace();
+const newNote = root.querySelector("#ar-note"); newNote.value = "new"; newNote.fire("input"); newNote.fire("blur");
+assert.equal(oldTimer.cancelled, true, "下一次 render 应显式取消旧备注定时器");
+if (!oldTimer.cancelled) oldTimer.fn();
+await Promise.resolve(); await Promise.resolve();
+assert.deepEqual(raceUpdates.map(({ patch }) => JSON.stringify(patch)), [JSON.stringify({ note: "new" })], "旧定时器不得在新备注后提交旧值");
+
+const ownerDrafts = new Map(), ownerUpdates = []; let finishOld;
+const renderOwner = () => scope.detail.render({ ...raceEntry, id: "owner" }, { update(id, patch) {
+  ownerUpdates.push({ id, patch }); return patch.note === "old-1" ? new Promise((resolve) => { finishOld = resolve; }) : Promise.resolve();
+}, errorText: (item) => item.code, draft: ownerDrafts.get("owner"), onDraft(id, patch) { ownerDrafts.set(id, { ...(ownerDrafts.get(id) || {}), ...patch }); } });
+renderOwner();
+const ownerOld = root.querySelector("#ar-note"); ownerOld.value = "old-1"; ownerOld.fire("input"); ownerOld.fire("blur"); await Promise.resolve();
+ownerOld.value = "old-2"; ownerOld.fire("input"); renderOwner();
+const ownerNew = root.querySelector("#ar-note"); ownerNew.value = "new"; ownerNew.fire("input"); const ownerNewTimer = timers.at(-1);
+finishOld(); await new Promise((resolve) => setImmediate(resolve));
+assert.equal(ownerNewTimer.cancelled, false, "旧 render 的在途回调不得取消新 render 的备注定时器");
+if (!ownerNewTimer.cancelled) ownerNewTimer.fn(); await Promise.resolve(); await Promise.resolve();
+assert.equal(ownerUpdates.at(-1).patch.note, "new", "新 render 的定时保存仍应正常执行");
+
 console.log("archive detail tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

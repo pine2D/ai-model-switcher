@@ -267,7 +267,7 @@ function latestEntryLoadWins() {
   vm.runInContext(js, context);
   els["ar-list"].children[1].fire("click");
   gets[1].done({ ok: false });
-  els["ar-list"].children[0].fire("click");
+  els["ar-list"].children[0].fire("click"); assert.equal(els["ar-status"].textContent, "", "新正文请求开始时应立即清除上一条目的加载失败状态");
   assert.deepEqual(gets.map((request) => request.id), ["a", "b", "a"], "A→B→A 应创建三次独立正文请求");
   gets[2].done({ ok: true, record: { ...a, note: "fresh", results: [] } });
   assert.equal(renders.at(-1).note, "fresh");

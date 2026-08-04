@@ -1,5 +1,6 @@
 // console/archive-detail.js — 归档详情与人工评价控件
 const ArchiveDetail = (() => {
+  let cancelPendingNote = () => {};
   const successful = (result) => typeof result?.text === "string" && result.text.trim();
   const node = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -26,6 +27,7 @@ const ArchiveDetail = (() => {
     return markdown.join("\n");
   }
   function render(entry, { update, errorText, draft = {}, onDraft = () => {} }) {
+    cancelPendingNote();
     const root = document.getElementById("ar-detail");
     const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).then(() => true, () => false);
     root.replaceChildren(node("h1", "ar-question", entry.task || entry.text || ""));
@@ -57,6 +59,7 @@ const ArchiveDetail = (() => {
     note.value = hasNoteDraft ? draft.note : entry.note || "";
     note.setAttribute("aria-label", t("arc_note"));
     let noteTimer, noteSaving = false, pendingNote = hasNoteDraft ? note.value : null;
+    cancelPendingNote = () => { clearTimeout(noteTimer); noteTimer = null; };
     const saveNote = () => {
       clearTimeout(noteTimer); noteTimer = null;
       if (pendingNote === null || noteSaving) return;

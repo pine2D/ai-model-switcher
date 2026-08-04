@@ -175,6 +175,7 @@ function savePatch(id, patch) {
 }
 function loadEntry(entry) {
   if (entry.results) return;
+  document.getElementById("ar-status").textContent = "";
   const token = ++entryLoadToken;
   chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveGet", id: entry.id }, (res) => {
     void chrome.runtime.lastError;
