@@ -253,6 +253,7 @@ async function getAutoRaise() {
 }
 // 关闭全部：仅关闭控制台新建（owned）的窗口（复用/用户窗口不动），并清空登记；伴侣窗一起关
 async function closeAll() {
+  await clearLastRun();
   const wins = await getWindows();
   for (const host of Object.keys(wins)) {
     if (wins[host].owned) { await removeIfPopup(wins[host].id); }

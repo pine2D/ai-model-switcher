@@ -176,10 +176,11 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
     if (!sites.length) { document.getElementById("ar-status").textContent = t("arc_noSites"); return; }
     chrome.storage.session.get("amsLastRun", (session) => {
       const run = session && session.amsLastRun;
-      const matches = Array.isArray(run?.hosts) && run.hosts.length === sites.length && sites.every((site) => run.hosts.includes(site.host));
+      const matches = typeof run?.runId === "string" && Array.isArray(run.hosts) && run.hosts.length === sites.length && sites.every((site) => run.hosts.includes(site.host));
       const fallback = (value && value.amsConsolePrompt) || "";
       button.disabled = true; document.getElementById("ar-status").textContent = t("arc_capturing");
-      chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites }, (response) => {
+      chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (response) => {
+        if (response?.code) { button.disabled = false; document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
         const byHost = {}; ((response && response.results) || []).forEach((result) => { byHost[result.host] = result; });
         const entry = {
           ts: Date.now(), text: matches ? run.text : fallback, task: matches ? run.task : fallback, source: matches ? run.source || null : null,

@@ -6,6 +6,10 @@ function serializeOp(fn) { const r = _opChain.then(fn, fn); _opChain = r.then(()
 let _sendEpoch = 0;
 function currentSendEpoch() { return _sendEpoch; }
 function cancelPendingSends() { _sendEpoch++; }
+async function clearLastRun() {
+  await chrome.storage.session.remove("amsLastRun");
+  pushBroadcast({ type: "runCleared" });
+}
 const MESSAGE_TIMEOUT = Symbol("message-timeout");
 async function messageBefore(send, deadline) {
   const left = deadline - Date.now();
@@ -73,8 +77,10 @@ async function openTile(sites, prune = true) {
 // 用户初次使用无需先点「平铺」：勾选 → 输入 → Enter 即可一步开窗+群发。
 async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(), images = [], run = {}) {
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
-  const runMeta = { text, task: String(run.task || text), source: run.source || null,
-    hosts: sites.map((site) => site.host), tier: tier || null, sentAt: Date.now() };
+  const now = Date.now();
+  const runId = run.runId || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : now.toString(36) + Math.random().toString(36).slice(2));
+  const runMeta = { runId, text, task: String(run.task || text), source: run.source || null,
+    hosts: Array.isArray(run.hosts) ? run.hosts : sites.map((site) => site.host), tier: run.tier || tier || null, sentAt: run.sentAt || now };
   await chrome.storage.session.set({ amsLastRun: runMeta });
   const wins = await getWindows();
   let anyMissing = false;
@@ -82,8 +88,8 @@ async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(
   if (tile && anyMissing) await openTile(sites, false); // 隐式开窗不 prune/不重排；retry 传 tile=false 连开窗也免
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   // 进度起点（console/compose 发起都统一）；带 text/tier 让 console 重建 lastSend（compose 发起的失败也能一键重试）
-  pushBroadcast({ type: "sendStart", hosts: runMeta.hosts, text, task: runMeta.task,
-    source: runMeta.source, tier, hasImage: images.length > 0 });
+  pushBroadcast({ type: "sendStart", hosts: sites.map((site) => site.host), run: runMeta, text, task: runMeta.task,
+    source: runMeta.source, tier: runMeta.tier, hasImage: images.length > 0 });
   const wins2 = await getWindows(); // 开窗失败或 retry 不开窗：缺窗站立即报 no_window，不空转到 timeout
   const results = await Promise.all(sites.map(async (s) => {
     if ((await popupWindowForHost(s.host, wins2)) == null) {
@@ -200,6 +206,7 @@ function isNewSessionUrl(tabUrl, newUrl) {
 // 全部新会话：把每个站点绑定窗口的 tab 导航到该站新会话 URL（无需各站适配新建按钮）；
 // 已在新会话入口的窗口跳过重载（省闪烁，并保留用户未发送的输入）。
 async function newSessionAll(sites) {
+  await clearLastRun();
   const wins = await getWindows();
   for (const s of sites) {
     if (!s.url) continue;

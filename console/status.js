@@ -83,17 +83,18 @@ function buildSummary(sites, results, question) {
 }
 // 归档快照：用户点汇总/导出的时刻就是"对比现场定格"的时刻，顺带归档——
 // "上次这个问题各家怎么答"从此可回看（console/archive.html）。
-function archiveSummary(sites, results, q) {
+function archiveSummary(sites, results, q, run) {
   const byHost = {}; results.forEach((r) => { byHost[r.host] = r; });
+  const meta = run || lastSend || {};
   const entry = {
-    ts: Date.now(), text: lastSend?.text || q || "", task: lastSend?.task || q || "", source: lastSend?.source || null,
+    ts: Date.now(), text: meta.text || q || "", task: meta.task || q || "", source: meta.source || null,
     results: sites.map((s) => { const r = byHost[s.host] || {}; return { host: s.host, label: s.label, text: r.text || null, state: r.state || null, code: r.code || null }; }),
   };
   return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (result) => resolve(!chrome.runtime.lastError && !!result?.ok)));
 }
-function copySummary(sites, results, question) {
+function copySummary(sites, results, question, run) {
   const { md, miss, q } = buildSummary(sites, results, question);
-  Promise.all([navigator.clipboard.writeText(md), archiveSummary(sites, results, q)]).then(
+  Promise.all([navigator.clipboard.writeText(md), archiveSummary(sites, results, q, run)]).then(
     ([, archived]) => flashNote(archived ? (miss ? t("con_collectDonePart", sites.length, miss) : t("con_collectDone", sites.length)) : t("con_collectDoneUnarchived")),
     () => flashNote(t("con_collectFail"))
   );
@@ -143,11 +144,15 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.from !== "AMS_BG") return;
   if (msg.type === "sendStart") {
     ignoreResults = false; // 新一轮群发开始，恢复接收结果
-    const images = msg.hasImage && lastSend && lastSend.text === msg.text ? lastSend.images : null;
-    if (msg.text) lastSend = { text: msg.text, task: msg.task || msg.text, source: msg.source || null, tier: msg.tier || null, hasImage: !!msg.hasImage, images };
+    const run = msg.run || { text: msg.text, task: msg.task || msg.text, source: msg.source || null, tier: msg.tier || null, hosts: msg.hosts };
+    const images = msg.hasImage && lastSend && (lastSend.runId === run.runId || !lastSend.runId && lastSend.text === run.text) ? lastSend.images : null;
+    if (run.text) lastSend = { ...run, hasImage: !!msg.hasImage, images };
     progress = { total: msg.hosts.length, done: 0 };
     msg.hosts.forEach((h) => setDot(h, "send", t("con_sendingDot")));
     armDotTimeouts(msg.hosts, msg.hasImage ? 95000 : undefined);
+    updateSendLabel(); updateRetry(); updateFailSum();
+  } else if (msg.type === "runCleared") {
+    ignoreResults = true; clearDotTimeouts(); lastSend = null; progress = { total: 0, done: 0 };
     updateSendLabel(); updateRetry(); updateFailSum();
   } else if (msg.type === "siteResult" && msg.result) {
     if (ignoreResults) return; // closeAll 后的迟到结果不复活芯片

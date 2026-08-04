@@ -157,8 +157,11 @@ document.getElementById("send").addEventListener("click", async () => {
 });
 document.getElementById("collect").addEventListener("click", () => {
   const sites = chosen(); if (!sites.length) return;
-  const question = (lastSend && lastSend.text) || elPrompt.value.trim();
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites }, (resp) => copySummary(sites, (resp && resp.results) || [], question));
+  const run = lastSend && { ...lastSend };
+  const question = run?.text || elPrompt.value.trim();
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (resp) => {
+    if (!resp?.code) copySummary(sites, resp?.results || [], question, run);
+  });
 });
 document.getElementById("archive").addEventListener("click", () => {
   // 受管归档窗（与伴侣窗同款）：幂等打开、随 console 联动最小化/抬前、closeAll 一起关
@@ -221,7 +224,8 @@ document.getElementById("retry").addEventListener("click", (e) => {
   const sites = SITES.filter((s) => failHosts.includes(s.host));
   if (!sites.length) return;
   const free = busy(e.currentTarget);
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, images: lastSend.images || [], tile: false, run: { task: lastSend.task, source: lastSend.source } }, (resp) => { free(); applyResults(resp && resp.results); });
+  const run = { runId: lastSend.runId, hosts: lastSend.hosts, task: lastSend.task, source: lastSend.source, tier: lastSend.tier, sentAt: lastSend.sentAt };
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: lastSend.text, tier: lastSend.tier, images: lastSend.images || [], tile: false, run }, (resp) => { free(); applyResults(resp && resp.results); });
 });
 
 // 伴侣窗编辑 → 经 storage 回填细条输入框（本框未编辑时才更新，防回环）

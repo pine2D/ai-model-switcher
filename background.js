@@ -110,7 +110,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     serializeOp(() => sendAll(msg.sites || [], msg.text || "", msg.tier || null, msg.tile !== false, epoch, msg.images || [], msg.run || {})).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true;
   }
   if (msg.action === "checkup") { serializeOp(() => checkupAll(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
-  if (msg.action === "collect") { collectAll(msg.sites || []).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; } // 只读收集回答，同上
+  if (msg.action === "collect") {
+    const epoch = currentSendEpoch(), hasRunId = Object.hasOwn(msg, "runId");
+    const matchesRun = () => new Promise((resolve) => chrome.storage.session.get("amsLastRun", (value) => {
+      void chrome.runtime.lastError; resolve(!hasRunId || (value?.amsLastRun?.runId || null) === (msg.runId || null));
+    }));
+    const active = async () => epoch === currentSendEpoch() && await matchesRun();
+    (async () => {
+      if (!await active()) return { results: [], code: "stale_run" };
+      const results = await collectAll(msg.sites || []);
+      return await active() ? { results } : { results: [], code: "stale_run" };
+    })()
+      .then(sendResponse).catch(() => sendResponse({ results: [] })); return true;
+  } // 只读收集回答，同上
   // 回应完成时刻：console 据此解除按钮忙碌态（操作可能在串行链里排队最长 ~22s，无反馈像卡死）
   if (msg.action === "closeAll") { cancelPendingSends(); serializeOp(closeAll).then(() => sendResponse({}), () => sendResponse({})); return true; }
   if (msg.action === "newSession") { cancelPendingSends(); serializeOp(() => newSessionAll(msg.sites || [])).then(() => sendResponse({}), () => sendResponse({})); return true; }
