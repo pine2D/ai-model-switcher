@@ -102,6 +102,7 @@ async function composeHistoryRejects() {
   } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } } }); }, set(_value, done) { if (done) done(); } }, onChanged: { addListener() {} } } };
   const context = { chrome, document: { getElementById: (id) => els[id], querySelectorAll: () => [], createElement: () => new El("new"), createTextNode: () => new El("text"), addEventListener() {}, hasFocus: () => false },
     ComposeContext: { init: async () => {}, payload: (text) => ({ text, task: text, source: null }) },
+    RunMeta: { clearPending: async () => {} },
     SITES: [{ host: "a", label: "A" }], t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console };
   vm.runInNewContext(fs.readFileSync("console/compose.js", "utf8"), context);
   const sending = els["ch-send"].listeners.click[0]();

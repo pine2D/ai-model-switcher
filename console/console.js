@@ -3,6 +3,11 @@ const elTier = document.getElementById("tier");
 const elTierButtons = [...document.querySelectorAll("#tierbuttons [data-tier]")];
 const elPrompt = document.getElementById("prompt");
 let selected = {};
+let pendingClear = Promise.resolve();
+function clearPendingRun() {
+  pendingClear = RunMeta.clearPending();
+  pendingClear.catch(() => {});
+}
 // 细条历史与范围/档位控件拆在 console/library.js（本文件之前加载，classic script 共享全局）
 
 function render() {
@@ -146,23 +151,27 @@ document.getElementById("send").addEventListener("click", async () => {
   let images = [];
   try { if (sentImages.length) images = await imagePayloads(sentImages); }
   catch (e) { elSend.disabled = false; flashNote(t("con_imageRead")); return; }
+  let run;
+  try { await pendingClear; run = await RunMeta.resolve(text); }
+  catch (error) { elSend.disabled = false; flashNote(t("con_failed")); return; }
   pushHistory(text);
-  lastSend = { text, task: text, source: null, tier: elTier.value || null, hasImage: images.length > 0, images };
+  lastSend = { text, ...run, tier: elTier.value || null, hasImage: images.length > 0, images };
   const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, images.length ? 95000 : 48000);
   sites.forEach((s) => setDot(s.host, "send", t("con_sendingTile")));
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images, run: { task: text, source: null } }, (resp) => {
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images, run }, (resp) => {
     clearTimeout(reEnableTimer); elSend.disabled = false; applyResults(resp && resp.results);
   });
   if (pendingImages === sentImages) setPendingImages([], false);
 });
-document.getElementById("collect").addEventListener("click", () => {
+document.getElementById("collect").addEventListener("click", async () => {
   const sites = chosen(); if (!sites.length) return;
   const run = lastSend && { ...lastSend };
   const matchesRun = run && Array.isArray(run.hosts) && sites.every((site) => run.hosts.includes(site.host));
   const question = matchesRun ? run.text : elPrompt.value.trim();
+  const archive = await archiveRun(matchesRun ? run : null);
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (resp) => {
     if (chrome.runtime.lastError || resp?.code || !Array.isArray(resp?.results)) { flashNote(t("con_collectFail")); return; }
-    copySummary(sites, resp.results, question, matchesRun ? run : { text: question, task: question, source: null });
+    copySummary(sites, resp.results, question, archive);
   });
 });
 document.getElementById("archive").addEventListener("click", () => {
@@ -187,6 +196,7 @@ document.getElementById("closeall").addEventListener("click", (e) => {
 });
 elTier.addEventListener("change", () => { syncTierButtons(); save(); });
 elPrompt.addEventListener("input", () => {
+  clearPendingRun();
   elPrompt.removeAttribute("aria-invalid");
   histCursor = -1; elPrompt.title = ""; // 编辑历史条目即成为新草稿，清位置指示
   chrome.storage.local.set({ amsConsolePrompt: elPrompt.value });
@@ -200,14 +210,14 @@ elPrompt.addEventListener("keydown", (e) => {
   if (e.key === "ArrowUp" && !e.isComposing && history.length) { // IME 方向键选词不劫持
     e.preventDefault();
     if (histCursor === -1) histDraft = elPrompt.value; // 进浏览前先存草稿，↓ 回来可还原
-    histCursor = Math.min(histCursor + 1, history.length - 1);
+    histCursor = Math.min(histCursor + 1, history.length - 1); clearPendingRun();
     elPrompt.value = history[histCursor]; // 浏览期间不落盘：storage 里始终是草稿，误关窗也不丢
     elPrompt.title = t("con_histPos", histCursor + 1, history.length); // 位置指示（悬停可见）
   } else if (e.key === "ArrowDown" && !e.isComposing) {
     if (histCursor === -1) return; // 未在浏览历史 → 不动用户草稿
     e.preventDefault();
-    if (histCursor === 0) { histCursor = -1; elPrompt.value = histDraft; elPrompt.title = ""; }
-    else { histCursor -= 1; elPrompt.value = history[histCursor]; elPrompt.title = t("con_histPos", histCursor + 1, history.length); }
+    if (histCursor === 0) { histCursor = -1; clearPendingRun(); elPrompt.value = histDraft; elPrompt.title = ""; }
+    else { histCursor -= 1; clearPendingRun(); elPrompt.value = history[histCursor]; elPrompt.title = t("con_histPos", histCursor + 1, history.length); }
   }
 });
 

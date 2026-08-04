@@ -128,11 +128,14 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
           done?.(); chrome.runtime.lastError = null;
         },
       },
-      session: { set(value, done) {
-        sessionWrites.push(value);
-        chrome.runtime.lastError = sessionSetFailures-- > 0 ? { message: "session write failed" } : null;
-        done?.(); chrome.runtime.lastError = null;
-      } },
+      session: {
+        set(value, done) {
+          sessionWrites.push(value);
+          chrome.runtime.lastError = sessionSetFailures-- > 0 ? { message: "session write failed" } : null;
+          done?.(); chrome.runtime.lastError = null;
+        },
+        remove(_key, done) { done?.(); },
+      },
       onChanged: { addListener() {} },
     },
   };
@@ -141,10 +144,12 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
     getElementById: (id) => els[id], querySelectorAll: () => [], createElement: () => new El(),
     createTextNode: () => new El(), addEventListener() {}, hasFocus: () => false,
   };
-  vm.runInNewContext(fs.readFileSync("console/compose.js", "utf8"), {
+  const context = vm.createContext({
     chrome, document, ComposeContext, SITES: [{ host: "a", label: "A" }], t: (key) => COPY[language][key] || key,
     applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console,
   });
+  vm.runInContext(fs.readFileSync("console/run-meta.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("console/compose.js", "utf8"), context);
   return { els, messages, localWrites, sessionWrites, initialized: () => initialized, closed: () => closed, releaseInit: () => releaseInit(), sourceMeta };
 }
 

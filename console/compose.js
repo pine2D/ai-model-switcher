@@ -64,11 +64,7 @@ async function persistAndClose() {
   chrome.storage.local.set({ amsConsolePrompt: run.text }, () => {
     const error = chrome.runtime.lastError;
     if (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
-    chrome.storage.session.set({ amsPendingRun: run }, () => {
-      const sessionError = chrome.runtime.lastError;
-      if (sessionError) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
-      window.close();
-    });
+    RunMeta.savePending(run).then(() => window.close(), () => { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); });
   });
 }
 document.getElementById("ch-close").addEventListener("click", persistAndClose);
@@ -176,6 +172,8 @@ document.getElementById("ch-send").addEventListener("click", async () => {
   if (!task) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
   await composeContextReady;
   const payload = ComposeContext.payload(task);
+  try { await RunMeta.clearPending(); }
+  catch (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
   chrome.storage.local.get(["amsConsole"], (o) => {
     const c = (o && o.amsConsole) || {};
     const sites = SITES.filter((s) => (c.selected || {})[s.host]);
