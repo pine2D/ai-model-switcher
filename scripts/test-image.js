@@ -229,7 +229,7 @@ test("图片只进入 tab 消息，sendStart 仅广播 hasImage", async () => {
     runtime: {
       lastError: null,
       sendMessage: (message, callback) => { broadcasts.push(message); if (callback) callback(); },
-    },
+    }, storage: { session: { set: async () => {} } },
     tabs: {
       sendMessage: async (_id, message) => {
         tabMessages.push(message);

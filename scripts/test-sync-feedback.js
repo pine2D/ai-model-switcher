@@ -134,7 +134,10 @@ function archivePageRejects() {
     if (message.source === "AMS_CONSOLE") return done({ results: [] });
     if (message.action === "archiveAdd") return done({ ok: false });
     return done({ ok: true, items: [] });
-  } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } }, amsConsolePrompt: "q" }); } } } };
+  } }, storage: {
+    local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } }, amsConsolePrompt: "q" }); } },
+    session: { get(_key, done) { done({}); } },
+  } };
   const context = { chrome, document: { documentElement: {}, getElementById: (id) => els[id], addEventListener() {}, createElement: () => new El("new"), createTextNode: () => new El("text") },
     navigator: { clipboard: { writeText: () => Promise.resolve() } }, URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, SITES: [{ host: "a", label: "A" }], t: (key) => key, applyI18n() {}, setTimeout, Date };
   vm.runInNewContext(fs.readFileSync("console/archive.js", "utf8"), context);

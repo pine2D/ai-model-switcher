@@ -207,6 +207,7 @@ async function imageBroadcastDeadline() {
   const tabMessages = [];
   const chrome = {
     runtime: { lastError: null, sendMessage: (_message, callback) => callback && callback() },
+    storage: { session: { set: async () => {} } },
     tabs: {
       sendMessage: async (_id, message) => {
         tabMessages.push(message);

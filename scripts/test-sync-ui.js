@@ -30,7 +30,7 @@ assert.ok(!compose.includes("amsHistory") && !compose.includes("slice(0, 20)"));
 assert.ok(!archive.includes("amsArchive") && !background.includes("slice(0, 30)"));
 assert.ok(library.includes('action: "historyAdd"'));
 assert.ok(compose.includes('action: "historyPage"'));
-assert.ok(archive.includes('action: "archivePage"') && archive.includes('action: "archiveGet"'));
+assert.ok(archive.includes('action: "archiveSearch"') && archive.includes('action: "archiveTags"') && archive.includes('action: "archiveGet"'));
 assert.ok(manage.includes("crypto.randomUUID()") && manage.includes("updatedAt: Date.now()"));
 assert.ok(compose.includes('item.text || item.preview || ""'));
 assert.ok(store.includes("accept") && store.includes('!Object.hasOwn(value, "deletedAt")'));

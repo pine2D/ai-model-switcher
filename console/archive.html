@@ -16,6 +16,11 @@
   </div>
   <div id="ar-body">
     <div id="ar-library">
+      <div id="ar-search-row">
+        <input id="ar-search" type="search" data-i18n-ph="arc_searchPh" data-i18n-aria="arc_searchAria">
+        <button id="ar-favorites" type="button" aria-pressed="false" data-i18n="arc_favorites">收藏</button>
+      </div>
+      <select id="ar-tag" data-i18n-aria="arc_tagFilter"><option value="" data-i18n="arc_allTags">全部标签</option></select>
       <div id="ar-list" role="listbox" data-i18n-aria="arc_listAria" aria-label="归档条目"></div>
       <button id="ar-more" type="button" hidden data-i18n="arc_more">加载更多</button>
     </div>

@@ -92,7 +92,7 @@ function testCompanionResponsibilities() {
   assert.ok(!scopeJs.includes('"✓"') && scopeJs.includes('check.state === "checking" ? "…" : ""'), "范围巡检终态应使用共享 SVG 状态图标");
 
   const archive = source("console/archive.html");
-  assert.ok(!archive.includes("<select") && archive.includes('id="ar-list"') && archive.includes('role="listbox"'), "归档应使用自定义可访问列表");
+  assert.ok(archive.includes('<select id="ar-tag"') && archive.includes('id="ar-list"') && archive.includes('role="listbox"'), "归档应使用原生标签筛选和自定义可访问列表");
   for (const id of ["ar-capture", "ar-copy", "ar-export", "ar-del"]) assert.ok(archive.includes(`id="${id}"`), `归档窗应提供 ${id}`);
 }
 function testScopeControls() {

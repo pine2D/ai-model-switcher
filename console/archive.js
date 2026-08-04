@@ -6,8 +6,12 @@ const elDetail = document.getElementById("ar-detail");
 const elCopy = document.getElementById("ar-copy");
 const elExport = document.getElementById("ar-export");
 const elDel = document.getElementById("ar-del");
+const elSearch = document.getElementById("ar-search");
+const elFavorites = document.getElementById("ar-favorites");
+const elTag = document.getElementById("ar-tag");
 let archive = [];
 let archiveCursor = null, selectedId = null;
+let filters = { query: "", favorite: false, tag: "" }, searchToken = 0, searchTimer;
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
   submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow",
   not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
@@ -51,6 +55,10 @@ function renderMd(md, box) {
 function currentEntry() {
   return archive.find((entry) => entry.id === selectedId) || null;
 }
+function replaceEntry(record) {
+  archive = archive.map((entry) => entry.id === record.id ? record : entry);
+  renderList(record.id);
+}
 function renderList(preferredId) {
   selectedId = archive.some((entry) => entry.id === preferredId) ? preferredId
     : archive.some((entry) => entry.id === selectedId) ? selectedId : archive[0] && archive[0].id;
@@ -62,9 +70,16 @@ function renderList(preferredId) {
     button.setAttribute("aria-selected", String(entry.id === selectedId));
     const date = document.createElement("time"); date.textContent = new Date(entry.ts).toLocaleString(document.documentElement.lang || undefined);
     const question = document.createElement("span");
-    const text = entry.text || entry.preview || "";
+    const text = entry.task || entry.preview || entry.text || "";
     question.textContent = text.length > 52 ? text.slice(0, 52) + "…" : (text || "—");
     button.append(date, question);
+    if (entry.favorite || entry.tags?.length) {
+      const badges = document.createElement("div"); badges.className = "ar-badges";
+      for (const text of [...(entry.favorite ? [t("arc_favorites")] : []), ...(entry.tags || [])]) {
+        const badge = document.createElement("span"); badge.className = "ar-badge"; badge.textContent = text; badges.appendChild(badge);
+      }
+      button.appendChild(badges);
+    }
     button.addEventListener("click", () => { selectedId = entry.id; renderList(entry.id); });
     elList.appendChild(button);
   });
@@ -84,12 +99,40 @@ function dataMessage(action, payload, done) {
     if (done) done(res);
   });
 }
-function loadPage(reset, preferredId) {
-  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archivePage", cursor: reset ? null : archiveCursor, limit: 50 }, (res) => {
+function loadPage(reset, preferredId, token = searchToken) {
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveSearch", cursor: reset ? null : archiveCursor, limit: 50, filters: { ...filters } }, (res) => {
     void chrome.runtime.lastError;
+    if (token !== searchToken) return;
     if (!res || !res.ok) { document.getElementById("ar-status").textContent = t("arc_loadFailed"); return; }
     archive = reset ? res.items || [] : archive.concat(res.items || []);
     archiveCursor = res.nextCursor || null; document.getElementById("ar-status").textContent = ""; renderList(preferredId);
+  });
+}
+function refreshSearch(preferredId, delay = 0) {
+  const token = ++searchToken, preferred = preferredId || selectedId;
+  archive = []; archiveCursor = null; elList.replaceChildren(); document.getElementById("ar-more").hidden = true; showCurrent();
+  if (searchTimer) clearTimeout(searchTimer);
+  const run = () => loadPage(true, preferred, token);
+  searchTimer = delay ? setTimeout(run, delay) : (run(), null);
+}
+function loadTags() {
+  if (!elTag) return;
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveTags" }, (res) => {
+    void chrome.runtime.lastError;
+    if (!res?.ok) return;
+    const tags = res.tags || [], selected = filters.tag;
+    const all = document.createElement("option"); all.value = ""; all.textContent = t("arc_allTags");
+    elTag.replaceChildren(all);
+    for (const tag of tags) { const option = document.createElement("option"); option.value = tag; option.textContent = tag; elTag.appendChild(option); }
+    filters.tag = tags.includes(selected) ? selected : ""; elTag.value = filters.tag;
+    if (selected && !filters.tag) refreshSearch();
+  });
+}
+function savePatch(patch, done) {
+  const entry = currentEntry(); if (!entry) return;
+  dataMessage("archiveUpdate", { id: entry.id, patch }, (res) => {
+    if (!res.record) return;
+    replaceEntry(res.record); loadTags(); if (done) done(res.record);
   });
 }
 function loadEntry(entry) {
@@ -103,6 +146,11 @@ function loadEntry(entry) {
   });
 }
 document.getElementById("ar-more").addEventListener("click", () => loadPage(false));
+elSearch?.addEventListener("input", () => { filters.query = elSearch.value; refreshSearch(selectedId, 180); });
+elFavorites?.addEventListener("click", () => {
+  filters.favorite = !filters.favorite; elFavorites.setAttribute("aria-pressed", String(filters.favorite)); refreshSearch(selectedId);
+});
+elTag?.addEventListener("change", () => { filters.tag = elTag.value; refreshSearch(selectedId); });
 elCopy.addEventListener("click", () => {
   const e = currentEntry();
   if (e) navigator.clipboard.writeText(entryMd(e)).then(() => { elCopy.textContent = t("arc_copied"); setTimeout(() => { elCopy.textContent = t("arc_copy"); }, 1500); });
@@ -141,7 +189,7 @@ document.getElementById("ar-capture").addEventListener("click", (event) => {
           if (chrome.runtime.lastError || !res?.ok || !res.record) { document.getElementById("ar-status").textContent = t("arc_saveFailed"); return; }
           selectedId = res.record.id;
           document.getElementById("ar-status").textContent = t("arc_captured", sites.length);
-          loadPage(true, selectedId);
+          loadTags(); refreshSearch(selectedId);
         });
       });
     });
@@ -162,10 +210,10 @@ elDel.addEventListener("click", () => {
     return;
   }
   disarmDel();
-  dataMessage("archiveDelete", { id: cur.id }, () => loadPage(true));
+  dataMessage("archiveDelete", { id: cur.id }, () => { loadTags(); refreshSearch(); });
 });
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.source === "AMS_DATA" && msg.type === "archiveChanged") loadPage(true, selectedId);
+  if (msg && msg.source === "AMS_DATA" && msg.type === "archiveChanged") { loadTags(); refreshSearch(selectedId); }
 });
-loadPage(true);
-document.addEventListener("i18n:changed", () => renderList());
+refreshSearch(); loadTags();
+document.addEventListener("i18n:changed", () => { renderList(); loadTags(); });
