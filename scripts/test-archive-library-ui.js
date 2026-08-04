@@ -14,9 +14,9 @@ assert.ok(js.includes('action: "archiveSearch"'), "结果库应使用 archiveSea
 assert.ok(js.includes('action: "archiveTags"'), "结果库应加载 archiveTags");
 assert.ok(js.includes("searchToken"), "stale search callbacks must be ignored");
 assert.ok(!html.includes("<svg") || (html.match(/<svg/g) || []).length === 1, "do not add nonessential icons");
-assert.equal(html.match(/<html lang="([^"]+)"/)?.[1], "en");
-assert.equal(html.match(/id="ar-detail"[^>]+data-empty="([^"]+)"/)?.[1], "Loading saved result…",
-  "详情区静态 fallback 应与声明的英文页面语言一致");
+assert.equal(html.match(/<html lang="([^"]+)"/)?.[1], "zh-CN");
+assert.equal(html.match(/id="ar-detail"[^>]+data-empty="([^"]+)"/)?.[1], "正在加载已保存的结果…",
+  "详情区静态 fallback 应与声明的简体中文页面语言一致");
 
 class El {
   constructor() { this.listeners = {}; this.classList = { add() {}, remove() {} }; this.children = []; this.value = ""; }

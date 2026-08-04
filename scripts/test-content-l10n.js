@@ -7,6 +7,23 @@ const vm = require("node:vm");
 const LANGS = ["en", "zh_CN", "zh_TW"];
 const htmlFiles = ["popup/popup.html", "options/options.html", "console/console.html", "console/compose.html", "console/scope.html", "console/archive.html"];
 const placeholders = (value) => [...String(value).matchAll(/\{\d+\}|\$[A-Za-z0-9_]+\$/g)].map((match) => match[0]).sort();
+const attribute = (tag, name) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? null;
+function openingTag(source, name, value) {
+  for (const match of source.matchAll(/<([a-z][\w-]*)\b[^>]*>/gi)) {
+    if (attribute(match[0], name) === value) return { name: match[1].toLowerCase(), source: match[0], end: match.index + match[0].length };
+  }
+  assert.fail(`missing element with ${name}="${value}"`);
+}
+function firstTag(source, name) {
+  const match = source.match(new RegExp(`<${name}\\b[^>]*>`, "i"));
+  assert.ok(match, `missing <${name}>`);
+  return match[0];
+}
+function fallbackText(source, element) {
+  const end = source.indexOf(`</${element.name}>`, element.end);
+  assert.notEqual(end, -1, `missing </${element.name}>`);
+  return source.slice(element.end, end).replace(/<[^>]*>/g, "").trim();
+}
 
 function messages() {
   const source = fs.readFileSync("i18n.js", "utf8");
@@ -32,29 +49,29 @@ for (const key of resultLibraryKeys) {
   for (const lang of LANGS) assert.doesNotMatch(rows[key][lang], legacyTerms[lang], `${key}.${lang}: use result library terminology`);
 }
 
-const organizationTerms = {
-  en: ["favorites", "tags", "notes", "best-answer markings"],
-  zh_CN: ["收藏", "标签", "备注", "最佳答案标记"],
-  zh_TW: ["收藏", "標籤", "備註", "最佳答案標記"],
+const dataTerms = {
+  en: ["settings", "templates", "groups", "question history", "AI answers", "favorites", "tags", "notes", "which answer is marked as best"],
+  zh_CN: ["设置", "模板", "分组", "提问历史", "AI 回答", "收藏", "标签", "备注", "哪个回答被标为最佳"],
+  zh_TW: ["設定", "範本", "群組", "提問記錄", "AI 回答", "收藏", "標籤", "備註", "哪個回答被標為最佳"],
 };
-const disclosureTerms = {
-  en: ["plaintext", "end-to-end encryption"],
-  zh_CN: ["明文", "端到端加密"],
-  zh_TW: ["明文", "端對端加密"],
+const driveTerms = {
+  en: ["all data synced to Google Drive", "plaintext", "end-to-end encryption"],
+  zh_CN: ["所有同步到 Google Drive 的数据", "明文", "端到端加密"],
+  zh_TW: ["所有同步到 Google Drive 的資料", "明文", "端對端加密"],
 };
+const transferTerms = { en: ["all data exported", "plaintext", "end-to-end encryption"],
+  zh_CN: ["全部导出数据", "明文", "端到端加密"], zh_TW: ["全部匯出資料", "明文", "端對端加密"] };
 for (const lang of LANGS) {
-  const storage = rows.sync_storage[lang].toLowerCase(), sensitive = rows.sync_sensitive[lang].toLowerCase();
-  const transfer = rows.sync_transferPlain[lang].toLowerCase();
+  const intro = rows.sync_intro[lang].toLowerCase(), storage = rows.sync_storage[lang].toLowerCase();
+  const sensitive = rows.sync_sensitive[lang].toLowerCase(), transfer = rows.sync_transferPlain[lang].toLowerCase();
+  assert.ok(intro.includes(dataTerms[lang][2].toLowerCase()), `sync_intro.${lang}: missing groups`);
   assert.ok(storage.includes(rows.arc_title[lang].toLowerCase()), `sync_storage.${lang}: missing result library`);
-  for (const term of organizationTerms[lang]) {
+  for (const term of dataTerms[lang]) {
     assert.ok(storage.includes(term.toLowerCase()), `sync_storage.${lang}: missing ${term}`);
-    assert.ok(sensitive.includes(term.toLowerCase()), `sync_sensitive.${lang}: missing ${term}`);
     assert.ok(transfer.includes(term.toLowerCase()), `sync_transferPlain.${lang}: missing ${term}`);
   }
-  for (const term of disclosureTerms[lang]) {
-    assert.ok(sensitive.includes(term.toLowerCase()), `sync_sensitive.${lang}: missing ${term}`);
-    assert.ok(transfer.includes(term.toLowerCase()), `sync_transferPlain.${lang}: missing ${term}`);
-  }
+  for (const term of driveTerms[lang]) assert.ok(sensitive.includes(term.toLowerCase()), `sync_sensitive.${lang}: missing ${term}`);
+  for (const term of transferTerms[lang]) assert.ok(transfer.includes(term.toLowerCase()), `sync_transferPlain.${lang}: missing ${term}`);
 }
 
 const locales = Object.fromEntries(LANGS.map((lang) => [lang, JSON.parse(fs.readFileSync(`_locales/${lang}/messages.json`, "utf8"))]));
@@ -67,6 +84,7 @@ for (const [key, value] of Object.entries(locales.en)) assert.doesNotMatch(value
 
 for (const file of htmlFiles) {
   const source = fs.readFileSync(file, "utf8");
+  assert.equal(attribute(firstTag(source, "html"), "lang"), "zh-CN", `${file}: initial language differs from fallback content`);
   for (const match of source.matchAll(/data-i18n(?:-title|-ph|-aria)?="([^"]+)"/g)) {
     assert.ok(rows[match[1]], `${file}: missing i18n key ${match[1]}`);
   }
@@ -77,12 +95,22 @@ for (const file of ["console/archive.js", "console/archive-detail.js"]) {
 }
 
 const consoleHtml = fs.readFileSync("console/console.html", "utf8");
-assert.ok(consoleHtml.includes(`title="${rows.con_archiveTitle.zh_CN}" aria-label="${rows.con_archiveTitle.zh_CN}"`), "console result library fallback differs");
+const libraryButton = openingTag(consoleHtml, "data-i18n-title", "con_archiveTitle");
+assert.equal(attribute(libraryButton.source, "data-i18n-aria"), "con_archiveTitle");
+assert.equal(attribute(libraryButton.source, "title"), rows.con_archiveTitle.zh_CN);
+assert.equal(attribute(libraryButton.source, "aria-label"), rows.con_archiveTitle.zh_CN);
 const archiveHtml = fs.readFileSync("console/archive.html", "utf8");
-assert.ok(archiveHtml.includes(`data-i18n-aria="arc_listAria" aria-label="${rows.arc_listAria.zh_CN}"`), "result library list fallback differs");
+const libraryList = openingTag(archiveHtml, "data-i18n-aria", "arc_listAria");
+assert.equal(attribute(libraryList.source, "aria-label"), rows.arc_listAria.zh_CN);
+assert.equal(attribute(openingTag(archiveHtml, "id", "ar-detail").source, "data-empty"), rows.arc_loading.zh_CN);
+const scopeHtml = fs.readFileSync("console/scope.html", "utf8"), scopeTitle = openingTag(scopeHtml, "data-i18n", "con_groupAria");
+assert.equal(scopeTitle.name, "title"); assert.equal(fallbackText(scopeHtml, scopeTitle), rows.con_groupAria.zh_CN);
 const optionsHtml = fs.readFileSync("options/options.html", "utf8");
+const optionsTitle = openingTag(optionsHtml, "data-i18n", "settings_title");
+assert.equal(optionsTitle.name, "title"); assert.equal(fallbackText(optionsHtml, optionsTitle), rows.settings_title.zh_CN);
 for (const key of ["sync_intro", "sync_storage", "sync_sensitive", "sync_transferPlain"]) {
-  assert.ok(optionsHtml.includes(`data-i18n="${key}">${rows[key].zh_CN}</`), `${key}: HTML fallback differs`);
+  const element = openingTag(optionsHtml, "data-i18n", key);
+  assert.equal(fallbackText(optionsHtml, element), rows[key].zh_CN, `${key}: HTML fallback differs`);
 }
 assert.doesNotMatch(fs.readFileSync("README.md", "utf8"), /归档|歸檔|封存/);
 const changelog = fs.readFileSync("CHANGELOG.md", "utf8"), unreleased = changelog.slice(changelog.indexOf("## [未发布]"), changelog.indexOf("## [0.13.0]"));
