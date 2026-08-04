@@ -171,7 +171,20 @@ body.compose [hidden]{display:none!important}
 #cmp-template-name{min-width:0;height:30px;box-sizing:border-box;padding:0 8px;border:1px solid var(--name-line);border-radius:7px;background:var(--name-fill);color:var(--text)}
 #cmp-confirm-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2);font-size:11px}
 #cmp-confirm-yes{border-color:var(--danger-line);background:var(--danger-fill);color:var(--danger)}
+#cmp-editor{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+#cmp-source{flex:none;max-height:45%;box-sizing:border-box;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--fill-2);overflow:auto;color:var(--text-2);font-size:11px}
+#cmp-source-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text)}
+#cmp-source-head strong{margin-left:5px}
+#cmp-source-remove{height:28px}
+#cmp-source-kind,#cmp-source-count{margin-top:4px;color:var(--text-3)}
+#cmp-source-url{display:block;margin-top:4px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cmp-source details{margin-top:6px}
+#cmp-source summary{cursor:pointer;color:var(--text-2)}
+#cmp-source-detail{margin:6px 0 0;padding:7px;border-radius:7px;background:var(--fill);white-space:pre-wrap;overflow-wrap:anywhere}
+#cmp-source-replace{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--edge)}
+#cmp-source-replace span{margin-right:auto}
 #ch-text{min-width:0;min-height:120px;margin:0;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--fill-2);color:var(--text);font-size:13px;line-height:1.6;resize:none;font-family:inherit}
+#cmp-editor #ch-text{flex:1;width:100%;box-sizing:border-box}
 #ch-text::placeholder{color:var(--faint)}
 #ch-foot{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--edge);flex-wrap:wrap} /* 伴侣窗宽随 console 输入框，窄时按钮换行不溢出 */
 #ch-foot .scope{flex:1 0 100%;font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

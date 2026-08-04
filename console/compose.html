@@ -33,7 +33,24 @@
         <button id="cmp-confirm-no" type="button" data-i18n="con_cancel">取消</button>
       </div>
     </aside>
-    <textarea id="ch-text" data-i18n-ph="cmp_ph" placeholder="输入要群发的问题…（Ctrl+Enter 发送）"></textarea>
+    <section id="cmp-editor">
+      <div id="cmp-source" hidden>
+        <div id="cmp-source-head">
+          <div><span data-i18n="cmp_source">网页来源</span> <strong id="cmp-source-title"></strong></div>
+          <button id="cmp-source-remove" type="button" data-i18n="cmp_sourceRemove">移除来源</button>
+        </div>
+        <div id="cmp-source-kind"></div>
+        <a id="cmp-source-url" target="_blank" rel="noreferrer"></a>
+        <div id="cmp-source-count"></div>
+        <details><summary data-i18n="cmp_sourceDetail">采集内容</summary><p id="cmp-source-detail"></p></details>
+        <div id="cmp-source-replace" hidden>
+          <span data-i18n="cmp_sourceReplaceQuestion">替换当前来源？</span>
+          <button id="cmp-source-replace-yes" type="button" data-i18n="cmp_sourceReplace">替换</button>
+          <button id="cmp-source-replace-no" type="button" data-i18n="cmp_sourceKeep">保留当前来源</button>
+        </div>
+      </div>
+      <textarea id="ch-text" data-i18n-ph="cmp_ph" placeholder="输入要群发的问题…（Ctrl+Enter 发送）"></textarea>
+    </section>
   </div>
   <div id="ch-foot">
     <span id="ch-scope" class="scope" role="status" aria-live="polite" tabindex="-1"></span>
@@ -41,5 +58,7 @@
     <button id="ch-send" data-i18n="cmp_send">发送到全部</button>
   </div>
   <script src="sites.js"></script>
+  <script src="workspace-i18n.js"></script>
+  <script src="compose-context.js"></script>
   <script src="compose.js"></script>
 </body></html>

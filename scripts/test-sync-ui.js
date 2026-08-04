@@ -14,7 +14,7 @@ assert.equal([...idBytes].map((byte) => String.fromCharCode(97 + (byte >> 4), 97
 
 const runtimeFiles = [
   "background.js", "i18n.js", "console/theme.js", "content/pill.js", "popup/popup.js",
-  "console/console.js", "console/compose.js", "console/scope.js", "console/archive.js",
+  "console/console.js", "console/compose-context.js", "console/compose.js", "console/scope.js", "console/archive.js",
 ];
 const syncRuntimeFiles = runtimeFiles.filter((file) => fs.readFileSync(file, "utf8").includes("storage.sync"));
 assert.deepEqual(syncRuntimeFiles, [], "运行时代码不得再读写 Chrome Sync");

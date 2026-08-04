@@ -89,7 +89,7 @@ function historyRace() {
   assert.equal(context.testApi.getHistory().join(","), "B,old", "A 失败不得抹掉随后成功的 B 或原有顺序");
 }
 
-function composeHistoryRejects() {
+async function composeHistoryRejects() {
   const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template", "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel", "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
   const els = Object.fromEntries(ids.map((id) => [id, new El(id)]));
   els["ch-text"].value = "question";
@@ -101,14 +101,16 @@ function composeHistoryRejects() {
     if (done) done({ ok: true });
   } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true } } }); }, set(_value, done) { if (done) done(); } }, onChanged: { addListener() {} } } };
   const context = { chrome, document: { getElementById: (id) => els[id], querySelectorAll: () => [], createElement: () => new El("new"), createTextNode: () => new El("text"), addEventListener() {}, hasFocus: () => false },
+    ComposeContext: { init: async () => {}, payload: (text) => ({ text, task: text, source: null }) },
     SITES: [{ host: "a", label: "A" }], t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console };
   vm.runInNewContext(fs.readFileSync("console/compose.js", "utf8"), context);
-  els["ch-send"].listeners.click[0]();
+  const sending = els["ch-send"].listeners.click[0]();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(messages.some((message) => message.action === "sendAll"), false, "历史写入完成前不得关闭 compose 或发送");
   historyDone({ ok: false });
   assert.equal(messages.some((message) => message.from === "AMS_COMPOSE" && message.type === "historySaveFailed"), true, "历史失败必须通知主控制台可见反馈");
   assert.equal(messages.some((message) => message.action === "sendAll"), false, "主控制台收到失败提示前不得关闭 compose 或发送");
-  feedbackDone();
+  feedbackDone(); await sending;
   assert.equal(messages.some((message) => message.action === "sendAll"), true, "历史失败不得阻断 AI 群发");
   assert.equal(closed, 1, "历史回调后仍应关闭 compose");
 }
@@ -152,7 +154,7 @@ function archivePageRejects() {
   await blockedFeedback();
   historyRejects();
   historyRace();
-  composeHistoryRejects();
+  await composeHistoryRejects();
   await archiveRejects();
   archivePageRejects();
   console.log("sync feedback UI checks passed");

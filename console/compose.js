@@ -1,5 +1,6 @@
 // console/compose.js — 提示词工作区：编辑、模板、历史与发送。
 applyI18n();
+const composeContextReady = ComposeContext.init().catch(() => {});
 const elText = document.getElementById("ch-text");
 const elList = document.getElementById("cmp-list");
 const elActions = document.getElementById("cmp-actions");
@@ -57,8 +58,18 @@ function setKind(kind) {
 }
 document.querySelectorAll("#cmp-tabs [data-kind]").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
 
-function persistAndClose() {
-  chrome.storage.local.set({ amsConsolePrompt: elText.value }, () => window.close());
+async function persistAndClose() {
+  await composeContextReady;
+  const run = ComposeContext.payload(elText.value.trim());
+  chrome.storage.local.set({ amsConsolePrompt: run.text }, () => {
+    const error = chrome.runtime.lastError;
+    if (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
+    chrome.storage.session.set({ amsPendingRun: run }, () => {
+      const sessionError = chrome.runtime.lastError;
+      if (sessionError) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
+      window.close();
+    });
+  });
 }
 document.getElementById("ch-close").addEventListener("click", persistAndClose);
 document.getElementById("ch-back").addEventListener("click", persistAndClose);
@@ -160,16 +171,18 @@ document.addEventListener("i18n:changed", () => {
 elText.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); document.getElementById("ch-send").click(); }
 });
-document.getElementById("ch-send").addEventListener("click", () => {
-  const text = elText.value.trim();
-  if (!text) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
+document.getElementById("ch-send").addEventListener("click", async () => {
+  const task = elText.value.trim();
+  if (!task) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
+  await composeContextReady;
+  const payload = ComposeContext.payload(task);
   chrome.storage.local.get(["amsConsole"], (o) => {
     const c = (o && o.amsConsole) || {};
     const sites = SITES.filter((s) => (c.selected || {})[s.host]);
     if (!sites.length) { const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
-    chrome.storage.local.set({ amsConsolePrompt: elText.value }, () => {
-      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text }, (result) => {
-        const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: c.tier || null, run: { task: text, source: null } }); window.close(); };
+    chrome.storage.local.set({ amsConsolePrompt: payload.text }, () => {
+      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text: payload.text }, (result) => {
+        const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier: c.tier || null, run: { task: payload.task, source: payload.source } }); window.close(); };
         if (chrome.runtime.lastError || !result?.ok) chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, send);
         else send();
       });
