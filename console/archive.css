@@ -1,4 +1,4 @@
-/* console/archive.css — 归档只读页（独立 popup，不受 96px 细条约束） */
+/* console/archive.css — 归档页（独立 popup，不受 96px 细条约束） */
 body.archive{display:flex;flex-direction:column;height:100vh;margin:0;padding:10px;box-sizing:border-box;
   background:var(--strip-b);color:var(--text);font:13px/1.5 -apple-system,"Segoe UI",sans-serif}
 #ar-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -35,6 +35,25 @@ body.archive{display:flex;flex-direction:column;height:100vh;margin:0;padding:10
 #ar-detail::-webkit-scrollbar{width:10px}
 #ar-detail::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:5px;border:2px solid var(--bg)}
 #ar-detail:empty::before{content:attr(data-empty);color:var(--faint)}
+.ar-question{margin:0 0 4px;font-size:17px;line-height:1.4}
+.ar-source{margin-bottom:10px;color:var(--text-3)}
+.ar-source a{color:var(--accent)}
+.ar-controls{display:grid;grid-template-columns:auto minmax(140px,1fr) minmax(220px,2fr);align-items:end;gap:8px;margin:10px 0}
+.ar-controls button,.ar-controls input,.ar-controls textarea,.ar-sites button,.ar-winner{box-sizing:border-box;border:1px solid var(--line);border-radius:7px;
+  background:var(--fill-2);color:var(--text);font:inherit}
+.ar-controls button,.ar-sites button,.ar-winner{padding:6px 10px;cursor:pointer}
+.ar-field{display:flex;flex-direction:column;gap:3px;color:var(--text-3);font-size:11px}
+.ar-field input,.ar-field textarea{width:100%;padding:6px 8px;resize:vertical}
+.ar-field textarea{min-height:34px;max-height:120px}
+.ar-favorite[aria-pressed="true"],.ar-winner[aria-pressed="true"]{border-color:var(--active-line);background:var(--active-bg);color:var(--active-text)}
+.ar-sites{display:flex;flex-wrap:wrap;gap:5px;margin:12px 0 4px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.ar-answer{padding:10px 0;border-bottom:1px solid var(--line)}
+.ar-answer:last-child{border-bottom:0}
+.ar-answer-head{display:flex;align-items:center;gap:8px}
+.ar-answer-head h2{flex:1;margin:0;color:var(--accent);font-size:13.5px}
+.ar-answer-body{margin-top:5px}
+.ar-controls :focus-visible,.ar-sites button:focus-visible,.ar-winner:focus-visible{outline:2px solid var(--active-line);outline-offset:1px}
+@media(max-width:700px){.ar-controls{grid-template-columns:auto 1fr}.ar-field:last-child{grid-column:1/-1}}
 /* 极简 md 渲染块（archive.js renderMd） */
 .ar-mh{font-weight:700;margin:10px 0 4px}
 .ar-mh1{font-size:15px;border-bottom:1px solid var(--line);padding-bottom:6px}

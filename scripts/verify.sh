@@ -35,6 +35,7 @@ node scripts/test-content-l10n.js
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-background.js
 node scripts/test-archive-capture.js
+node scripts/test-archive-detail.js
 node scripts/test-archive-library-ui.js
 node scripts/test-console-polish.js
 node scripts/test-icon-system.js

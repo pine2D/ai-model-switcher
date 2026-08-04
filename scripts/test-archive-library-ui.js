@@ -44,7 +44,7 @@ function loadMoreIsSingleFlight() {
   const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
     createElement: () => new El(), createTextNode: () => new El() };
   const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
-    t: (key) => key, applyI18n() {} });
+    t: (key) => key, applyI18n() {}, ArchiveDetail: { render() {}, entryMarkdown: () => "markdown" } });
   vm.runInContext(js, context);
 
   els["ar-more"].fire("click"); els["ar-more"].fire("click");
@@ -60,6 +60,40 @@ function loadMoreIsSingleFlight() {
   assert.deepEqual(vm.runInContext("archive.map((entry) => entry.id)", context), ["base-2", "page"], "分页结果不得重复追加");
 }
 
-loadMoreIsSingleFlight();
+async function updateOnlyAppliesAfterSuccess() {
+  const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture", "ar-search", "ar-favorites", "ar-tag"];
+  const els = Object.fromEntries(ids.map((id) => [id, new El()]));
+  const pending = [], renders = [];
+  const record = { id: "entry", ts: 1, task: "Question", text: "Question", results: [], favorite: false, tags: [], note: "", winnerHost: null };
+  const chrome = {
+    runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) {
+      if (message.action === "archiveSearch") return done({ ok: true, items: [record], nextCursor: null });
+      if (message.action === "archiveTags") return done({ ok: true, tags: [] });
+      if (message.action === "archiveUpdate") pending.push({ message, done });
+    } },
+    storage: { local: { get() {} }, session: { get() {} } },
+  };
+  const document = { documentElement: {}, getElementById: (id) => els[id], addEventListener() {},
+    createElement: () => new El(), createTextNode: () => new El() };
+  const ArchiveDetail = { render(entry, options) { renders.push({ entry, options }); }, entryMarkdown: () => "markdown" };
+  const context = vm.createContext({ chrome, document, navigator: {}, URL, Blob, SITES: [], Date, setTimeout, clearTimeout,
+    t: (key) => key, applyI18n() {}, ArchiveDetail });
+  vm.runInContext(js, context);
+  assert.equal(renders.length, 1, "已加载条目应交给详情渲染器");
 
-console.log("archive library UI contract tests passed");
+  const saved = renders[0].options.update({ favorite: true });
+  assert.equal(typeof saved?.then, "function", "详情更新必须返回 Promise");
+  assert.equal(vm.runInContext("archive[0].favorite", context), false, "响应成功前不得替换本地记录");
+  pending.shift().done({ ok: true, record: { ...record, favorite: true } });
+  assert.equal((await saved).favorite, true);
+  assert.equal(vm.runInContext("archive[0].favorite", context), true);
+
+  const failed = renders.at(-1).options.update({ tags: ["draft"] });
+  pending.shift().done({ ok: false });
+  await assert.rejects(failed);
+  assert.equal(els["ar-status"].textContent, "arc_updateFailed");
+  assert.deepEqual(vm.runInContext("archive[0].tags", context), [], "失败更新不得替换本地记录");
+}
+
+loadMoreIsSingleFlight();
+updateOnlyAppliesAfterSuccess().then(() => console.log("archive library UI contract tests passed"), (error) => { console.error(error); process.exitCode = 1; });

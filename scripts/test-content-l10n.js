@@ -37,5 +37,9 @@ for (const file of htmlFiles) {
     assert.ok(rows[match[1]], `${file}: missing i18n key ${match[1]}`);
   }
 }
+for (const file of ["console/archive.js", "console/archive-detail.js"]) {
+  const source = fs.readFileSync(file, "utf8");
+  for (const match of source.matchAll(/\bt\("([^"]+)"/g)) assert.ok(rows[match[1]], `${file}: missing i18n key ${match[1]}`);
+}
 
 console.log("[content-l10n] locale coverage, placeholders, keys, and punctuation passed");

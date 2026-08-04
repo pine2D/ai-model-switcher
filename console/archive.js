@@ -1,5 +1,4 @@
-// console/archive.js — 归档只读页：汇总复制/导出时定格的「问题+各站回答」快照的
-// 列表与详情。md 重建与 console/status.js 的 buildSummary 对齐（本页无 console 全局，独立小实现）。
+// console/archive.js — 归档页：管理汇总复制/导出时定格的「问题+各站回答」快照。
 applyI18n();
 const elList = document.getElementById("ar-list");
 const elDetail = document.getElementById("ar-detail");
@@ -17,15 +16,7 @@ const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errN
   not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
 function resultError(r) { return t(ARCH_ERR_KEYS[r.code] || "con_errNoAnswer"); }
 
-function entryMd(e) {
-  const md = ["# " + t("con_mdHeader") + " · " + new Date(e.ts).toLocaleString(document.documentElement.lang || undefined)];
-  if (e.text) md.push("\n**" + t("con_mdQuestion") + "**: " + e.text);
-  for (const r of e.results || []) {
-    const tier = r.state === "think" ? " · " + t("con_mdThink") : r.state === "fast" ? " · " + t("con_mdFast") : "";
-    md.push("\n## " + r.label + tier + "\n", r.text ? r.text : "> " + resultError(r));
-  }
-  return md.join("\n");
-}
+function entryMd(e) { return ArchiveDetail.entryMarkdown(e, resultError); }
 // 详情区极简行级渲染（标题/引用/围栏/行内粗体，其余原样）：回看场景读内容而非 md 源码；
 // 「复制」仍取 entryMd 源文（看=渲染，复制=可再粘贴的 Markdown）。全程 textContent 组装，无注入面。
 function renderMd(md, box) {
@@ -90,7 +81,7 @@ function renderList(preferredId) {
 function showCurrent() {
   const e = currentEntry();
   elDetail.replaceChildren();
-  if (e && e.results) renderMd(entryMd(e), elDetail);
+  if (e && e.results) ArchiveDetail.render(e, { update: savePatch, errorText: resultError });
   elCopy.disabled = elExport.disabled = elDel.disabled = !e || !e.results;
 }
 function dataMessage(action, payload, done) {
@@ -131,11 +122,15 @@ function loadTags() {
     if (selected && !filters.tag) refreshSearch();
   });
 }
-function savePatch(patch, done) {
+function savePatch(patch) {
   const entry = currentEntry(); if (!entry) return;
-  dataMessage("archiveUpdate", { id: entry.id, patch }, (res) => {
-    if (!res.record) return;
-    replaceEntry(res.record); loadTags(); if (done) done(res.record);
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveUpdate", id: entry.id, patch }, (res) => {
+      if (chrome.runtime.lastError || !res?.ok || !res.record) {
+        document.getElementById("ar-status").textContent = t("arc_updateFailed"); reject(new Error("archive_update_failed")); return;
+      }
+      replaceEntry(res.record); loadTags(); document.getElementById("ar-status").textContent = ""; resolve(res.record);
+    });
   });
 }
 function loadEntry(entry) {
