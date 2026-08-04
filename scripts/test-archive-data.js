@@ -25,6 +25,8 @@ vm.runInContext(fs.readFileSync("bg/data.js", "utf8") + ";this.data=Data", scope
 async function main() {
   const data = scope.data;
   const added = await data.addArchive({ text: "Prompt", task: "Question", results: [{ host: "a", label: "A", text: "Answer" }] });
+  assert.equal(added.schema, 1);
+  assert.equal(added.preview, "Prompt");
   const changed = await data.updateArchive(added.id, { favorite: true, tags: ["work"], note: "keep", winnerHost: "a" });
   assert.equal(changed.favorite, true);
   assert.equal(outbox.get(`archive:${added.id}`).kind, "archive");

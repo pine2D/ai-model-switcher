@@ -11,6 +11,23 @@ function driveRuntime(handler) {
   return { drive: scope.drive, requests };
 }
 
+function archiveStore(rows) {
+  const cursor = () => {
+    let index = 0, req;
+    const advance = () => {
+      const value = rows[index++];
+      req.result = value && { value, continue: () => queueMicrotask(advance) };
+      req.onsuccess?.();
+    };
+    req = {}; queueMicrotask(advance); return req;
+  };
+  const db = { transaction: () => ({ objectStore: () => ({ index: () => ({ openCursor: cursor }) }) }) };
+  const indexedDB = { open: () => { const req = {}; queueMicrotask(() => { req.result = db; req.onsuccess?.(); }); return req; } };
+  const scope = vm.createContext({ indexedDB, IDBKeyRange: { upperBound: () => {} }, queueMicrotask });
+  vm.runInContext(fs.readFileSync("bg/store.js", "utf8") + ";this.store=SyncStore", scope);
+  return scope.store;
+}
+
 async function assertSyncStreams(total) {
   const meta = new Map(), local = new Map(); let imported = 0, maxBatch = 0, accumulatedCalls = 0, trims = 0;
   const store = {
@@ -74,8 +91,9 @@ async function main() {
   const source = fs.readFileSync("bg/store.js", "utf8");
   assert.ok(!source.includes(".getAll("), "IDB iterate/trim 不得把 store 或 outbox 全集读入内存");
   assert.match(source, /logicalKey[^\n]+unique:\s*false/, "logicalKey 索引必须允许重复 fileId");
-  assert.match(source, /function searchArchives[\s\S]*!Object\.hasOwn\(value, "deletedAt"\)/, "deletedAt:0 也必须作为 archive tombstone 隐藏");
-  assert.match(source, /pageArchives: \(cursor, limit\) => searchArchives\(cursor, limit\)/, "archive 翻页必须复用筛选扫描");
+  const store = archiveStore([{ id: "new", createdAt: 3, favorite: true }, { id: "gone", createdAt: 2, deletedAt: 0 }, { id: "old", createdAt: 1 }]);
+  assert.deepEqual(Array.from((await store.searchArchives(null, 50, (row) => row.favorite)).items, (row) => row.id), ["new"]);
+  assert.deepEqual(Array.from((await store.pageArchives(null, 50)).items, (row) => row.id), ["new", "old"]);
   const verify = fs.readFileSync("scripts/verify.sh", "utf8");
   for (const file of ["test-sync-integrity.js", "test-sync-scale.js", "test-sync-feedback.js"])
     assert.ok(verify.includes(file), `verify.sh 必须执行 ${file}`);

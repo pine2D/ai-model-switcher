@@ -37,7 +37,8 @@ const Data = (() => {
   }
   async function addArchive(entry = {}) {
     const createdAt = entry.createdAt || Date.now(), id = entry.id || crypto.randomUUID(), deviceId = await getDeviceId();
-    const record = ArchiveModel.normalize(entry, { id, now: createdAt, deviceId });
+    const record = { ...ArchiveModel.normalize(entry, { id, now: createdAt, deviceId }), schema: SyncModel.SCHEMA,
+      preview: entry.preview || SyncModel.utf8Preview(entry.text || "") };
     await SyncStore.putArchive(record);
     await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
     await SyncStore.trimBodies(200, 50);
