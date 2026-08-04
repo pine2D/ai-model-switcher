@@ -29,6 +29,9 @@ for file in "${JS_FILES[@]}"; do
   [ "$lines" -le 300 ] || { echo "✗ $file: $lines 行" >&2; exit 1; }
 done
 
+echo "[test] 用户可见文案与本地化"
+node scripts/test-content-l10n.js
+
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-background.js
 node scripts/test-console-polish.js

@@ -6,16 +6,16 @@
 <link rel="stylesheet" href="console.css"></head>
 <body class="compose">
   <div id="ch-head">
-    <div class="t"><svg class="logo lucide lucide-pencil" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg> <span data-i18n="cmp_title">编辑群发问题</span></div>
+    <div class="t"><svg class="logo lucide lucide-pencil" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg> <span data-i18n="cmp_title">提示词工作区</span></div>
     <button id="ch-close" class="icon" data-i18n-title="cmp_close" data-i18n-aria="cmp_close" title="关闭" aria-label="关闭"><svg class="lucide lucide-x" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
   </div>
   <div id="cmp-main">
-    <aside id="cmp-library" data-i18n-aria="cmp_libraryAria" aria-label="提示词素材">
+    <aside id="cmp-library" data-i18n-aria="cmp_libraryAria" aria-label="提示词模板与历史">
       <div id="cmp-tabs" role="tablist">
         <button id="cmp-tab-templates" type="button" role="tab" aria-selected="true" data-kind="templates" data-i18n="cmp_templates">模板</button>
         <button id="cmp-tab-history" type="button" role="tab" aria-selected="false" data-kind="history" data-i18n="cmp_history">历史</button>
       </div>
-      <div id="cmp-list" role="listbox" data-i18n-aria="cmp_libraryAria" aria-label="提示词素材"></div>
+      <div id="cmp-list" role="listbox" data-i18n-aria="cmp_libraryAria" aria-label="提示词模板与历史"></div>
       <button id="cmp-more" type="button" hidden data-i18n="cmp_more">加载更多</button>
       <span id="cmp-status" role="status" aria-live="polite"></span>
       <div id="cmp-actions">
@@ -37,7 +37,7 @@
   </div>
   <div id="ch-foot">
     <span id="ch-scope" class="scope" role="status" aria-live="polite" tabindex="-1"></span>
-    <button id="ch-back" data-i18n="cmp_back">回填并关闭</button>
+    <button id="ch-back" data-i18n="cmp_back">填入提示词并关闭</button>
     <button id="ch-send" data-i18n="cmp_send">发送到全部</button>
   </div>
   <script src="sites.js"></script>

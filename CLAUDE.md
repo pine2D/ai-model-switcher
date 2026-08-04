@@ -1,6 +1,6 @@
 # PolyAsk · AI 众答
 
-Chrome MV3 扩展。两大能力：①**群发对比**——一个问题群发到多个 AI、真实窗口同屏平铺对比，各站最新回答可一键**汇总复制为 Markdown**（核心）；②在 9 个 AI 站点**独立访问**时一键切换「深度思考/快速模型」。
+Chrome MV3 扩展。两大能力：①**群发对比**——一个问题群发到多个 AI、真实窗口同屏平铺对比，各站最新回答可一键**汇总复制为 Markdown**（核心）；②在 9 个 AI 站点**独立访问**时一键切换「深度思考/快速模型」。另提供 Google Drive 数据同步、迁移包和统一设置页。
 
 ## 加新站点
 
@@ -9,27 +9,30 @@ Chrome MV3 扩展。两大能力：①**群发对比**——一个问题群发�
 ## 架构
 
 ```
-background.js               快捷键转发(commands→tabs.sendMessage{source:AMS,mode}) + 群发控制台编排
+background.js               Service Worker 入口：快捷键转发并加载 bg/ 模块
+bg/                         窗口/面板/群发编排 + IndexedDB 数据 + Google Drive 同步/迁移
 content/core.js             helpers + toast + __AMS 注册表 + runMode/switchTier + submitPrompt + onMessage
 content/md.js               可见 DOM→Markdown 通用序列化（汇总复制用，挂 __AMS.toMarkdown；隐藏节点/按钮剔除）
 content/adapters-intl.js    Claude/ChatGPT/Gemini
 content/adapters-cn.js      DeepSeek/豆包/千问
 content/adapters-cn2.js     Kimi/元宝/智谱清言（cn 触及 300 行上限后按站拆分）
-content/pill.js             三态悬浮控件(handle/always/hidden, storage.sync displayMode, Shadow DOM)
+content/pill.js             三态悬浮控件(handle/always/hidden, storage.local displayMode, Shadow DOM)
+content/upload.js           图片选择、校验与站点附件注入
 console/console.html|css|js 群发指挥台(固定 96px 单行专业紧凑条 popup；档位/发送/平铺/汇总复制/联动)
 console/scope.html|js       站点范围伴侣窗(连续多选/分组管理/站点巡检；失焦关闭，不改变主 console 高度)
 console/status.js           群发进度/结果状态(圆点状态机/错误码翻译/失败汇总/汇总复制拼装/aria-live；console.js 之后加载共享其全局)
 console/compose.html|js     提示词工作区(长文本编辑/模板管理/历史/发送)
 console/archive.html|js     结果工作区(采集当前结果/归档列表/复制/导出/删除)
 console/sites|theme.js      站点清单(console/伴侣窗共享)、主题
-popup/                      🧠/⚡按钮 + 主题/语言/显示模式/自动置顶 + 快捷键展示 + 🩺诊断 + 打开控制台
+popup/                      🧠/⚡按钮 + 快捷键展示 + 🩺诊断 + 打开控制台/设置
+options/                    统一设置页：常规 + Google Drive 同步 + 迁移包 + 数据与隐私
 ```
-- 权限：`storage`、`tabs`、`system.display`（群发要 tabs.sendMessage/query + 多显示器工作区；无 host_permissions）。
+- 权限：`storage`、`tabs`、`system.display`、`identity`、`alarms`（群发窗口、Google OAuth 与定时同步；无 host_permissions）。
 - 适配器契约：每站 `{think, fast, state(), diagnose()}`（可选 `submit(el)`、`answer()`、`inject(el,text)`）；state/diagnose/answer **只读不开菜单**。`inject` 返回 false=交回通用注入链（beforeinput→execCommand→textContent）；**抛异常=通用链对本站不安全**（如 Kimi），core 直接报 `inject_failed` 不回退。
 
 ## 群发控制台（console）编排 —— 实战沉淀
 
-控制台是贴顶、占满屏宽、固定高 96px(`STRIP_H`) 的独立 `type:"popup"` 窗口；下方平铺各 AI 站点窗口。编排全在 `background.js`。
+控制台是贴顶、占满屏宽、固定高 96px(`STRIP_H`) 的独立 `type:"popup"` 窗口；下方平铺各 AI 站点窗口。`background.js` 是入口，具体编排按职责拆在 `bg/`。
 
 - **popup-only 铁律（安全核心）**：所有「host→窗口」解析收敛到 `popupWindowForHost(host,wins)`，**只返回 `type:"popup"`，绝不碰用户日常浏览窗口(`type:"normal"`)**；关窗经 `removeIfPopup(id)`（get 校验 type 再 remove）。openTile/sendAll/focusAll/minimizeAll/newSession 全走它。曾因裸 `tabs.query({url})` 误把用户日常窗口收编进平铺/广播/新会话（清空对话），故铁律不可破。
 - **登记表 `amsWindows` host→{id,owned}**：owned=true 仅 `windows.create(popup)` 新建（closeAll 可自动关）；复用/收编窗口 owned=false（不擅自关）。
@@ -38,7 +41,7 @@ popup/                      🧠/⚡按钮 + 主题/语言/显示模式/自动�
 - **联动**（弃用 `onFocusChanged`——Windows 上常不派发也不唤醒 SW）：由 console **页面 DOM 事件**驱动——window `focus` → `consoleFocused` 消息经 ~180ms 去抖抬整组工作区；`visibilitychange` hidden → `consoleHidden`，后台核实 `state==="minimized"` 才联动 `minimizeAllManaged`（区分最小化 vs 被遮挡）。`onRemoved`==console 窗口 → `closeAll`(仅 owned)。console 窗口 id 存 `amsConsoleWin`。
 - **平铺基准与保留高度**：基准工作区取 `consoleWorkArea()`（console 中心点所在显示器——拖到哪屏铺哪屏，也根治副屏 reserve 混坐标系）；保留高度用控制台**实际底边 `c.top+c.height`**（非硬编码 96）——WSL2/X410 给每个窗口套 ~30px 标题栏（Chrome 如实报告在 `top`），只用 height 会漏掉上移、致平铺压住控制台。
 - **薄弹窗限制**：96px 窗口里的自定义 DOM 浮层会被裁切；需要纵向空间的历史/模板、站点范围/巡检、归档/导出分别进入 `compose.html`、`scope.html`、`archive.html` 独立 popup，主 console 不使用原生下拉且始终保持 96px。
-- storage keys：`amsConsole{selected,tier,prompt}`、`amsWindows`、`amsHistory`(≤20 去重)、`amsTemplates`、`amsGroups`、`amsArchive`(≤30 条汇总快照，archive.html 查看)、`amsConsoleWin`、`amsComposeWin`、`amsScopeWin`、`amsArchiveWin`、`amsConsolePrefill`(popup 带站一次性)、`amsAutoRaise`(bool，popup 开关：发送后自动置顶)。窗口 id 类 key 在 `onStartup` 一律清空（id 跨重启失效）；每个新建平铺窗都使用站点新会话 URL，只有既有受管 popup 延续当前对话。
+- 数据位置：常规设置、模板、分组和同步状态在 `storage.local`；受管站点窗口表 `amsWindows` 在 `storage.session`；问题历史、归档、同步 outbox 和远端文件索引在 IndexedDB。历史与归档不设 PolyAsk 条数上限，但本地仅缓存近期正文，较旧正文按需从 Google Drive 读取。`amsConsoleWin`、`amsComposeWin`、`amsScopeWin`、`amsArchiveWin` 等窗口 id 在 `onStartup` 清空（id 跨重启失效）；每个新建平铺窗都使用站点新会话 URL，只有既有受管 popup 延续当前对话。
 
 ## 注入与提交（submitPrompt / switchTier）—— 实战沉淀
 
@@ -80,3 +83,13 @@ popup/                      🧠/⚡按钮 + 主题/语言/显示模式/自动�
 - 已发布 tag 不覆盖；若需改内容必须升新版本。仅验包可运行 `bash scripts/release.sh --build-only`。
 - `docs/superpowers/`、`.superpowers/`、`.spec-workflow/` 与 `.codegraph/` 已 gitignore（本地工作文档不入库）。
 - 单文件 ≤300 行（JS）；超了按 intl/cn 之类职责拆分。
+
+### 发布前文案与文档核查
+
+- 核对 `README.md`、`CHANGELOG.md`、扩展说明和设置页是否覆盖本版新增功能、限制、权限、隐私行为及最新模型映射；删除已经失效的入口或描述。
+- 凡修改用户可见文案，必须使用 `content-l10n` skill 检查三语语义、术语、占位符、快捷键、URL、文件格式和长度限制。不得只改一种语言。
+- 英文散文用 `humanizer` 自查，中文散文用 `humanizer-zh` 自查。重点清理破折号群、广告腔、三连套式、空泛总结和宣传性强化，不改写技术事实。
+- 破坏性操作、明文存储、权限范围、不可撤销后果和数据保留规则不得弱化；按钮、确认文案与实际动作必须一致。
+- 运行 `node scripts/test-content-l10n.js`，确认三语键覆盖、占位符一致、HTML i18n 引用有效，且英文用户文案不含长破折号。
+- 在 English、简体中文和繁體中文下检查 popup、控制台、范围、提示词、归档和设置页，确认切换语言后无截断、异常换行或缺失的 aria-label。
+- 确认 `CHANGELOG.md` 的「未发布」段已记录所有用户可感知变更，再运行 `bash scripts/verify.sh` 和 `bash scripts/release.sh --build-only`。
