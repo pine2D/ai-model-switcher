@@ -139,6 +139,13 @@ function armDotTimeouts(hosts, ms) {
     dotTimers.set(h, timer);
   });
 }
+function clearRunState() {
+  ignoreResults = true; clearDotTimeouts();
+  [...document.querySelectorAll(".chip")].forEach((chip) => {
+    chip.classList.remove("send", "open", "done", "fail"); chip.title = chip.dataset.label + " · " + t("con_chipHint"); chip.setAttribute("aria-label", chip.dataset.label);
+  });
+  lastSend = null; progress = { total: 0, done: 0 }; updateSendLabel(); updateRetry(); updateFailSum();
+}
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.from === "AMS_COMPOSE" && msg.type === "historySaveFailed") { flashNote(t("con_historySaveFailed")); return; }
   if (!msg || msg.from !== "AMS_BG") return;
@@ -152,8 +159,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     armDotTimeouts(msg.hosts, msg.hasImage ? 95000 : undefined);
     updateSendLabel(); updateRetry(); updateFailSum();
   } else if (msg.type === "runCleared") {
-    ignoreResults = true; clearDotTimeouts(); lastSend = null; progress = { total: 0, done: 0 };
-    updateSendLabel(); updateRetry(); updateFailSum();
+    clearRunState();
   } else if (msg.type === "siteResult" && msg.result) {
     if (ignoreResults) return; // closeAll 后的迟到结果不复活芯片
     applyResults([msg.result]);

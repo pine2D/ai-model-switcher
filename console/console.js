@@ -181,10 +181,7 @@ document.addEventListener("keydown", (e) => {
 document.getElementById("closeall").addEventListener("click", (e) => {
   const free = busy(e.currentTarget);
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "closeAll" }, () => { void chrome.runtime.lastError; free(); });
-  ignoreResults = true; // 在途群发的迟到结果不得复活刚清空的芯片（下一次 sendStart/tile/checkup 解除）
-  clearDotTimeouts();
-  [...document.querySelectorAll('.chip')].forEach((c) => { c.classList.remove("send", "open", "done", "fail"); c.title = c.dataset.label + " · " + t("con_chipHint"); c.setAttribute("aria-label", c.dataset.label); });
-  progress = { total: 0, done: 0 }; updateSendLabel(); lastSend = null; updateRetry(); updateFailSum();
+  clearRunState(); // 在途群发的迟到结果不得复活刚清空的芯片（下一次 sendStart/tile/checkup 解除）
 });
 elTier.addEventListener("change", () => { syncTierButtons(); save(); });
 elPrompt.addEventListener("input", () => {

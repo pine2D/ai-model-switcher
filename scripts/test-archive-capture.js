@@ -46,9 +46,10 @@ async function staleRunDoesNotReplaceMetadata() {
 }
 
 class El {
-  constructor() { this.disabled = this.hidden = false; this.textContent = ""; this.style = {}; this.listeners = {}; this.classList = { add() {}, remove() {} }; }
+  constructor() { this.disabled = this.hidden = false; this.textContent = ""; this.style = {}; this.listeners = {}; this.attrs = {}; this.dataset = {}; const names = new Set(); this.classList = { add: (...v) => v.forEach((x) => names.add(x)), remove: (...v) => v.forEach((x) => names.delete(x)), toggle: (x, on) => on ? names.add(x) : names.delete(x), contains: (x) => names.has(x) }; }
   addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
-  setAttribute() {} replaceChildren() {} appendChild() {} append() {} click() {}
+  setAttribute(key, value) { this.attrs[key] = String(value); } getAttribute(key) { return this.attrs[key] || null; }
+  removeAttribute(key) { delete this.attrs[key]; } replaceChildren() {} appendChild() {} append() {} click() {} querySelectorAll() { return []; } focus() {} scrollBy() {} setPointerCapture() {}
 }
 function archiveCaptureUsesRunIdentity() {
   const ids = ["ar-list", "ar-detail", "ar-copy", "ar-export", "ar-del", "ar-more", "ar-status", "ar-capture"];
@@ -84,21 +85,38 @@ function archiveCaptureUsesRunIdentity() {
   assert.equal(added[1].source, null);
 }
 
-function delayedSummaryKeepsClickedRun() {
-  let receive, added;
-  const elements = Object.fromEntries(["failsum", "live", "send", "retry"].map((id) => [id, new El()]));
-  const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receive = fn; } }, sendMessage(message, done) {
-    if (message.action === "archiveAdd") added = message.entry;
-    done?.({ ok: true });
-  } } };
-  const context = { chrome, document: { documentElement: {}, getElementById: (id) => elements[id], querySelector: () => null, querySelectorAll: () => [] },
-    navigator: { clipboard: { writeText: () => Promise.resolve() } }, t: (key) => key, setTimeout: () => 0, clearTimeout: () => {}, Date, Map, console };
+function runClearedResetsChips() {
+  let receive;
+  const elements = Object.fromEntries(["failsum", "live", "send", "retry"].map((id) => [id, new El()])), chip = new El();
+  chip.dataset = { host: "a", label: "A" }; chip.title = "old"; chip.setAttribute("aria-label", "old"); ["send", "open", "done", "fail"].forEach((x) => chip.classList.add(x));
+  const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receive = fn; } }, sendMessage() {} } };
+  const context = { chrome, document: { documentElement: {}, getElementById: (id) => elements[id], querySelector: () => chip, querySelectorAll: () => [chip] },
+    selected: {}, t: (key) => key, setTimeout: () => 0, clearTimeout: () => {}, Date, Map, console };
   vm.runInNewContext(source("console/status.js"), context);
+  receive({ from: "AMS_BG", type: "runCleared" });
+  ["send", "open", "done", "fail"].forEach((x) => assert.equal(chip.classList.contains(x), false));
+  assert.equal(chip.title, "A · con_chipHint"); assert.equal(chip.getAttribute("aria-label"), "A");
+}
+
+async function collectClickKeepsClickedRun() {
+  const ids = ["sites", "tier", "prompt", "sites-l", "sites-r", "bar", "group", "tile", "send", "collect", "archive", "newsession", "closeall", "compose", "retry", "failsum", "live"];
+  const elements = Object.fromEntries(ids.map((id) => [id, new El()])), receivers = []; let collectDone, added;
+  elements.tier.value = "think"; elements.prompt.value = "Draft";
+  const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receivers.push(fn); } }, sendMessage(message, done) {
+    if (message.action === "collect") { collectDone = done; return; }
+    if (message.action === "archiveAdd") { added = message.entry; return done?.({ ok: true }); }
+    done?.({ ok: true, items: [] });
+  } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true }, tier: "think" }, amsConsolePrompt: "Draft" }); }, set() {} }, onChanged: { addListener() {} } } };
+  const context = { chrome, document: { documentElement: {}, activeElement: null, getElementById: (id) => elements[id], querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() },
+    window: { addEventListener() {} }, navigator: { clipboard: { writeText: () => Promise.resolve() } }, ResizeObserver: class { observe() {} }, SITES: [{ host: "a", label: "A", on: true }],
+    t: (key) => key, applyI18n() {}, syncTierButtons() {}, syncGroupSelect() {}, history: [], histCursor: -1, histDraft: "", pendingImages: [], pushHistory() {}, imagePayloads: async () => [], setPendingImages() {}, setTimeout: () => 0, clearTimeout() {}, Date, Map, console };
+  vm.runInNewContext(source("console/console.js"), context); vm.runInNewContext(source("console/status.js"), context);
   const sourceMeta = { kind: "selection", title: "Source", url: "https://example.test", truncated: false, capturedAt: 3 };
   const run = { runId: "run-1", text: "Full prompt", task: "Question", source: sourceMeta, hosts: ["a"], tier: "think", sentAt: 1 };
-  receive({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run, text: run.text, task: run.task, source: run.source, tier: run.tier, hasImage: false });
-  receive({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: { ...run, runId: "run-2", text: "New prompt", task: "New task" }, text: "New prompt", task: "New task", source: null, tier: "fast", hasImage: false });
-  context.archiveSummary([{ host: "a", label: "A" }], [{ host: "a", text: "Answer" }], "Full prompt", run);
+  receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run, hasImage: false }));
+  elements.collect.listeners.click[0]();
+  receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: { ...run, runId: "run-2", text: "New prompt", task: "New task", source: null }, hasImage: false }));
+  collectDone({ results: [{ host: "a", text: "Answer" }] }); await Promise.resolve(); await Promise.resolve();
   assert.equal(added.text, "Full prompt");
   assert.equal(added.task, "Question");
   assert.deepEqual(plain(added.source), sourceMeta);
@@ -173,7 +191,8 @@ async function closeAllClearsRun() {
   await retryKeepsLogicalRun();
   await staleRunDoesNotReplaceMetadata();
   archiveCaptureUsesRunIdentity();
-  delayedSummaryKeepsClickedRun();
+  runClearedResetsChips();
+  await collectClickKeepsClickedRun();
   await collectRejectsRunThatChangesDuringRead();
   await collectRejectsNullIdentityAndCancellation();
   await sessionsClearRun();
