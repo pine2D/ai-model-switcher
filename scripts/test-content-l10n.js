@@ -12,6 +12,7 @@ function messages() {
   const source = fs.readFileSync("i18n.js", "utf8");
   const scope = {};
   vm.runInNewContext(`${source.slice(0, source.indexOf("\nconst I18N_LANGS"))}\nglobalThis.result = MSG;`, scope);
+  vm.runInNewContext(fs.readFileSync("console/workspace-i18n.js", "utf8"), { MSG: scope.result, applyI18n() {} });
   vm.runInNewContext(fs.readFileSync("options/options-i18n.js", "utf8"), { MSG: scope.result, applyI18n() {} });
   return scope.result;
 }

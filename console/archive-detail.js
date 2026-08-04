@@ -37,7 +37,7 @@ const ArchiveDetail = (() => {
       source.appendChild(link); root.appendChild(source);
     }
     const controls = node("div", "ar-controls");
-    const favorite = node("button", "ar-favorite", t("arc_favorite"));
+    const favorite = node("button", "ar-favorite", t("arc_favorites"));
     favorite.id = "ar-favorite"; favorite.type = "button"; favorite.setAttribute("aria-pressed", String(!!entry.favorite));
     favorite.addEventListener("click", () => save({ favorite: !entry.favorite }));
     const tags = node("input", "ar-tags"); tags.id = "ar-tags"; tags.value = (entry.tags || []).join(", ");
@@ -60,7 +60,7 @@ const ArchiveDetail = (() => {
       const tier = result.state === "think" ? " · " + t("con_mdThink") : result.state === "fast" ? " · " + t("con_mdFast") : "";
       heading.appendChild(node("h2", "", result.label + tier));
       if (successful(result)) {
-        const winner = node("button", "ar-winner", t("arc_markBest"));
+        const winner = node("button", "ar-winner", t(entry.winnerHost === result.host ? "arc_unmarkBest" : "arc_best"));
         winner.type = "button"; winner.setAttribute("aria-pressed", String(entry.winnerHost === result.host));
         winner.addEventListener("click", () => save({ winnerHost: entry.winnerHost === result.host ? null : result.host })); heading.appendChild(winner);
       }

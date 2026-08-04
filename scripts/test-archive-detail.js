@@ -29,8 +29,8 @@ class El {
 
 const root = new El();
 const document = { createElement: (tag) => new El(tag), getElementById: (id) => id === "ar-detail" ? root : root.querySelector("#" + id) };
-const messages = { arc_favorite: "Favorite", arc_tags: "Tags", arc_note: "Private note", arc_sites: "Sites",
-  arc_question: "Question", arc_source: "Source", arc_bestAnswer: "Best answer: {0}", arc_markBest: "Mark as best answer",
+const messages = { arc_favorites: "Favorites", arc_tags: "Tags", arc_note: "Note", arc_sites: "Sites",
+  arc_question: "Question", arc_source: "Source", arc_bestAnswer: "Best answer: {0}", arc_best: "Mark as best", arc_unmarkBest: "Clear best answer",
   con_mdThink: "Deep think", con_mdFast: "Fast", con_errNoAnswer: "No answer" };
 const t = (key, ...values) => values.reduce((text, value, index) => text.replaceAll(`{${index}}`, value), messages[key] || key);
 const renderMd = (md, box) => { box.textContent = md; };
@@ -44,6 +44,7 @@ const entry = { id: "x", task: "Question", text: "Question", favorite: true, tag
 scope.detail.render(entry, { update: async () => entry, errorText: (item) => item.code });
 assert.equal(root.querySelectorAll(".ar-answer").length, 2);
 assert.equal(root.querySelectorAll(".ar-winner").length, 1);
+assert.equal(root.querySelector(".ar-winner").textContent, "Clear best answer");
 assert.equal(root.querySelector("#ar-favorite").getAttribute("aria-pressed"), "true");
 assert.equal(root.querySelector("#ar-tags").value, "work");
 assert.equal(root.querySelector("#ar-note").value, "private note");
@@ -58,6 +59,7 @@ const editable = { ...entry, favorite: false, winnerHost: null,
 const rejectUpdate = (id, patch) => { updates.push({ id, patch }); return Promise.reject(new Error("save failed")); };
 scope.detail.render(editable, { update: rejectUpdate, errorText: (item) => item.code });
 assert.equal(root.querySelectorAll(".ar-sites").length, 1, "详情应提供站点导航");
+assert.equal(root.querySelector(".ar-winner").textContent, "Mark as best");
 assert.equal(root.querySelector("a").getAttribute("href"), "https://example.test/");
 assert.match(scope.detail.entryMarkdown(editable), /\[Source\]\(https:\/\/example\.test\/\)/);
 const hostileSource = { ...editable, source: { kind: "page", title: "Bad [title]\\\nnext", url: "https://example.test/a (b)?q=hello world" } };
