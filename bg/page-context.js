@@ -59,7 +59,7 @@ const PageContext = (() => {
     try { return ["http:", "https:"].includes(new URL(tab?.url || "").protocol); } catch (e) { return false; }
   }
 
-  function capSelection(value) {
+  function capText(value) {
     const chars = [...String(value || "").trim()];
     const truncated = chars.length > 30000;
     return {
@@ -68,22 +68,49 @@ const PageContext = (() => {
     };
   }
 
+  function extractPage(rootDocument = document) {
+    const root = rootDocument.querySelector("article") || rootDocument.querySelector("main") ||
+      rootDocument.querySelector('[role="main"]') || rootDocument.body;
+    return String(root?.innerText || "").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  async function pageFailure(code) {
+    await callbackApi((done) => chrome.storage.session.set({ amsComposeContextError: code }, done));
+    await openCompose();
+    return { ok: false, code };
+  }
+
   async function handleClick(info, tab) {
     if (info?.menuItemId !== MENU_SELECTION && info?.menuItemId !== MENU_PAGE) return { ok: false };
-    if (!canRead(tab)) return { ok: false, code: "page_access_denied" };
-    if (info.menuItemId === MENU_PAGE) return { ok: false };
+    const isPage = info.menuItemId === MENU_PAGE;
+    if (!canRead(tab)) return isPage ? pageFailure("page_access_denied") : { ok: false, code: "page_access_denied" };
 
-    const { text, truncated } = capSelection(info.selectionText);
-    if (!text) return { ok: false, code: "page_empty" };
+    let value = info.selectionText;
+    if (isPage) {
+      try {
+        const [{ result = "" } = {}] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: extractPage,
+        });
+        value = result;
+      } catch (e) {
+        return pageFailure("page_access_denied");
+      }
+    }
+
+    const { text, truncated } = capText(value);
+    if (!text) return isPage ? pageFailure("page_empty") : { ok: false, code: "page_empty" };
     const context = {
-      kind: "selection",
+      kind: isPage ? "page" : "selection",
       title: String(tab.title || ""),
       url: tab.url,
       text,
       truncated,
       capturedAt: Date.now(),
     };
-    await callbackApi((done) => chrome.storage.session.set({ amsComposeContext: context }, done));
+    const values = { amsComposeContext: context };
+    if (isPage) values.amsComposeContextError = null;
+    await callbackApi((done) => chrome.storage.session.set(values, done));
     await openCompose();
     return { ok: true, context };
   }
@@ -95,5 +122,5 @@ const PageContext = (() => {
   });
   chrome.contextMenus.onClicked.addListener((info, tab) => { void handleClick(info, tab).catch(() => {}); });
 
-  return { MENU_SELECTION, MENU_PAGE, installMenus, handleClick };
+  return { MENU_SELECTION, MENU_PAGE, installMenus, handleClick, capText, extractForTest: extractPage };
 })();

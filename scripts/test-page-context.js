@@ -16,18 +16,16 @@ let uiLanguage = "zh-TW";
 let removed = 0;
 let opened = 0;
 let saved = {};
+let pageDocument = { querySelector: () => null, body: { innerText: "page body" } };
 const created = [];
 const executions = [];
+const sessionWrites = [];
 const menus = new Map();
 const menuOps = [];
-const failNext = { get: null, create: null, session: null };
+const failNext = { get: null, create: null, session: null, execute: null };
 let delayMenus = false;
 
-function takeError(name) {
-  const message = failNext[name];
-  failNext[name] = null;
-  return message;
-}
+function takeError(name) { const message = failNext[name]; failNext[name] = null; return message; }
 
 function invokeCallback(callback, message, value) {
   chrome.runtime.lastError = message ? { message } : null;
@@ -94,7 +92,10 @@ const chrome = {
   scripting: {
     executeScript(options) {
       executions.push(options);
-      return Promise.resolve([{ result: "page body" }]);
+      const message = takeError("execute");
+      if (message) return Promise.reject(new Error(message));
+      const result = vm.runInNewContext(`(${options.func.toString()})()`, { document: pageDocument });
+      return Promise.resolve([{ result }]);
     },
   },
   storage: {
@@ -110,7 +111,10 @@ const chrome = {
       set(value, callback) {
         assert.equal(typeof callback, "function");
         const message = takeError("session");
-        if (!message) saved = plain(value);
+        if (!message) {
+          sessionWrites.push(plain(value));
+          Object.assign(saved, plain(value));
+        }
         invokeCallback(callback, message);
       },
     },
@@ -118,20 +122,23 @@ const chrome = {
   },
 };
 
-const context = vm.createContext({
-  chrome,
-  console,
-  Date,
-  URL,
-  openCompose: async () => { opened++; },
-});
+const context = vm.createContext({ chrome, console, Date, URL, openCompose: async () => { opened++; } });
 vm.runInContext(source("bg/page-context.js"), context);
 const PageContext = vm.runInContext("PageContext", context);
 
 async function run() {
-  assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), {
-    installed: 1, startup: 1, changed: 1, clicked: 1,
-  });
+  const doc = (nodes = {}, body = "Body") => ({ querySelector: (selector) => nodes[selector] || null, body: { innerText: body } });
+  assert.equal(PageContext.extractForTest(doc({ article: { innerText: " Article body " } })), "Article body");
+  assert.equal(PageContext.extractForTest(doc({ main: { innerText: " Main body " }, '[role="main"]': { innerText: "Role body" } })), "Main body");
+  assert.equal(PageContext.extractForTest(doc({ '[role="main"]': { innerText: " Role body " } })), "Role body");
+  assert.equal(PageContext.extractForTest(doc({}, " Body fallback ")), "Body fallback");
+  assert.equal(PageContext.extractForTest(doc({ article: { innerText: " A\r\nB\rC\n\n\n\nD " } })), "A\nB\nC\n\nD");
+  const capped = PageContext.capText("a".repeat(24001) + "MIDDLE" + "z".repeat(6001));
+  assert.equal([...capped.text].length, 30000);
+  assert.equal(capped.text, "a".repeat(24000) + "z".repeat(6000));
+  assert.equal(capped.truncated, true);
+
+  assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), { installed: 1, startup: 1, changed: 1, clicked: 1 });
 
   await PageContext.installMenus();
   assert.deepEqual(created.map((item) => item.id), ["ams-send-selection", "ams-send-page"]);
@@ -163,19 +170,15 @@ async function run() {
   await driveConcurrentInstalls(firstInstall, latestInstall);
   delayMenus = false;
   assert.deepEqual([...menus.values()].map((item) => item.title), ["用 PolyAsk 比较所选内容", "用 PolyAsk 比较当前网页"]);
-  assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), {
-    installed: 1, startup: 1, changed: 1, clicked: 1,
-  });
+  assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), { installed: 1, startup: 1, changed: 1, clicked: 1 });
 
   failNext.get = "language read failed";
   await assert.rejects(PageContext.installMenus(), /language read failed/);
   failNext.create = "menu create failed";
   await assert.rejects(PageContext.installMenus(), /menu create failed/);
 
-  await PageContext.handleClick(
-    { menuItemId: "ams-send-selection", selectionText: " chosen text " },
-    { id: 7, url: "https://example.com/a", title: "Example" }
-  );
+  await PageContext.handleClick({ menuItemId: "ams-send-selection", selectionText: " chosen text " },
+    { id: 7, url: "https://example.com/a", title: "Example" });
   assert.equal(executions.length, 0);
   assert.equal(saved.amsComposeContext.text, "chosen text");
   assert.equal(saved.amsComposeContext.kind, "selection");
@@ -185,18 +188,42 @@ async function run() {
   assert.equal(typeof saved.amsComposeContext.capturedAt, "number");
   assert.equal(opened, 1);
 
-  const page = await PageContext.handleClick(
-    { menuItemId: "ams-send-page" },
-    { id: 7, url: "https://example.com/a", title: "Example" }
-  );
-  assert.equal(page.ok, false);
-  assert.equal(executions.length, 0);
+  const openedBeforePage = opened;
+  saved.amsComposeContextError = "stale";
+  pageDocument = doc({ article: { innerText: " Page body " } });
+  const page = await PageContext.handleClick({ menuItemId: "ams-send-page" },
+    { id: 7, url: "https://example.com/a", title: "Example" });
+  assert.equal(page.ok, true);
+  assert.equal(executions.length, 1);
+  assert.deepEqual(plain(executions[0].target), { tabId: 7 });
+  assert.equal(typeof executions[0].func, "function");
+  assert.deepEqual(plain({ ...saved.amsComposeContext, capturedAt: 0 }), {
+    kind: "page", title: "Example", url: "https://example.com/a",
+    text: "Page body", truncated: false, capturedAt: 0,
+  });
+  assert.equal(saved.amsComposeContextError, null);
+  assert.equal(opened, openedBeforePage + 1);
+
+  const oldContext = plain(saved.amsComposeContext);
+  failNext.execute = "Cannot access page";
+  const blocked = await PageContext.handleClick({ menuItemId: "ams-send-page" },
+    { id: 7, url: "https://example.com/a" });
+  assert.deepEqual(plain(blocked), { ok: false, code: "page_access_denied" });
+  assert.deepEqual(sessionWrites.at(-1), { amsComposeContextError: "page_access_denied" });
+  assert.deepEqual(saved.amsComposeContext, oldContext);
+  assert.equal(opened, openedBeforePage + 2);
+
+  pageDocument = doc({}, " \n\n ");
+  const blank = await PageContext.handleClick({ menuItemId: "ams-send-page" },
+    { id: 7, url: "https://example.com/a" });
+  assert.deepEqual(plain(blank), { ok: false, code: "page_empty" });
+  assert.deepEqual(sessionWrites.at(-1), { amsComposeContextError: "page_empty" });
+  assert.deepEqual(saved.amsComposeContext, oldContext);
+  assert.equal(opened, openedBeforePage + 3);
 
   const longText = "😀".repeat(24001) + "MIDDLE" + "🦊".repeat(6001);
-  await PageContext.handleClick(
-    { menuItemId: "ams-send-selection", selectionText: longText },
-    { id: 7, url: "https://example.com/a", title: "Example" }
-  );
+  await PageContext.handleClick({ menuItemId: "ams-send-selection", selectionText: longText },
+    { id: 7, url: "https://example.com/a", title: "Example" });
   assert.equal(saved.amsComposeContext.text, "😀".repeat(24000) + "🦊".repeat(6000));
   assert.equal(saved.amsComposeContext.truncated, true);
 
@@ -206,12 +233,15 @@ async function run() {
   );
   assert.deepEqual(plain(empty), { ok: false, code: "page_empty" });
 
+  const executionsBeforeDenied = executions.length;
   const denied = await PageContext.handleClick(
     { menuItemId: "ams-send-page" },
     { id: 8, url: "chrome://settings" }
   );
   assert.deepEqual(plain(denied), { ok: false, code: "page_access_denied" });
-  assert.equal(executions.length, 0);
+  assert.equal(executions.length, executionsBeforeDenied);
+  assert.deepEqual(sessionWrites.at(-1), { amsComposeContextError: "page_access_denied" });
+  assert.equal(opened, openedBeforePage + 5);
 
   const openedBeforeFailure = opened;
   failNext.session = "session save failed";
