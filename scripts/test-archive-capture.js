@@ -127,44 +127,39 @@ async function collectClickKeepsClickedRun() {
   elements.tier.value = "think"; elements.prompt.value = "Draft";
   const sourceMeta = { kind: "selection", title: "Source", url: "https://example.test", truncated: false, capturedAt: 3 };
   const run = { runId: "run-1", text: "Full prompt", task: "Question", source: sourceMeta, hosts: ["a"], tier: "think", sentAt: 1 };
-  let sessionRun = run;
+  let sessionRun = run, getDone;
   const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receivers.push(fn); } }, sendMessage(message, done) {
     if (message.action === "collect") { collectDone = done; return; }
     if (message.action === "archiveAdd") { added.push(message.entry); return done?.({ ok: true }); }
     done?.({ ok: true, items: [] });
   } }, storage: { local: { get(_keys, done) { done({ amsConsole: { selected: { a: true }, tier: "think" }, amsConsolePrompt: "Draft" }); }, set() {} },
-    session: { get(_key, done) { done({ amsLastRun: sessionRun }); } }, onChanged: { addListener() {} } } };
+    session: { get(_key, done) { getDone = () => done({ amsLastRun: sessionRun }); } }, onChanged: { addListener() {} } } };
   const context = { chrome, document: { documentElement: {}, activeElement: null, getElementById: (id) => elements[id], querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() },
     window: { addEventListener() {} }, navigator: { clipboard: { writeText: () => { clipboardWrites++; return Promise.resolve(); } } }, ResizeObserver: class { observe() {} }, SITES: [{ host: "a", label: "A", on: true }, { host: "b", label: "B" }],
     t: (key) => key, applyI18n() {}, syncTierButtons() {}, syncGroupSelect() {}, history: [], histCursor: -1, histDraft: "", pendingImages: [], pushHistory() {}, imagePayloads: async () => [], setPendingImages() {}, setTimeout: () => 0, clearTimeout() {}, Date, Map, console };
   vm.runInNewContext(source("console/console.js"), context); vm.runInNewContext(source("console/status.js"), context);
   receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run, hasImage: false }));
-  await Promise.resolve(elements.collect.listeners.click[0]());
+  const collecting = elements.collect.listeners.click[0]();
   sessionRun = { ...run, runId: "run-2", text: "New prompt", task: "New task", source: null };
   receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: sessionRun, hasImage: false }));
+  getDone(); await collecting;
   collectDone({ results: [{ host: "a", text: "Answer" }] }); await new Promise(setImmediate);
   assert.equal(added[0].text, "Full prompt");
   assert.equal(added[0].task, "Question");
   assert.deepEqual(plain(added[0].source), sourceMeta);
-  receivers.forEach((fn) => fn({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run, hasImage: false }));
-  sessionRun = { ...run, runId: "run-3", source: null };
-  await Promise.resolve(elements.collect.listeners.click[0]());
-  collectDone({ results: [{ host: "a", text: "Answer" }] }); await new Promise(setImmediate);
-  assert.equal(added[1].task, "Full prompt");
-  assert.equal(added[1].source, null, "运行快照不匹配时不得继承来源");
   vm.runInNewContext("selected.b = true", context);
   await Promise.resolve(elements.collect.listeners.click[0]());
   collectDone({ results: [{ host: "a", text: "A" }, { host: "b", text: "B" }] }); await new Promise(setImmediate);
-  assert.equal(added[2].text, "Draft", "采集范围超出运行 hosts 时应使用当前输入");
-  assert.equal(added[2].task, "Draft");
-  assert.equal(added[2].source, null, "采集范围超出运行 hosts 时不得继承旧来源");
+  assert.equal(added[1].text, "Draft", "采集范围超出运行 hosts 时应使用当前输入");
+  assert.equal(added[1].task, "Draft");
+  assert.equal(added[1].source, null, "采集范围超出运行 hosts 时不得继承旧来源");
   for (const failure of [{ response: undefined }, { response: { results: [] }, runtime: true }, { response: { results: [], code: "error" } }]) {
     await Promise.resolve(elements.collect.listeners.click[0]());
     chrome.runtime.lastError = failure.runtime ? { message: "disconnected" } : null;
     collectDone(failure.response); chrome.runtime.lastError = null;
     await new Promise(setImmediate);
-    assert.equal(clipboardWrites, 3, "采集失败不得写剪贴板");
-    assert.equal(added.length, 3, "采集失败不得自动归档");
+    assert.equal(clipboardWrites, 2, "采集失败不得写剪贴板");
+    assert.equal(added.length, 2, "采集失败不得自动归档");
     assert.equal(elements.failsum.textContent, "con_collectFail");
   }
 }
