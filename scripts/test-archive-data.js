@@ -25,7 +25,8 @@ const SyncStore = {
 const chrome = { storage: { local: { get: async (defaults) => defaults, set: async () => {} } }, runtime: {
   onMessage: { addListener(fn) { dataMessageListener = fn; } }, sendMessage(message) { broadcasts.push(message); },
 } };
-const scope = vm.createContext({ SyncStore, SyncModel: { SCHEMA: 1, utf8Preview: (text) => text }, chrome,
+const scope = vm.createContext({ SyncStore, SyncModel: { SCHEMA: 1, utf8Preview: (text) => text,
+  compareVersion: (a, b) => Number(a.updatedAt) - Number(b.updatedAt) || String(a.deviceId || "").localeCompare(String(b.deviceId || "")) }, chrome,
   crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" }, Date });
 vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8") + ";this.model=ArchiveModel", scope);
 vm.runInContext(fs.readFileSync("bg/data.js", "utf8") + ";this.data=Data", scope);
@@ -50,11 +51,41 @@ async function main() {
   const afterFailure = data.updateArchive(added.id, { tags: ["after-failure"] });
   await assert.rejects(failed, /invalid_favorite/);
   assert.deepEqual((await afterFailure).tags, ["after-failure"], "失败更新不得永久锁住同一归档");
+  const updateFirst = await data.addArchive({ id: "00000000-0000-4000-8000-000000000002", text: "update first", results: [] });
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const lateUpdate = data.updateArchive(updateFirst.id, { note: "late" });
+  await new Promise(setImmediate);
+  const deleteAfter = data.deleteArchive(updateFirst.id);
+  await new Promise(setImmediate); releaseArchivePut(); await Promise.all([lateUpdate, deleteAfter]);
+  assert.equal(Object.hasOwn(archives.get(updateFirst.id), "deletedAt"), true, "update 后排队的删除必须最终保留 tombstone");
+
+  const deleteFirst = await data.addArchive({ id: "00000000-0000-4000-8000-000000000003", text: "delete first", results: [] });
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const deleting = data.deleteArchive(deleteFirst.id);
+  await new Promise(setImmediate);
+  const updateAfter = data.updateArchive(deleteFirst.id, { note: "resurrect" });
+  await new Promise(setImmediate); releaseArchivePut(); await deleting;
+  await assert.rejects(updateAfter, (error) => error.code === "not_found", "删除后排队的更新必须重新读取 tombstone");
+
+  const slow = await data.addArchive({ id: "00000000-0000-4000-8000-000000000004", text: "slow", results: [] });
+  const fast = await data.addArchive({ id: "00000000-0000-4000-8000-000000000005", text: "fast", results: [] });
+  archivePutGate = new Promise((resolve) => { releaseArchivePut = resolve; }); blockArchivePut = true;
+  const slowUpdate = data.updateArchive(slow.id, { note: "slow" }); await new Promise(setImmediate);
+  const fastUpdate = data.updateArchive(fast.id, { note: "fast" });
+  const winner = await Promise.race([fastUpdate.then(() => "fast"), new Promise((resolve) => setImmediate(() => resolve("blocked")))]);
+  releaseArchivePut(); await Promise.all([slowUpdate, fastUpdate]);
+  assert.equal(winner, "fast", "不同归档不得共用全局写锁");
   const response = await new Promise((resolve) => dataMessageListener({ source: "AMS_DATA", action: "archiveUpdate", id: added.id,
     patch: { note: "messaged" }, changeToken: "request-token" }, null, resolve));
   assert.equal(response.changeToken, "request-token");
   assert.deepEqual(broadcasts.at(-1), { source: "AMS_DATA", type: "archiveChanged", changeToken: "request-token" });
   assert.equal(Object.hasOwn(archives.get(added.id), "changeToken"), false, "change token 不得进入归档记录");
+  const remote = { ...archives.get(added.id), updatedAt: archives.get(added.id).updatedAt + 1, deviceId: "remote" };
+  assert.equal((await data.importRecords({ archives: [remote] })).archives, 1, "Drive 导入必须报告实际归档写入数");
+  assert.equal((await data.importRecords({ archives: [remote] })).archives, 0, "Drive 重复版本不得报告归档变化");
+  const migrated = { kind: "archive", value: { ...remote, id: "00000000-0000-4000-8000-000000000006" } };
+  assert.equal((await data.importRecords([migrated])).archives, 1, "迁移导入必须报告实际归档写入数");
+  assert.equal((await data.importRecords([migrated])).archives, 0, "迁移重复版本不得报告归档变化");
   console.log("archive-data tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -101,8 +101,8 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: {
     SCHEMA: 1, hashText: async (text) => text, utf8Preview: (text) => text, retryDelay: () => 500, mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], corrupt: 0 }),
     mergeHistory: (items) => items, mergeArchives: (items) => items,
-  }, chrome, Date: class extends Date { static now() { return now; } }, setTimeout, clearTimeout, console });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
+  }, chrome, Date: class extends Date { static now() { return now; } }, setTimeout, clearTimeout, console, URL });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), scope); vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
   return { sync: scope.sync, calls, queued, records, values, change: (c) => onChanged(c, "local"), localChangeCalls: () => localChangeCalls, now: (value) => { now = value; } };
 }
 function transferRuntime() {
@@ -113,7 +113,7 @@ function transferRuntime() {
     onDisconnect: { addListener: (fn) => disconnectListeners.push(fn), removeListener: (fn) => disconnectListeners.splice(disconnectListeners.indexOf(fn), 1) },
     ack: (seq) => messageListeners.slice().forEach((fn) => fn({ ack: seq })),
     disconnect: () => disconnectListeners.slice().forEach((fn) => fn()) };
-  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "q", text: "q", textHash: "q", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "00000000-0000-4000-8000-000000000001", text: "q", task: "q", source: null, results: [], favorite: false, tags: [], note: "", winnerHost: null, hosts: [], resultPreviews: [], searchText: "q", createdAt: 1, updatedAt: 1 } }; } },
+  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "q", text: "q", textHash: "q", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "00000000-0000-4000-8000-000000000001", text: "q", task: "q", source: null, results: [], favorite: false, tags: [], note: "", winnerHost: null, synthesis: null, hosts: [], resultPreviews: [], searchText: "q", createdAt: 1, updatedAt: 1 } }; } },
     SyncEngine: { runForExport: async () => { synced++; } },
     chrome: { runtime: { onConnect: { addListener: () => {} } } }, SyncModel: { hashText: async (text) => text }, Date, console });
   const file = path.join(__dirname, "..", "bg/transfer.js");

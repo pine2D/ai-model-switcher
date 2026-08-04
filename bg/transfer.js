@@ -84,7 +84,11 @@ if (globalThis.chrome?.runtime?.onMessage) chrome.runtime.onMessage.addListener(
       for (const row of msg.records || []) await Transfer.validateContent(row);
     } else {
       if (msg.action === "finishImport") await SyncEngine.finishImport();
-      else { for (const row of msg.records || []) await Transfer.validateContent(row); await Data.importRecords(msg.records || []); }
+      else {
+        for (const row of msg.records || []) await Transfer.validateContent(row);
+        const changed = await Data.importRecords(msg.records || []);
+        if (changed?.archives) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" });
+      }
     }
     return {};
   }).then((value) => respond({ ok: true, value }), (error) => respond({ ok: false, code: error.code || "import_failed" }));

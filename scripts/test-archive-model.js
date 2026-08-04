@@ -19,8 +19,29 @@ for (const url of ["javascript:alert(1)", "data:text/plain,x", "not a url"])
 const updated = model.update(entry, { favorite: true, tags: [" research ", "research", "battery"], note: "Useful", winnerHost: "a.test" }, { now: 20, deviceId: "other" });
 assert.deepEqual([...updated.tags], ["research", "battery"]);
 assert.equal(updated.updatedAt, 20);
+assert.equal(model.validMetadata(updated), true);
 assert.equal(model.matches(updated, { query: "useful", favorite: true, tag: "battery" }), true);
 assert.throws(() => model.update(updated, { winnerHost: "b.test" }, { now: 30, deviceId: "x" }), /invalid_winner/);
 assert.throws(() => model.update(updated, { tags: Array(21).fill("x") }, { now: 30, deviceId: "x" }), /invalid_tags/);
 assert.equal(model.validMetadata({ ...updated, source: { kind: "page", title: "Bad", url: "javascript:alert(1)" } }), false);
+const invalid = (patch) => assert.equal(model.validMetadata({ ...updated, ...patch }), false);
+invalid({ resultPreviews: [null] });
+invalid({ hosts: ["wrong"] });
+invalid({ searchText: "stale" });
+const missing = { ...updated }; delete missing.synthesis; assert.equal(model.validMetadata(missing), false);
+invalid({ source: { ...updated.source, extra: true } });
+invalid({ source: { kind: "page", title: "Example", url: updated.source.url } });
+invalid({ source: { ...updated.source, url: "https://example.com" } });
+invalid({ source: { ...updated.source, capturedAt: -1 } });
+for (const patch of [{ host: 1 }, { label: null }, { text: {} }, { extra: true }]) {
+  const results = [{ host: "a.test", label: "A", text: "Answer", ...patch }];
+  invalid({ results, hosts: ["a.test"], resultPreviews: [{ host: "a.test", label: "A", text: "Answer" }] });
+}
+for (const patch of [{ host: "h".repeat(257) }, { label: "l".repeat(257) }, { code: "c".repeat(65) }, { state: "s".repeat(65) }]) {
+  const value = model.normalize({ text: "Q", results: [{ host: "a", label: "A", text: "Answer", state: null, code: null, ...patch }] },
+    { id: "bounded", now: 1, deviceId: "d" });
+  assert.equal(model.validMetadata(value), false);
+}
+assert.throws(() => model.update({ ...updated, resultPreviews: [null] }, { note: "safe" }, { now: 30, deviceId: "x" }), /invalid_record/);
+assert.equal(model.validMetadata(model.normalize({ text: "Q", source: null, results: [] }, { id: "null-source", now: 1, deviceId: "d" })), true);
 console.log("archive-model tests passed");

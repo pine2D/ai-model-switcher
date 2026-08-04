@@ -2,9 +2,9 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 
-function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false } = {}) {
+function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false, archiveImportChanged = true } = {}) {
   const meta = new Map(), index = new Map(indexed.map((file) => [file.logicalKey, file])), outbox = new Map(queued.map((op) => [op.key, op]));
-  const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [];
+  const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [], broadcasts = [];
   const deviceState = { schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {}, ...device }; let listener, notes = 0, activeChanges = changes;
   const store = {
     getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
@@ -23,7 +23,9 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
     applyRemoteState: async (state, suppress) => { applied.push(state); events.push("apply"); const cleanup = suppress({ amsTheme: "dark" });
       listener?.({ amsTheme: { newValue: "dark" } }, "local"); cleanup(); },
     noteStorageChanges: async () => { notes++; return {}; }, seedState: async (empty) => { seeds.push(empty); events.push("seed"); },
-    exportRecords: async () => ({ history: [], archives: localArchives }), importRecords: async (records) => imports.push(records),
+    exportRecords: async () => ({ history: [], archives: localArchives }), importRecords: async (records) => {
+      imports.push(records); return { archives: archiveImportChanged ? (records.archives || []).length : 0 };
+    },
     getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),
   };
   const drive = {
@@ -35,7 +37,7 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
   };
   const chrome = {
     storage: { local: { get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])), set: async (next) => { for (const [key, value] of Object.entries(next)) local.set(key, value); } }, onChanged: { addListener: (fn) => { listener = fn; } } },
-    runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} } }, alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
+    runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} }, sendMessage: (message) => broadcasts.push(message) }, alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
   };
   const SyncModel = {
     SCHEMA: 1, hashText: async (value) => value, utf8Preview: (value) => value || "", retryDelay: () => 50,
@@ -48,10 +50,15 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
     mergeHistory: (items) => items, mergeArchives: (items) => items,
     compareVersion: (a, b) => Number(a.updatedAt) - Number(b.updatedAt) || String(a.deviceId || "").localeCompare(String(b.deviceId || "")),
   };
-  const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel, chrome, Date, setTimeout, clearTimeout });
+  const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel, chrome, Date, setTimeout, clearTimeout, URL });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), scope);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
-  return { sync: scope.sync, calls, auths, uploads, meta, index, outbox, applied, imports, seeds, events, notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
+  return { sync: scope.sync, calls, auths, uploads, meta, index, outbox, applied, imports, seeds, events, broadcasts, notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
 }
+
+const liveArchive = (id, patch = {}) => ({ schema: 1, id, createdAt: 1, updatedAt: 1, deviceId: "remote", text: "Prompt", task: "Question", source: null,
+  results: [{ host: "a", label: "A", text: "Answer", state: "think", code: null }], favorite: false, tags: [], note: "", winnerHost: null,
+  synthesis: null, hosts: ["a"], resultPreviews: [{ host: "a", label: "A", text: "Answer" }], searchText: "question\na\nanswer", ...patch });
 
 module.exports = async function testSyncEngine() {
   const added = { id: "remote", appProperties: { app: "polyask", schema: "1", kind: "state", id: "remote" } };
@@ -97,6 +104,19 @@ module.exports = async function testSyncEngine() {
   const archive = runtime({ listed: [{ id: "arc", appProperties: { app: "polyask", schema: "1", kind: "archive", id: "a" } }], bodies: { arc: tomb }, localArchives: [{ id: "a", createdAt: 1, updatedAt: 1, text: "live", deviceId: "a" }] });
   await archive.sync.connect();
   assert.equal(archive.imports.at(-1).archives[0].deletedAt, 3, "远端 tombstone 必须覆盖本地 active 记录");
+
+  const liveFiles = ["one", "two"].map((id) => ({ id: `file-${id}`, appProperties: { app: "polyask", schema: "1", kind: "archive", id } }));
+  const live = runtime({ listed: liveFiles, bodies: { "file-one": liveArchive("one"), "file-two": liveArchive("two") } });
+  await live.sync.connect();
+  assert.equal(live.imports.length, 2, "同批有效 Drive 归档必须全部导入");
+  assert.deepEqual(JSON.parse(JSON.stringify(live.broadcasts)), [{ source: "AMS_DATA", type: "archiveChanged" }], "同批归档变化只能发送一次无 token 广播");
+  const unchanged = runtime({ listed: [liveFiles[0]], bodies: { "file-one": liveArchive("one") }, archiveImportChanged: false });
+  await unchanged.sync.connect(); assert.deepEqual(unchanged.broadcasts, [], "未实际写入归档时不得广播");
+  const incomplete = liveArchive("missing"); delete incomplete.synthesis;
+  const invalidLive = runtime({ listed: [{ id: "file-missing", appProperties: { app: "polyask", schema: "1", kind: "archive", id: "missing" } }], bodies: { "file-missing": incomplete } });
+  await invalidLive.sync.connect();
+  assert.equal(invalidLive.imports.length, 0, "缺少当前元数据的 Drive live 归档必须隔离");
+  assert.equal((await invalidLive.sync.status()).errorCount, 1, "损坏 Drive live 归档必须计错");
 
   const waiting = runtime({ queued: [{ key: "archive:h", kind: "archive", entityId: "h", nextAt: 0, attempt: 0 }], localArchives: [{ id: "h", text: "x" }], fail: true });
   await waiting.sync.connect();

@@ -13,6 +13,8 @@ function loadModel() {
   vm.runInContext(fs.readFileSync("bg/sync-model.js", "utf8") + ";this.model=SyncModel", scope);
   return scope.model;
 }
+const liveArchive = (text, patch = {}) => ({ schema: 1, id: "a", createdAt: 1, updatedAt: 1, text, task: text, source: null, results: [], favorite: false,
+  tags: [], note: "", winnerHost: null, synthesis: null, hosts: [], resultPreviews: [], searchText: text.toLocaleLowerCase(), deviceId: "d", ...patch });
 
 function loadTransfer(model) {
   const scope = vm.createContext({ SyncModel: model, chrome: {}, Date });
@@ -98,7 +100,7 @@ function syncRuntime({ entityKind = "archive", readOnly = false, duplicate = fal
     download: async (id) => {
       downloads.push(id);
       if (id === "dead") throw { code: "not_found", status: 404 };
-      return { schema: 1, id: "a", createdAt: 1, text: "good", results: [], deviceId: "d" };
+      return liveArchive("good");
     },
     upsert: async (fileId, _name, _props, body) => {
       uploads.push({ fileId, body: structuredClone(body) });
@@ -110,8 +112,9 @@ function syncRuntime({ entityKind = "archive", readOnly = false, duplicate = fal
     get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])),
     set: async (values) => { for (const [key, value] of Object.entries(values)) local.set(key, value); },
   }, onChanged: storage }, runtime: { onMessage: event(), onStartup: event() }, alarms: { create: () => {}, onAlarm: event() } };
-  const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: model, chrome, Date,
+  const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: model, chrome, Date, URL,
     setTimeout: (fn) => { const id = ++timerId; timers.set(id, fn); return id; }, clearTimeout: (id) => timers.delete(id), structuredClone });
+  vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8"), scope);
   vm.runInContext(fs.readFileSync("bg/sync.js", "utf8") + ";this.sync=SyncEngine", scope);
   if (duplicate) { files.set("z", { fileId: "z", logicalKey: "archive:a" }); files.set("a", { fileId: "a", logicalKey: "archive:a" }); }
   if (deadFile) { files.set("dead", { fileId: "dead", logicalKey: "archive:a" }); files.set("good", { fileId: "good", logicalKey: "archive:a" }); }
@@ -192,7 +195,7 @@ async function main() {
   tombstoneRace.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
   tombstoneRace.drive.download = async () => {
     tombstoneRace.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, deletedAt: 2, fileId: "same", deviceId: "z" });
-    return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "stale", results: [], deviceId: "d" };
+    return liveArchive("stale");
   };
   const deleted = await tombstoneRace.sync.resolveArchive("a");
   assert.equal(deleted.deletedAt, 2, "并发 tombstone 必须胜过在途旧正文");
@@ -203,15 +206,15 @@ async function main() {
   newerTrimmed.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
   newerTrimmed.drive.download = async () => {
     if (!archiveReads++) { newerTrimmed.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, fileId: "same", deviceId: "d" });
-      return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "old", results: [], deviceId: "d" }; }
-    return { schema: 1, id: "a", createdAt: 1, updatedAt: 2, text: "new", results: [], deviceId: "d" };
+      return liveArchive("old"); }
+    return liveArchive("new", { updatedAt: 2 });
   };
   assert.equal((await newerTrimmed.sync.resolveArchive("a")).text, "new", "同 fileId 新版本已裁正文时必须重读新正文");
   assert.equal(archiveReads, 2);
 
   const cloudNewer = syncRuntime(); cloudNewer.outbox.clear();
   cloudNewer.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 1, fileId: "same", deviceId: "d" });
-  cloudNewer.drive.download = async () => ({ schema: 1, id: "a", createdAt: 1, updatedAt: 2, text: "fresh", results: [], deviceId: "d" });
+  cloudNewer.drive.download = async () => liveArchive("fresh", { updatedAt: 2 });
   const fresh = await cloudNewer.sync.resolveArchive("a");
   assert.equal(fresh.updatedAt, 2, "云端正文版本较新时不得被本地旧 metadata 覆盖");
   assert.equal(fresh.text, "fresh");
@@ -230,7 +233,7 @@ async function main() {
   const staleArchive = syncRuntime(); staleArchive.outbox.clear(); let staleArchiveReads = 0;
   staleArchive.records.set("archive:a", { id: "a", createdAt: 1, updatedAt: 2, fileId: "same", deviceId: "d" });
   staleArchive.drive.download = async () => { if (++staleArchiveReads > 2) throw { code: "too_many_reads" };
-    return { schema: 1, id: "a", createdAt: 1, updatedAt: 1, text: "old", results: [], deviceId: "d" }; };
+    return liveArchive("old"); };
   await assert.rejects(staleArchive.sync.resolveArchive("a"), (error) => error.code === "stale_body", "archive 持续旧正文必须有限重试后终止");
   assert.equal(staleArchiveReads, 2);
 

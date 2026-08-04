@@ -14,6 +14,15 @@ function transferRuntime({ runForExport, rows }) {
   vm.runInContext(fs.readFileSync("bg/transfer.js", "utf8") + ";this.transfer=Transfer", scope);
   return scope.transfer;
 }
+function migrationRuntime(importRecords) {
+  const broadcasts = []; let listener;
+  const chrome = { runtime: { onConnect: event(), onMessage: { addListener: (fn) => { listener = fn; } }, sendMessage: (message) => broadcasts.push(message) } };
+  const scope = vm.createContext({ chrome, SyncEngine: { finishImport: async () => {} }, Data: { importRecords },
+    SyncModel: { hashText: async (text) => text }, crypto: require("node:crypto").webcrypto, Date, URL });
+  vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8"), scope);
+  vm.runInContext(fs.readFileSync("bg/transfer.js", "utf8"), scope);
+  return { broadcasts, send: (message) => new Promise((resolve) => listener(message, null, resolve)) };
+}
 function syncRuntime(connected, readOnly = false) {
   const config = { connected, readOnly }, events = { storage: event(), alarm: event(), message: event(), startup: event() };
   let notes = 0;
@@ -44,17 +53,30 @@ async function main() {
 
   const archive = { id: "00000000-0000-4000-8000-000000000001", createdAt: 1, updatedAt: 1, text: "Prompt", task: "Question", source: null,
     results: [{ host: "a", label: "A", text: "Answer" }], favorite: true, tags: ["work"], note: "keep", winnerHost: "a",
-    hosts: ["a"], resultPreviews: [{ host: "a", label: "A", text: "Answer" }], searchText: "question\nwork\nkeep\na\nanswer" };
+    synthesis: null, hosts: ["a"], resultPreviews: [{ host: "a", label: "A", text: "Answer" }], searchText: "question\nkeep\nwork\na\nanswer" };
   assert.equal(await transferRuntime({ runForExport: async () => {}, rows: async function* () {} }).validateContent({ kind: "archive", value: JSON.parse(JSON.stringify(archive)) }), true);
   const invalid = (patch) => assert.throws(() => transferRuntime({ runForExport: async () => {}, rows: async function* () {} })
     .validateRecord({ kind: "archive", value: { ...archive, ...patch } }), (error) => error.code === "invalid_record");
   invalid({ note: "x".repeat(4001) });
   invalid({ tags: Array(21).fill("work") });
   invalid({ winnerHost: "b" });
+  invalid({ resultPreviews: [null] });
+  invalid({ source: { kind: "page", title: "Bad", url: "https://example.test/", truncated: false, capturedAt: 1, extra: true } });
+  invalid({ source: { kind: "page", title: "Bad", url: "https://example.test/" } });
   for (const url of ["javascript:alert(1)", "data:text/plain,x", "not a url"])
-    invalid({ source: { kind: "page", title: "Bad", url } });
+    invalid({ source: { kind: "page", title: "Bad", url, truncated: false, capturedAt: 1 } });
   assert.doesNotThrow(() => transferRuntime({ runForExport: async () => {}, rows: async function* () {} })
-    .validateRecord({ kind: "archive", value: { ...archive, source: { kind: "selection", title: "Web", url: "https://example.test/path" } } }));
+    .validateRecord({ kind: "archive", value: { ...archive, source: { kind: "selection", title: "Web", url: "https://example.test/path", truncated: false, capturedAt: 1 },
+      searchText: "question\nweb\nhttps://example.test/path\nkeep\nwork\na\nanswer" } }));
+
+  let changed = 2;
+  const migration = migrationRuntime(async () => ({ archives: changed }));
+  const rows = [1, 2].map((at) => ({ kind: "archive", value: { id: `00000000-0000-4000-8000-00000000000${at}`, createdAt: at, deletedAt: at } }));
+  assert.equal((await migration.send({ source: "AMS_TRANSFER", action: "importBatch", records: rows })).ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(migration.broadcasts)), [{ source: "AMS_DATA", type: "archiveChanged" }], "迁移批次有归档变化时只广播一次且不带 token");
+  changed = 0;
+  await migration.send({ source: "AMS_TRANSFER", action: "importBatch", records: rows });
+  assert.equal(migration.broadcasts.length, 1, "迁移批次未改变归档时不得广播");
   console.log("transfer tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -1,7 +1,7 @@
 // bg/data.js — 本地记录与设备状态协议
 const Data = (() => {
   const SETTINGS = ["amsLang", "amsTheme", "displayMode", "amsAutoRaise"];
-  const archiveUpdates = new Map();
+  const archiveMutations = new Map();
   let cachedDeviceId, deviceIdOpening;
   const scheduleLocal = () => { if (typeof SyncEngine !== "undefined") SyncEngine.scheduleLocal?.(); };
   async function getDeviceId() {
@@ -55,11 +55,12 @@ const Data = (() => {
     scheduleLocal();
     return record;
   }
-  function updateArchive(id, patch) {
-    const run = (archiveUpdates.get(id) || Promise.resolve()).catch(() => {}).then(() => writeArchiveUpdate(id, patch));
-    archiveUpdates.set(id, run);
-    return run.finally(() => { if (archiveUpdates.get(id) === run) archiveUpdates.delete(id); });
+  function mutateArchive(id, task) {
+    const run = (archiveMutations.get(id) || Promise.resolve()).catch(() => {}).then(task);
+    archiveMutations.set(id, run);
+    return run.finally(() => { if (archiveMutations.get(id) === run) archiveMutations.delete(id); });
   }
+  const updateArchive = (id, patch) => mutateArchive(id, () => writeArchiveUpdate(id, patch));
   function searchArchives(cursor, limit = 50, filters = {}) {
     const query = { query: String(filters.query || "").trim(), favorite: !!filters.favorite, tag: String(filters.tag || "").trim() };
     return SyncStore.searchArchives(cursor, limit, (record) => ArchiveModel.matches(record, query));
@@ -71,7 +72,7 @@ const Data = (() => {
     });
     return [...tags].sort((left, right) => left.localeCompare(right));
   }
-  async function deleteArchive(id) {
+  async function writeArchiveDelete(id) {
     const old = await SyncStore.getArchive(id);
     if (!old) return null;
     const now = Date.now(), record = { id, createdAt: old.createdAt, updatedAt: now, deletedAt: now,
@@ -81,6 +82,7 @@ const Data = (() => {
     scheduleLocal();
     return record;
   }
+  const deleteArchive = (id) => mutateArchive(id, () => writeArchiveDelete(id));
   async function noteStorageChanges(changes = {}) {
     const state = await deviceState(), now = Date.now(), id = await getDeviceId();
     let changed = false;
@@ -133,13 +135,16 @@ const Data = (() => {
   const stamp = (record = {}) => ({ ...record, updatedAt: Math.max(Number(record.updatedAt) || 0, Number(record.deletedAt) || 0, Number(record.createdAt) || 0) });
   const newer = (old, next) => !old || SyncModel.compareVersion(stamp(old), stamp(next)) < 0;
   async function importRecords(records = []) {
+    let archiveChanges = 0;
     if (!Array.isArray(records)) {
       for (const value of records.history || []) {
         const old = await SyncStore.getHistory(value.id), merged = SyncModel.mergeHistory([old, value])[0];
         if (merged) await SyncStore.putHistory(merged);
       }
-      for (const value of records.archives || []) if (newer(await SyncStore.getArchive(value.id), value)) await SyncStore.putArchive(value);
-      return;
+      for (const value of records.archives || []) if (newer(await SyncStore.getArchive(value.id), value)) {
+        await SyncStore.putArchive(value); archiveChanges++;
+      }
+      return { archives: archiveChanges };
     }
     const rows = records;
     const id = await getDeviceId(), state = await deviceState();
@@ -162,7 +167,7 @@ const Data = (() => {
         const next = { ...value, deviceId: id, schema: SyncModel.SCHEMA, updatedAt: value.updatedAt || value.deletedAt || value.createdAt,
           preview: value.preview || SyncModel.utf8Preview(value.text || "") };
         const old = await SyncStore.getArchive(next.id);
-        if (newer(old, next)) await SyncStore.putArchive(next);
+        if (newer(old, next)) { await SyncStore.putArchive(next); archiveChanges++; }
         await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
       }
     }
@@ -171,6 +176,7 @@ const Data = (() => {
       if (typeof SyncEngine !== "undefined") await SyncEngine.projectImportedState(state); else await projectState(state);
     }
     await SyncStore.trimBodies(200, 50);
+    return { archives: archiveChanges };
   }
   async function* exportRecords() {
     const state = SyncModel.mergeStateFragments([await SyncStore.getMeta("materializedState") || {}, await deviceState()]).materialized;

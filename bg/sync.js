@@ -55,9 +55,8 @@ const SyncEngine = (() => {
       Object.values(body.settings || {}).every(validVersion) && ["templates", "groups"].every((key) => Object.values(body[key] || {}).every((item) => item?.id && validVersion(item)));
     if (kind === "history") return body.id === props.id && body.textHash === props.id && body.deviceId === props.device && typeof body.text === "string" &&
       validTime(body.createdAt) && validTime(body.lastUsedAt) && await SyncModel.hashText(body.text) === body.textHash;
-    return kind === "archive" && body.id === props.id && validTime(body.createdAt) &&
-      (!Object.hasOwn(body, "updatedAt") || validTime(body.updatedAt)) &&
-      (Object.hasOwn(body, "deletedAt") ? validTime(body.deletedAt) : typeof body.text === "string" && Array.isArray(body.results));
+    return kind === "archive" && body.id === props.id && validTime(body.createdAt) && (!Object.hasOwn(body, "updatedAt") || validTime(body.updatedAt)) &&
+      (Object.hasOwn(body, "deletedAt") ? validTime(body.deletedAt) : typeof body.text === "string" && Array.isArray(body.results) && ArchiveModel.validMetadata(body));
   }
   async function readFile(file, collected, seenAt) {
     if (file.removed) { collected.removedStates.push(file.fileId); collected.futureFiles.delete(file.fileId); return forget(file.fileId); }
@@ -74,7 +73,7 @@ const SyncEngine = (() => {
       if (key) await SyncStore.putFile({ fileId: id, logicalKey: key, ...(seenAt ? { seenAt } : {}) });
       if (kind === "state") collected.states.push({ fileId: id, body });
       if (kind === "history") await Data.importRecords({ history: [{ ...body, fileId: id }] });
-      if (kind === "archive") await Data.importRecords({ archives: [{ ...body, fileId: id }] });
+      if (kind === "archive") { const changed = await Data.importRecords({ archives: [{ ...body, fileId: id }] }); collected.archiveChanges += changed?.archives || 0; }
     } catch (error) {
       if (error?.code === "not_found" || error?.status === 404) { if (kind === "state") collected.removedStates.push(id); await invalidate(id, seenAt, logicalKey(file)); return; }
       if (error?.code === "invalid_response") { errorCount++; await invalidate(id, seenAt, logicalKey(file)); return; }
@@ -102,6 +101,7 @@ const SyncEngine = (() => {
     errorCount += state.corrupt || 0;
     if (state.readOnly) await saveConfig({ readOnly: true });
     if (Object.keys(remoteStates).length || collected.removedStates.length) await Data.applyRemoteState(state, suppressProjection);
+    if (collected.archiveChanges) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" });
     await SyncStore.trimBodies?.(200, 50);
   }
   async function saveToken(token) { await SyncStore.putMeta("pageToken", token); await saveConfig({ pageToken: token }); }
@@ -112,7 +112,7 @@ const SyncEngine = (() => {
     const result = await Drive.listChanges(token); for (const change of result.changes || []) await visit(change); return result;
   }
   async function changesSince(token) {
-    const later = { states: [], removedStates: [], futureFiles: new Set() };
+    const later = { states: [], removedStates: [], futureFiles: new Set(), archiveChanges: 0 };
     const changes = await visitChanges(token, (change) => readFile(change.file || change, later));
     await applyCollected(later);
     await saveToken(changes.newStartPageToken || token);
@@ -120,7 +120,7 @@ const SyncEngine = (() => {
   const stamp = (item) => ({ ...item, updatedAt: Math.max(Number(item.updatedAt) || 0, Number(item.deletedAt) || 0, Number(item.createdAt) || 0) });
   function mergeBucket(a = {}, b = {}) { const out = { ...a }; for (const [id, item] of Object.entries(b)) if (!out[id] || SyncModel.compareVersion(stamp(out[id]), stamp(item)) < 0) out[id] = item; return out; }
   async function fullScan(token, firstConnect) {
-    const collected = { states: [], removedStates: [], futureFiles: new Set() }, scanId = `${Date.now()}-${Math.random()}`;
+    const collected = { states: [], removedStates: [], futureFiles: new Set(), archiveChanges: 0 }, scanId = `${Date.now()}-${Math.random()}`;
     let cloudCount = 0;
     await visitFiles(async (file) => {
       if (file.appProperties?.app === "polyask") cloudCount++;
