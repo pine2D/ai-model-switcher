@@ -163,16 +163,20 @@ document.getElementById("send").addEventListener("click", async () => {
   });
   if (pendingImages === sentImages) setPendingImages([], false);
 });
-document.getElementById("collect").addEventListener("click", async () => {
+document.getElementById("collect").addEventListener("click", () => {
   const sites = chosen(); if (!sites.length) return;
-  const run = lastSend && { ...lastSend };
-  const matchesRun = run && Array.isArray(run.hosts) && sites.every((site) => run.hosts.includes(site.host));
-  const question = matchesRun ? run.text : elPrompt.value.trim();
-  const archive = await archiveRun(matchesRun ? run : null);
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "collect", sites, runId: run?.runId || null }, (resp) => {
-    if (chrome.runtime.lastError || resp?.code || !Array.isArray(resp?.results)) { flashNote(t("con_collectFail")); return; }
-    copySummary(sites, resp.results, question, archive);
-  });
+  const collect = (run, snapshot) => {
+    const matches = typeof run?.runId === "string" && Array.isArray(run.hosts) && sites.every((site) => run.hosts.includes(site.host));
+    const message = { source: "AMS_CONSOLE", action: "collect", sites };
+    if (typeof run?.runId === "string") message.runId = run.runId;
+    chrome.runtime.sendMessage(message, (resp) => {
+      if (chrome.runtime.lastError || resp?.code || !Array.isArray(resp?.results)) { flashNote(t("con_collectFail")); return; }
+      Promise.resolve(matches ? snapshot : null).then((archive) => copySummary(sites, resp.results, matches ? run.text : elPrompt.value.trim(), archive));
+    });
+  };
+  const run = lastSend?.runId && { ...lastSend };
+  if (run) { collect(run, archiveRun(run)); return; }
+  archiveRun(null).then((restored) => collect(restored, restored));
 });
 document.getElementById("archive").addEventListener("click", () => {
   // 受管归档窗（与伴侣窗同款）：幂等打开、随 console 联动最小化/抬前、closeAll 一起关

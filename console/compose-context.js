@@ -14,7 +14,7 @@ const ComposeContext = (() => {
   const detail = document.getElementById("cmp-source-detail");
   const replace = document.getElementById("cmp-source-replace");
   const status = document.getElementById("cmp-status");
-  let activeSource = null, pendingSource = null, errorCode = null, initialized = false;
+  let activeSource = null, activeMarker = null, pendingSource = null, errorCode = null, initialized = false;
 
   function sessionGet(keys) {
     return new Promise((resolve, reject) => chrome.storage.session.get(keys, (value) => {
@@ -50,7 +50,10 @@ const ComposeContext = (() => {
     errorCode = code;
     status.textContent = t(ERROR_COPY[code] || "cmp_contextDenied");
   }
-  function activate(source) { activeSource = source; render(); }
+  function activate(source) {
+    do { activeMarker = crypto.randomUUID(); } while (String(source.text || "").includes(activeMarker));
+    activeSource = source; render();
+  }
   function receive(source) {
     clearError();
     if (activeSource) { pendingSource = source; replace.hidden = false; return; }
@@ -69,12 +72,12 @@ const ComposeContext = (() => {
     if (!activeSource) return { text: task, task, source: null };
     const source = { ...activeSource }; delete source.text;
     const text = [task, "", t("cmp_payloadSource", activeSource.title), t("cmp_payloadUrl", activeSource.url), "",
-      t("cmp_referenceNotice"), `--- ${t("cmp_referenceStart")} ---`, activeSource.text,
-      `--- ${t("cmp_referenceEnd")} ---`].join("\n");
+      t("cmp_referenceNotice"), `--- ${t("cmp_referenceStart")} · ${activeMarker} ---`, activeSource.text,
+      `--- ${t("cmp_referenceEnd")} · ${activeMarker} ---`].join("\n");
     return { text, task, source };
   }
   function remove() {
-    activeSource = null; pendingSource = null; card.hidden = true; replace.hidden = true;
+    activeSource = activeMarker = null; pendingSource = null; card.hidden = true; replace.hidden = true;
   }
   async function resolveReplacement(usePending) {
     if (!pendingSource) return;

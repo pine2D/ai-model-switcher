@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 "use strict";
-
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -44,7 +43,6 @@ function finishMenuOp(op) {
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-
 async function driveConcurrentInstalls(first, second) {
   let settled = 0;
   first.then(() => { settled++; }, () => { settled++; });
@@ -177,6 +175,7 @@ async function run() {
   failNext.create = "menu create failed";
   await assert.rejects(PageContext.installMenus(), /menu create failed/);
 
+  saved.amsComposeContextError = "stale";
   await PageContext.handleClick({ menuItemId: "ams-send-selection", selectionText: " chosen text " },
     { id: 7, url: "https://example.com/a", title: "Example" });
   assert.equal(executions.length, 0);
@@ -186,6 +185,7 @@ async function run() {
   assert.equal(saved.amsComposeContext.url, "https://example.com/a");
   assert.equal(saved.amsComposeContext.truncated, false);
   assert.equal(typeof saved.amsComposeContext.capturedAt, "number");
+  assert.equal(saved.amsComposeContextError, null, "成功选区必须清除残留错误");
   assert.equal(opened, 1);
 
   const openedBeforePage = opened;

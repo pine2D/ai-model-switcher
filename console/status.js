@@ -83,14 +83,17 @@ function buildSummary(sites, results, question) {
 }
 // 归档快照：用户点汇总/导出的时刻就是"对比现场定格"的时刻，顺带归档——
 // "上次这个问题各家怎么答"从此可回看（console/archive.html）。
-function archiveRun(run) {
-  const clicked = run?.runId && { ...run, hosts: Array.isArray(run.hosts) ? [...run.hosts] : run.hosts, source: run.source && { ...run.source } };
-  if (!clicked) return Promise.resolve({});
+function freezeRun(run) {
+  return run?.runId && { ...run, hosts: Array.isArray(run.hosts) ? [...run.hosts] : run.hosts, source: run.source && { ...run.source } };
+}
+function readRun() {
   return new Promise((resolve) => chrome.storage.session.get("amsLastRun", (session) => {
-    if (chrome.runtime.lastError) { resolve(clicked); return; }
-    const last = session?.amsLastRun;
-    resolve(last?.runId === clicked.runId ? last : clicked);
+    resolve(chrome.runtime.lastError ? null : freezeRun(session?.amsLastRun));
   }));
+}
+function archiveRun(run) {
+  const clicked = freezeRun(run);
+  return readRun().then((last) => clicked ? last?.runId === clicked.runId ? last : clicked : last);
 }
 function archiveSummary(sites, results, q, run) {
   const byHost = {}; results.forEach((r) => { byHost[r.host] = r; });

@@ -108,8 +108,7 @@ const PageContext = (() => {
       truncated,
       capturedAt: Date.now(),
     };
-    const values = { amsComposeContext: context };
-    if (isPage) values.amsComposeContextError = null;
+    const values = { amsComposeContext: context, amsComposeContextError: null };
     await callbackApi((done) => chrome.storage.session.set(values, done));
     await openCompose();
     return { ok: true, context };
