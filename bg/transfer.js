@@ -22,7 +22,8 @@ const Transfer = (() => {
       : kind === "template" ? text(value, "id") && time(value, "updatedAt") && (tombstone || typeof value.text === "string")
       : kind === "group" ? text(value, "id") && time(value, "updatedAt") && (tombstone || text(value, "name") && Array.isArray(value.hosts))
       : kind === "history" ? text(value, "id") && text(value, "text") && text(value, "textHash") && time(value, "createdAt") && time(value, "lastUsedAt")
-      : text(value, "id") && time(value, "createdAt") && (time(value, "deletedAt") || typeof value.text === "string" && Array.isArray(value.results));
+      : text(value, "id") && time(value, "createdAt") && (time(value, "deletedAt") ||
+        typeof value.text === "string" && Array.isArray(value.results) && ArchiveModel.validMetadata(value));
     if (!valid) throw coded("invalid_record");
   }
   function validateRecord(row) {

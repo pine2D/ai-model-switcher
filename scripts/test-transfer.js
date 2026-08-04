@@ -10,6 +10,7 @@ function port() {
 function transferRuntime({ runForExport, rows }) {
   const chrome = { runtime: { onConnect: event(), onMessage: event() } };
   const scope = vm.createContext({ chrome, SyncEngine: { runForExport }, Data: { exportRecords: rows }, SyncModel: { hashText: async (text) => text }, crypto: require("node:crypto").webcrypto, Date });
+  vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8"), scope);
   vm.runInContext(fs.readFileSync("bg/transfer.js", "utf8") + ";this.transfer=Transfer", scope);
   return scope.transfer;
 }
@@ -40,6 +41,16 @@ async function main() {
   const guarded = syncRuntime(false);
   await guarded.sync.projectImportedState({});
   assert.equal(guarded.notes(), 0, "导入投影不得回写时间戳或二次排队");
+
+  const archive = { id: "00000000-0000-4000-8000-000000000001", createdAt: 1, updatedAt: 1, text: "Prompt", task: "Question", source: null,
+    results: [{ host: "a", label: "A", text: "Answer" }], favorite: true, tags: ["work"], note: "keep", winnerHost: "a",
+    hosts: ["a"], resultPreviews: [{ host: "a", label: "A", text: "Answer" }], searchText: "question\nwork\nkeep\na\nanswer" };
+  assert.equal(await transferRuntime({ runForExport: async () => {}, rows: async function* () {} }).validateContent({ kind: "archive", value: JSON.parse(JSON.stringify(archive)) }), true);
+  const invalid = (patch) => assert.throws(() => transferRuntime({ runForExport: async () => {}, rows: async function* () {} })
+    .validateRecord({ kind: "archive", value: { ...archive, ...patch } }), (error) => error.code === "invalid_record");
+  invalid({ note: "x".repeat(4001) });
+  invalid({ tags: Array(21).fill("work") });
+  invalid({ winnerHost: "b" });
   console.log("transfer tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -49,6 +49,7 @@ node scripts/test-transfer.js
 
 echo "[test] Google Drive 同步"
 node scripts/test-archive-model.js
+node scripts/test-archive-data.js
 node scripts/test-sync-model.js
 node scripts/test-sync-runtime.js
 node scripts/test-sync-ui.js

@@ -113,16 +113,17 @@ function transferRuntime() {
     onDisconnect: { addListener: (fn) => disconnectListeners.push(fn), removeListener: (fn) => disconnectListeners.splice(disconnectListeners.indexOf(fn), 1) },
     ack: (seq) => messageListeners.slice().forEach((fn) => fn({ ack: seq })),
     disconnect: () => disconnectListeners.slice().forEach((fn) => fn()) };
-  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "q", text: "q", textHash: "q", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "00000000-0000-4000-8000-000000000001", text: "q", results: [], createdAt: 1 } }; } },
+  const scope = vm.createContext({ Data: { exportRecords: async function* () { read++; yield { kind: "history", value: { id: "q", text: "q", textHash: "q", createdAt: 1, lastUsedAt: 1 } }; read++; yield { kind: "archive", value: { id: "00000000-0000-4000-8000-000000000001", text: "q", task: "q", source: null, results: [], favorite: false, tags: [], note: "", winnerHost: null, hosts: [], resultPreviews: [], searchText: "q", createdAt: 1, updatedAt: 1 } }; } },
     SyncEngine: { runForExport: async () => { synced++; } },
     chrome: { runtime: { onConnect: { addListener: () => {} } } }, SyncModel: { hashText: async (text) => text }, Date, console });
   const file = path.join(__dirname, "..", "bg/transfer.js");
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), scope);
   const source = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   vm.runInContext(source + ";this.transfer=typeof Transfer === 'undefined' ? undefined : Transfer", scope);
   return { transfer: scope.transfer, port, posted, reads: () => read, synced: () => synced };
 }
-
 async function main() {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/data.js"), "utf8") + ";this.data=Data", context);
   await context.data.addHistory("question");
   await context.data.addHistory("question");
@@ -144,7 +145,6 @@ async function main() {
   assert.deepEqual({ history: history.size, archives: [...archives.values()].filter((value) => !value.deletedAt).length }, activeAfterFirst,
     "重复导入不得增加活跃实体");
   assert.equal(outbox.size, outboxAfterFirst, "重复导入不得增加 outbox key");
-
   const streamed = transferRuntime();
   assert.equal(typeof streamed.transfer, "object", "必须提供迁移包端口");
   const exporting = streamed.transfer.attachPort(streamed.port);

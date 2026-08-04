@@ -37,6 +37,7 @@ function dataRuntime(model) {
   const chrome = { storage: { local: { get: async () => ({}), set: async () => {} } }, runtime: { onMessage: event(), sendMessage: () => {} } };
   const scope = vm.createContext({ SyncStore: store, SyncModel: model, chrome, crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000001" }, Date,
     SyncEngine: { scheduleLocal: () => { scheduled++; }, projectImportedState: async () => {} } });
+  vm.runInContext(fs.readFileSync("bg/archive-model.js", "utf8"), scope);
   vm.runInContext(fs.readFileSync("bg/data.js", "utf8") + ";this.data=Data", scope);
   return { data: scope.data, meta, history, archives, outbox, scheduled: () => scheduled };
 }

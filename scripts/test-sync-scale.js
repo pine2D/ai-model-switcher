@@ -74,7 +74,8 @@ async function main() {
   const source = fs.readFileSync("bg/store.js", "utf8");
   assert.ok(!source.includes(".getAll("), "IDB iterate/trim 不得把 store 或 outbox 全集读入内存");
   assert.match(source, /logicalKey[^\n]+unique:\s*false/, "logicalKey 索引必须允许重复 fileId");
-  assert.match(source, /pageArchives:[^\n]+Object\.hasOwn\(value, "deletedAt"\)/, "deletedAt:0 也必须作为 archive tombstone 隐藏");
+  assert.match(source, /function searchArchives[\s\S]*!Object\.hasOwn\(value, "deletedAt"\)/, "deletedAt:0 也必须作为 archive tombstone 隐藏");
+  assert.match(source, /pageArchives: \(cursor, limit\) => searchArchives\(cursor, limit\)/, "archive 翻页必须复用筛选扫描");
   const verify = fs.readFileSync("scripts/verify.sh", "utf8");
   for (const file of ["test-sync-integrity.js", "test-sync-scale.js", "test-sync-feedback.js"])
     assert.ok(verify.includes(file), `verify.sh 必须执行 ${file}`);

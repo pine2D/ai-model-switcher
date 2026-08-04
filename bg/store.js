@@ -74,6 +74,10 @@ const SyncStore = (() => {
     const time = store === "history" ? "lastUsedAt" : "createdAt";
     return { items, nextCursor: items.length === limit && last ? [last[time], last.id] : null };
   }
+  async function searchArchives(cursor, limit, accept) {
+    return page("archives", "created", cursor, limit, (value) =>
+      !Object.hasOwn(value, "deletedAt") && (!accept || accept(value)));
+  }
   async function iterate(kind, visit) {
     let after = null, item;
     while ((item = await next(kind, after))) { after = item.key; await visit(item.value); }
@@ -196,7 +200,7 @@ const SyncStore = (() => {
   return {
     open, getMeta: (key) => read("meta", key).then((row) => row && row.value), putMeta: (key, value) => write("meta", { key, value }), deleteMeta: (key) => erase("meta", key),
     putHistory: (record) => write("history", record), getHistory: (id) => read("history", id), pageHistory: (cursor, limit) => page("history", "lastUsed", cursor, limit),
-    putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => page("archives", "created", cursor, limit, (value) => !Object.hasOwn(value, "deletedAt")),
+    putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => searchArchives(cursor, limit), searchArchives,
     enqueue, readyOutbox, completeOutbox, countOutbox,
     putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
     deleteFile: (fileId) => erase("files", fileId),

@@ -37,13 +37,32 @@ const Data = (() => {
   }
   async function addArchive(entry = {}) {
     const createdAt = entry.createdAt || Date.now(), id = entry.id || crypto.randomUUID(), deviceId = await getDeviceId();
-    const record = { ...entry, id, createdAt, ts: entry.ts || createdAt, deviceId, schema: SyncModel.SCHEMA,
-      updatedAt: entry.updatedAt || createdAt, preview: entry.preview || SyncModel.utf8Preview(entry.text || "") };
+    const record = ArchiveModel.normalize(entry, { id, now: createdAt, deviceId });
     await SyncStore.putArchive(record);
     await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
     await SyncStore.trimBodies(200, 50);
     scheduleLocal();
     return record;
+  }
+  async function updateArchive(id, patch) {
+    const current = await resolve("archive", id);
+    if (!current || Object.hasOwn(current, "deletedAt")) throw Object.assign(new Error("not_found"), { code: "not_found" });
+    const record = ArchiveModel.update(current, patch, { now: Date.now(), deviceId: await getDeviceId() });
+    await SyncStore.putArchive(record);
+    await SyncStore.enqueue({ key: `archive:${id}`, kind: "archive", entityId: id, nextAt: 0, attempt: 0 });
+    scheduleLocal();
+    return record;
+  }
+  function searchArchives(cursor, limit = 50, filters = {}) {
+    const query = { query: String(filters.query || "").trim(), favorite: !!filters.favorite, tag: String(filters.tag || "").trim() };
+    return SyncStore.searchArchives(cursor, limit, (record) => ArchiveModel.matches(record, query));
+  }
+  async function archiveTags() {
+    const tags = new Set();
+    await SyncStore.iterate("archives", (record) => {
+      if (!Object.hasOwn(record, "deletedAt")) for (const tag of record.tags || []) tags.add(tag);
+    });
+    return [...tags].sort((left, right) => left.localeCompare(right));
   }
   async function deleteArchive(id) {
     const old = await SyncStore.getArchive(id);
@@ -173,7 +192,7 @@ const Data = (() => {
   }
   return { deviceId: getDeviceId, deviceState, noteStorageChanges, applyRemoteState, addHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
-    addArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), getArchive: (id) => resolve("archive", id),
+    addArchive, updateArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), searchArchives, archiveTags, getArchive: (id) => resolve("archive", id),
     seedState, importRecords, exportRecords, projectState };
 })();
 
@@ -187,6 +206,9 @@ if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addList
     archiveDelete: async () => { const record = await Data.deleteArchive(msg.id); return { ok: true, changed: record && "archiveChanged" }; },
     archivePage: () => Data.pageArchives(msg.cursor, msg.limit),
     archiveGet: async () => ({ record: await Data.getArchive(msg.id) }),
+    archiveSearch: () => Data.searchArchives(msg.cursor, msg.limit, msg.filters || {}),
+    archiveTags: async () => ({ tags: await Data.archiveTags() }),
+    archiveUpdate: async () => ({ record: await Data.updateArchive(msg.id, msg.patch), changed: "archiveChanged" }),
   };
   if (!Object.hasOwn(actions, msg.action)) return;
   actions[msg.action]().then((value) => {
