@@ -10,14 +10,16 @@ const PageContext = (() => {
   };
 
   function callbackApi(call) {
-    return new Promise((resolve) => call(() => { void chrome.runtime.lastError; resolve(); }));
+    return new Promise((resolve, reject) => call((value) => {
+      const error = chrome.runtime.lastError;
+      if (error) { reject(new Error(error.message)); return; }
+      resolve(value);
+    }));
   }
 
-  function readLanguage() {
-    return new Promise((resolve) => chrome.storage.local.get({ amsLang: "auto" }, (value) => {
-      void chrome.runtime.lastError;
-      resolve(value?.amsLang || "auto");
-    }));
+  async function readLanguage() {
+    const value = await callbackApi((done) => chrome.storage.local.get({ amsLang: "auto" }, done));
+    return value?.amsLang || "auto";
   }
 
   function resolveLanguage(preference) {
@@ -31,21 +33,26 @@ const PageContext = (() => {
     return MENU_COPY[kind][language] || MENU_COPY[kind].en;
   }
 
-  async function installMenus() {
-    const language = resolveLanguage(await readLanguage());
-    await callbackApi((done) => chrome.contextMenus.removeAll(done));
-    await callbackApi((done) => chrome.contextMenus.create({
-      id: MENU_SELECTION,
-      title: menuTitle("selection", language),
-      contexts: ["selection"],
-      documentUrlPatterns: ["http://*/*", "https://*/*"],
-    }, done));
-    await callbackApi((done) => chrome.contextMenus.create({
-      id: MENU_PAGE,
-      title: menuTitle("page", language),
-      contexts: ["page"],
-      documentUrlPatterns: ["http://*/*", "https://*/*"],
-    }, done));
+  let installQueue = Promise.resolve();
+  function installMenus() {
+    const current = installQueue.then(async () => {
+      const language = resolveLanguage(await readLanguage());
+      await callbackApi((done) => chrome.contextMenus.removeAll(done));
+      await callbackApi((done) => chrome.contextMenus.create({
+        id: MENU_SELECTION,
+        title: menuTitle("selection", language),
+        contexts: ["selection"],
+        documentUrlPatterns: ["http://*/*", "https://*/*"],
+      }, done));
+      await callbackApi((done) => chrome.contextMenus.create({
+        id: MENU_PAGE,
+        title: menuTitle("page", language),
+        contexts: ["page"],
+        documentUrlPatterns: ["http://*/*", "https://*/*"],
+      }, done));
+    });
+    installQueue = current.catch(() => {});
+    return current;
   }
 
   function canRead(tab) {
@@ -81,10 +88,10 @@ const PageContext = (() => {
     return { ok: true, context };
   }
 
-  chrome.runtime.onInstalled.addListener(() => installMenus());
-  chrome.runtime.onStartup.addListener(() => installMenus());
+  chrome.runtime.onInstalled.addListener(() => { void installMenus().catch(() => {}); });
+  chrome.runtime.onStartup.addListener(() => { void installMenus().catch(() => {}); });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.amsLang) return installMenus();
+    if (area === "local" && changes.amsLang) void installMenus().catch(() => {});
   });
   chrome.contextMenus.onClicked.addListener((info, tab) => { void handleClick(info, tab).catch(() => {}); });
 

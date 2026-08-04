@@ -18,18 +18,69 @@ let opened = 0;
 let saved = {};
 const created = [];
 const executions = [];
+const menus = new Map();
+const menuOps = [];
+const failNext = { get: null, create: null, session: null };
+let delayMenus = false;
+
+function takeError(name) {
+  const message = failNext[name];
+  failNext[name] = null;
+  return message;
+}
+
+function invokeCallback(callback, message, value) {
+  chrome.runtime.lastError = message ? { message } : null;
+  try { callback(value); } finally { chrome.runtime.lastError = null; }
+}
+
+function finishMenuOp(op) {
+  if (op.type === "remove") {
+    menus.clear();
+    invokeCallback(op.callback, null);
+    return;
+  }
+  const message = takeError("create") || (menus.has(op.item.id) ? `duplicate menu: ${op.item.id}` : null);
+  if (!message) menus.set(op.item.id, op.item);
+  invokeCallback(op.callback, message);
+}
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+async function driveConcurrentInstalls(first, second) {
+  let settled = 0;
+  first.then(() => { settled++; }, () => { settled++; });
+  second.then(() => { settled++; }, () => { settled++; });
+  let interleaved = false;
+  for (let guard = 0; settled < 2 && guard < 30; guard++) {
+    await tick();
+    if (!interleaved && menuOps.filter((op) => op.type === "remove").length >= 2) {
+      finishMenuOp(menuOps.splice(menuOps.findIndex((op) => op.type === "remove"), 1)[0]);
+      await tick();
+      finishMenuOp(menuOps.splice(menuOps.findIndex((op) => op.type === "create"), 1)[0]);
+      finishMenuOp(menuOps.splice(menuOps.findIndex((op) => op.type === "remove"), 1)[0]);
+      interleaved = true;
+      continue;
+    }
+    if (menuOps.length) finishMenuOp(menuOps.shift());
+  }
+  assert.equal(settled, 2, "并发菜单安装应完成");
+  await Promise.all([first, second]);
+}
 
 const chrome = {
   contextMenus: {
     removeAll(callback) {
       assert.equal(typeof callback, "function");
       removed++;
-      callback();
+      const op = { type: "remove", callback };
+      if (delayMenus) menuOps.push(op); else finishMenuOp(op);
     },
     create(item, callback) {
       assert.equal(typeof callback, "function");
       created.push(plain(item));
-      callback();
+      const op = { type: "create", item: plain(item), callback };
+      if (delayMenus) menuOps.push(op); else finishMenuOp(op);
       return item.id;
     },
     onClicked: event("clicked"),
@@ -51,14 +102,16 @@ const chrome = {
       get(defaults, callback) {
         assert.deepEqual(plain(defaults), { amsLang: "auto" });
         assert.equal(typeof callback, "function");
-        callback({ amsLang: language });
+        const message = takeError("get");
+        invokeCallback(callback, message, message ? undefined : { amsLang: language });
       },
     },
     session: {
       set(value, callback) {
         assert.equal(typeof callback, "function");
-        saved = plain(value);
-        callback();
+        const message = takeError("session");
+        if (!message) saved = plain(value);
+        invokeCallback(callback, message);
       },
     },
     onChanged: event("changed"),
@@ -87,16 +140,37 @@ async function run() {
   assert.deepEqual(created.map((item) => item.title), ["用 PolyAsk 比較所選內容", "用 PolyAsk 比較目前網頁"]);
 
   language = "zh_CN";
-  await listeners.installed[0]();
+  assert.equal(listeners.installed[0](), undefined);
+  await tick();
   assert.deepEqual(created.slice(-2).map((item) => item.title), ["用 PolyAsk 比较所选内容", "用 PolyAsk 比较当前网页"]);
   language = "en";
-  await listeners.startup[0]();
+  assert.equal(listeners.startup[0](), undefined);
+  await tick();
   assert.deepEqual(created.slice(-2).map((item) => item.title), ["Compare selection with PolyAsk", "Compare this page with PolyAsk"]);
   language = "auto";
   uiLanguage = "zh-CN";
-  await listeners.changed[0]({ amsLang: { newValue: "auto" } }, "local");
+  assert.equal(listeners.changed[0]({ amsLang: { newValue: "auto" } }, "local"), undefined);
+  await tick();
   assert.equal(removed, 4);
   assert.equal(created.length, 8);
+
+  delayMenus = true;
+  language = "en";
+  const firstInstall = PageContext.installMenus();
+  await tick();
+  language = "zh_CN";
+  const latestInstall = PageContext.installMenus();
+  await driveConcurrentInstalls(firstInstall, latestInstall);
+  delayMenus = false;
+  assert.deepEqual([...menus.values()].map((item) => item.title), ["用 PolyAsk 比较所选内容", "用 PolyAsk 比较当前网页"]);
+  assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), {
+    installed: 1, startup: 1, changed: 1, clicked: 1,
+  });
+
+  failNext.get = "language read failed";
+  await assert.rejects(PageContext.installMenus(), /language read failed/);
+  failNext.create = "menu create failed";
+  await assert.rejects(PageContext.installMenus(), /menu create failed/);
 
   await PageContext.handleClick(
     { menuItemId: "ams-send-selection", selectionText: " chosen text " },
@@ -110,6 +184,13 @@ async function run() {
   assert.equal(saved.amsComposeContext.truncated, false);
   assert.equal(typeof saved.amsComposeContext.capturedAt, "number");
   assert.equal(opened, 1);
+
+  const page = await PageContext.handleClick(
+    { menuItemId: "ams-send-page" },
+    { id: 7, url: "https://example.com/a", title: "Example" }
+  );
+  assert.equal(page.ok, false);
+  assert.equal(executions.length, 0);
 
   const longText = "😀".repeat(24001) + "MIDDLE" + "🦊".repeat(6001);
   await PageContext.handleClick(
@@ -132,8 +213,37 @@ async function run() {
   assert.deepEqual(plain(denied), { ok: false, code: "page_access_denied" });
   assert.equal(executions.length, 0);
 
+  const openedBeforeFailure = opened;
+  failNext.session = "session save failed";
+  await assert.rejects(PageContext.handleClick(
+    { menuItemId: "ams-send-selection", selectionText: "not saved" },
+    { id: 7, url: "https://example.com/a", title: "Example" }
+  ), /session save failed/);
+  assert.equal(opened, openedBeforeFailure);
+
+  for (const invoke of [
+    () => listeners.installed[0](),
+    () => listeners.startup[0](),
+    () => listeners.changed[0]({ amsLang: { newValue: "en" } }, "local"),
+  ]) {
+    failNext.get = "background install failed";
+    assert.equal(invoke(), undefined);
+    await tick();
+  }
+  failNext.session = "background save failed";
+  assert.equal(listeners.clicked[0](
+    { menuItemId: "ams-send-selection", selectionText: "not saved" },
+    { id: 7, url: "https://example.com/a", title: "Example" }
+  ), undefined);
+  await tick();
+  assert.equal(opened, openedBeforeFailure);
+
   const manifest = JSON.parse(source("manifest.json"));
-  assert.deepEqual(manifest.permissions.slice(-3), ["contextMenus", "activeTab", "scripting"]);
+  assert.deepEqual(manifest.permissions, ["storage", "tabs", "system.display", "identity", "alarms", "contextMenus", "activeTab", "scripting"]);
+  assert.deepEqual(manifest.host_permissions, ["https://www.googleapis.com/*"]);
+  assert.equal(Object.hasOwn(manifest, "optional_permissions"), false);
+  assert.equal(Object.hasOwn(manifest, "optional_host_permissions"), false);
+  assert.equal(JSON.stringify(manifest).includes("<all_urls>"), false);
 
   const imported = [];
   const noopEvent = { addListener() {} };
