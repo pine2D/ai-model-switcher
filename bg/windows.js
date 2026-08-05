@@ -118,7 +118,7 @@ async function openConsole(prefillHost) {
 async function _openConsole(prefillHost) {
   // 幂等：已开则聚焦既有 console（经 type 校验，陈旧/撞日常窗 → 继续新建），杜绝重复 console 孤立旧窗
   const cid = await getConsoleWinId();
-  if (cid != null && await updateIfPopup(cid, { focused: true, state: "normal" })) return;
+  if (cid != null && await updateIfPopup(cid, { focused: true, state: "normal" })) return cid;
   if (prefillHost) await chrome.storage.local.set({ amsConsolePrefill: prefillHost });
   const wa = await primaryWorkArea();
   const w = await chrome.windows.create({
@@ -127,6 +127,29 @@ async function _openConsole(prefillHost) {
   });
   consoleWinId = w.id;
   await chrome.storage.local.set({ amsConsoleWin: w.id });
+  return w.id;
+}
+
+async function ensureConsoleReady(prefillHost, timeoutMs = 5000) {
+  const windowId = await openConsole(prefillHost);
+  const expected = chrome.runtime.getURL("console/console.html");
+  const tabs = await chrome.tabs.query({ windowId });
+  const tab = tabs.find((item) => item.url === expected || item.pendingUrl === expected);
+  if (!tab?.id) throw new Error("console_missing");
+  if (tab.status === "complete") return windowId;
+  return new Promise((resolve, reject) => {
+    let timer, settled = false;
+    const finish = (error) => {
+      if (settled) return; settled = true;
+      clearTimeout(timer); chrome.tabs.onUpdated.removeListener(onUpdated); chrome.tabs.onRemoved.removeListener(onRemoved);
+      error ? reject(error) : resolve(windowId);
+    };
+    const onUpdated = (tabId, change) => { if (tabId === tab.id && change.status === "complete") finish(); };
+    const onRemoved = (tabId) => { if (tabId === tab.id) finish(new Error("console_closed")); };
+    chrome.tabs.onUpdated.addListener(onUpdated); chrome.tabs.onRemoved.addListener(onRemoved);
+    timer = setTimeout(() => finish(new Error("console_timeout")), timeoutMs);
+    chrome.tabs.get(tab.id).then((current) => { if (current.status === "complete") finish(); }, () => finish(new Error("console_missing")));
+  });
 }
 
 // 伴侣编辑窗：控制面（同 console），绝不进 amsWindows；通过专属 id 随工作区联动和关闭。

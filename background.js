@@ -95,7 +95,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.action === "openConsole") {
     // popup 发起时带当前站 host：console 首次使用（无勾选历史）预勾该站，打通"正看着这个站想群发"的路径
-    openConsole(msg.host); return;
+    ensureConsoleReady(msg.host).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
+    return true;
   }
   if (msg.action === "openScope") {
     if (raiseTimer != null) { clearTimeout(raiseTimer); raiseTimer = null; }

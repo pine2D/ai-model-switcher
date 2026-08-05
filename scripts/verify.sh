@@ -38,6 +38,7 @@ node scripts/test-run-meta.js
 node scripts/test-compose-context.js
 node scripts/test-site-selection.js
 node scripts/test-background.js
+node scripts/test-console-ready.js
 node scripts/test-archive-capture.js
 node scripts/test-archive-detail.js
 node scripts/test-archive-library-ui.js
