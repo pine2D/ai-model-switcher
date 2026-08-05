@@ -17,6 +17,8 @@ function testVisualSemantics() {
   const i18n = source("i18n.js");
   const group = html.match(/<button id="group"[\s\S]*?<\/button>/)?.[0] || "";
 
+  assert.ok(!html.includes('class="brand"') && !html.includes("data-brand-icon"), "控制台不应保留 PolyAsk 标识");
+  assert.doesNotMatch(css, /\.brand(?:\s|\{|\.)/, "控制台不应保留仅供品牌标识使用的样式");
   assert.ok(group && !group.includes("<svg"), "范围入口不应继续显示下拉箭头");
   assert.match(css, /#group\{[^}]*justify-content:center/, "范围数量应在按钮内居中");
   assert.ok(!html.includes("发送 ▸") && !compose.includes("发送到全部 ▸") && !i18n.includes("▸"),

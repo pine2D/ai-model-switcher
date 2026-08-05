@@ -61,12 +61,13 @@ const ComposeContext = (() => {
   }
 
   async function init() {
-    if (initialized) return;
+    if (initialized) return false;
     initialized = true;
     const values = await sessionGet([CONTEXT_KEY, ERROR_KEY]);
     await sessionRemove([CONTEXT_KEY, ERROR_KEY]);
     if (values[CONTEXT_KEY]) activate(values[CONTEXT_KEY]);
     if (values[ERROR_KEY]) showError(values[ERROR_KEY]);
+    return Boolean(values[CONTEXT_KEY]);
   }
   function payload(task) {
     if (!activeSource) return { text: task, task, source: null };

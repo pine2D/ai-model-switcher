@@ -70,7 +70,7 @@ for (const file of files) {
   }
 }
 assert.equal(lucideCount, 30, "内联 Lucide 图标应恰好为 30 个");
-assert.equal(brandCount, 3, "data-brand-icon 应恰好为 3 个");
+assert.equal(brandCount, 2, "data-brand-icon 应恰好为 2 个");
 assert.deepEqual([...lucideNames].sort(), Object.keys(LUCIDE_BODY_HASHES).sort(), "内联 Lucide 应恰好覆盖 27 个固定名称");
 for (const file of ["popup/popup.css", "console/console.css"]) {
   assert.ok(!fs.readFileSync(file, "utf8").includes("data:image/svg+xml"), `${file} 不得保留手写 data SVG`);

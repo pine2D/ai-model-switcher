@@ -21,7 +21,6 @@ class El {
   append() {}
   focus() {}
 }
-
 const COPY = {
   en: {
     cmp_sourceSelection: "Selected text", cmp_sourcePage: "Full page", cmp_sourceCount: "{0} characters",
@@ -92,19 +91,19 @@ function harness(initial = {}, language = "en", uuids = []) {
     setLanguage(next) { lang = next; for (const listener of documentListeners["i18n:changed"] || []) listener(); },
   };
 }
-function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFailures = 0, language = "en" } = {}) {
+function composeHarness({ delayInit = false, initialSource = false, savedPrompt, initialText = " question ", sessionSetFailures = 0, localSetFailures = 0, language = "en" } = {}) {
   const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template",
     "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel",
     "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
-  els["ch-text"].value = " question ";
+  els["ch-text"].value = initialText;
   const messages = [], localWrites = [], sessionWrites = [];
   let closed = 0, initialized = 0, initReady = !delayInit, releaseInit;
   const sourceMeta = { kind: "page", title: "Example", url: "https://example.com", truncated: false, capturedAt: 1 };
   const ComposeContext = {
     init() {
       initialized++;
-      return delayInit ? new Promise((resolve) => { releaseInit = () => { initReady = true; resolve(); }; }) : Promise.resolve();
+      return delayInit ? new Promise((resolve) => { releaseInit = () => { initReady = true; resolve(initialSource); }; }) : Promise.resolve(initialSource);
     },
     payload(task) { return { text: `${initReady ? "FULL" : "EARLY"}:${task}`, task, source: initReady ? sourceMeta : null }; },
   };
@@ -112,7 +111,7 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
     runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage(message, done) { messages.push(message); done?.({ ok: true }); } },
     storage: {
       local: {
-        get(_keys, done) { done({ amsConsole: { selected: { a: true } } }); },
+        get(_keys, done) { done({ amsConsole: { selected: { a: true } }, amsConsolePrompt: savedPrompt }); },
         set(value, done) {
           localWrites.push(value);
           const failed = localSetFailures > 0; if (failed) localSetFailures--;
@@ -241,9 +240,10 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
   assert.equal(live.els["cmp-source-title"].textContent, "Example");
   assert.deepEqual(JSON.parse(JSON.stringify(live.removes)), [["amsComposeContext"]], "无当前来源时实时来源必须立即消费");
 
+  const freshSource = composeHarness({ initialSource: true, savedPrompt: "stale draft", initialText: "" }); await new Promise(setImmediate); assert.equal(freshSource.els["ch-text"].value, "", "新来源启动不得恢复旧草稿");
+  const ordinary = composeHarness({ savedPrompt: "saved draft", initialText: "" }); await new Promise(setImmediate); assert.equal(ordinary.els["ch-text"].value, "saved draft", "普通打开仍应恢复草稿");
   const direct = composeHarness();
-  assert.equal(direct.initialized(), 1, "compose 必须初始化来源上下文");
-  await direct.els["ch-send"].fire("click");
+  assert.equal(direct.initialized(), 1, "compose 必须初始化来源上下文"); await direct.els["ch-send"].fire("click");
   const historyAdd = direct.messages.find((message) => message.action === "historyAdd");
   const sendAll = direct.messages.find((message) => message.action === "sendAll");
   assert.equal(historyAdd.text, "FULL:question", "提问历史必须记录实际发送 payload");

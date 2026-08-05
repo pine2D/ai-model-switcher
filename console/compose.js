@@ -1,6 +1,6 @@
 // console/compose.js — 提示词工作区：编辑、模板、历史与发送。
 applyI18n();
-const composeContextReady = ComposeContext.init().catch(() => {});
+const composeContextReady = ComposeContext.init().catch(() => false);
 const elText = document.getElementById("ch-text");
 const elList = document.getElementById("cmp-list");
 const elActions = document.getElementById("cmp-actions");
@@ -158,14 +158,15 @@ function loadHistoryItem(id) {
   });
 }
 document.getElementById("cmp-more").addEventListener("click", () => loadHistory(false));
-chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates"], (o) => {
+chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates"], async (o) => {
   if (chrome.runtime.lastError) { document.getElementById("cmp-status").textContent = t("cmp_settingsLoadFailed"); return; }
+  const freshSource = await composeContextReady;
   const c = (o && o.amsConsole) || {};
   const savedSelection = c.selected || {};
   const selected = resolveSiteSelection(savedSelection);
   if (!Object.keys(savedSelection).length) chrome.storage.local.set({ amsConsole: { ...c, selected } });
   const prompt = o.amsConsolePrompt != null ? o.amsConsolePrompt : c.prompt;
-  if (prompt) elText.value = prompt;
+  if (!freshSource && prompt) elText.value = prompt;
   templates = (o && o.amsTemplates) || [];
   renderScope(selected); renderLibrary(); elText.focus();
 });
