@@ -8,6 +8,7 @@ const entry = model.normalize({ text: "Full prompt", task: "Check claim", source
   results: [{ host: "a.test", label: "A", text: "An answer about lithium", state: "think" }, { host: "b.test", label: "B", text: null, code: "no_answer" }] },
   { id: "id", now: 10, deviceId: "device" });
 assert.equal(entry.task, "Check claim");
+assert.equal(model.normalize({ text: "Reference payload", task: "", source: entry.source, results: [] }, { id: "source-only", now: 10, deviceId: "device" }).task, "", "来源型归档必须保留空任务语义");
 assert.deepEqual(entry.hosts, ["a.test", "b.test"]);
 assert.equal(entry.resultPreviews[0].text, "An answer about lithium");
 assert.ok(entry.searchText.includes("example") && entry.searchText.includes("lithium"));

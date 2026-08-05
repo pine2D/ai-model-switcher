@@ -54,17 +54,18 @@ const ComposeContext = (() => {
     do { activeMarker = crypto.randomUUID(); } while (String(source.text || "").includes(activeMarker));
     activeSource = source; render();
   }
-  function receive(source) {
+  async function receive(source) {
     clearError();
     if (activeSource) { pendingSource = source; replace.hidden = false; return; }
-    activate(source); void sessionRemove(CONTEXT_KEY);
+    if (!await sessionRemove(CONTEXT_KEY)) { showError("source_update_failed"); return false; }
+    activate(source); return true;
   }
 
   async function init() {
     if (initialized) return false;
     initialized = true;
     const values = await sessionGet([CONTEXT_KEY, ERROR_KEY]);
-    await sessionRemove([CONTEXT_KEY, ERROR_KEY]);
+    if (!await sessionRemove([CONTEXT_KEY, ERROR_KEY])) { showError("source_update_failed"); return false; }
     if (values[CONTEXT_KEY]) activate(values[CONTEXT_KEY]);
     if (values[ERROR_KEY]) showError(values[ERROR_KEY]);
     return Boolean(values[CONTEXT_KEY]);
@@ -72,13 +73,16 @@ const ComposeContext = (() => {
   function payload(task) {
     if (!activeSource) return { text: task, task, source: null };
     const source = { ...activeSource }; delete source.text;
-    const text = [task, "", t("cmp_payloadSource", activeSource.title), t("cmp_payloadUrl", activeSource.url), "",
-      t("cmp_referenceNotice"), `--- ${t("cmp_referenceStart")} · ${activeMarker} ---`, activeSource.text,
-      `--- ${t("cmp_referenceEnd")} · ${activeMarker} ---`].join("\n");
+    const titleText = String(activeSource.title || "").replace(/\s+/g, " ").trim();
+    const text = [...(task ? [task, ""] : []), t("cmp_referenceNotice"),
+      `--- ${t("cmp_referenceStart")} · ${activeMarker} ---`, t("cmp_payloadSource", titleText),
+      t("cmp_payloadUrl", activeSource.url), "", activeSource.text, `--- ${t("cmp_referenceEnd")} · ${activeMarker} ---`].join("\n");
     return { text, task, source };
   }
-  function remove() {
+  async function remove() {
+    if (pendingSource && !await sessionRemove(CONTEXT_KEY)) { showError("source_update_failed"); return false; }
     activeSource = activeMarker = null; pendingSource = null; card.hidden = true; replace.hidden = true;
+    clearError(); return true;
   }
   async function resolveReplacement(usePending) {
     if (!pendingSource) return;
@@ -94,7 +98,7 @@ const ComposeContext = (() => {
   document.addEventListener("i18n:changed", () => { render(); if (errorCode) showError(errorCode); });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "session") return;
-    if (changes[CONTEXT_KEY]?.newValue) receive(changes[CONTEXT_KEY].newValue);
+    if (changes[CONTEXT_KEY]?.newValue) void receive(changes[CONTEXT_KEY].newValue);
     if (changes[ERROR_KEY] && Object.hasOwn(changes[ERROR_KEY], "newValue")) {
       if (changes[ERROR_KEY].newValue === null) clearError();
       else if (changes[ERROR_KEY].newValue !== undefined) showError(changes[ERROR_KEY].newValue);

@@ -22,7 +22,7 @@
       <option value="think" data-i18n="con_tierThink">🧠 深度思考</option>
       <option value="fast" data-i18n="con_tierFast">⚡ 快速</option>
     </select>
-    <input id="prompt" type="text" data-i18n-ph="con_promptPh" data-i18n-aria="con_promptAria" placeholder="输入要群发的问题…（Enter 发送 · ↑↓ 历史）" aria-label="群发问题" aria-keyshortcuts="Alt+P">
+    <textarea id="prompt" rows="1" data-i18n-ph="con_promptPh" data-i18n-aria="con_promptAria" placeholder="输入要群发的问题…（Enter 发送 · ↑↓ 历史）" aria-label="群发问题" aria-keyshortcuts="Alt+P"></textarea>
     <button id="image" type="button" class="icon" data-i18n-title="con_imageAdd" data-i18n-aria="con_imageAdd" title="添加图片" aria-label="添加图片" aria-pressed="false"><svg class="lucide lucide-image-plus" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 5h6" /><path d="M19 2v6" /><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /><circle cx="9" cy="9" r="2" /></svg></button>
     <input id="image-input" type="file" accept="image/png,image/jpeg" multiple hidden>
     <button id="compose" class="icon" data-i18n-title="con_composeTitle" data-i18n-aria="con_composeTitle" title="展开编辑长文本" aria-label="展开编辑长文本"><svg class="lucide lucide-pencil" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></svg></button>

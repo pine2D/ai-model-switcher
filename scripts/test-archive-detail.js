@@ -75,6 +75,11 @@ assert.equal(root.querySelectorAll(".ar-sites").length, 1, "详情应提供站�
 assert.equal(root.querySelector(".ar-winner").textContent, "Mark as best");
 assert.equal(root.querySelector("a").getAttribute("href"), "https://example.test/");
 assert.match(scope.detail.entryMarkdown(editable), /\[Source\]\(https:\/\/example\.test\/\)/);
+const sourceOnly = { ...editable, task: "", text: "Reference payload" };
+assert.equal(scope.detail.question(sourceOnly), "Source", "来源型归档列表应使用来源标题而非完整载荷");
+scope.detail.render(sourceOnly, { update: rejectUpdate, errorText: (item) => item.code });
+assert.equal(root.querySelector(".ar-question").textContent, "Source");
+assert.match(scope.detail.entryMarkdown(sourceOnly), /# Question\n\nSource\n/);
 const hostileSource = { ...editable, source: { kind: "page", title: "Bad [title]\\\nnext", url: "https://example.test/a (b)?q=hello world" } };
 const safeMarkdown = scope.detail.entryMarkdown(hostileSource);
 assert.match(safeMarkdown, /\[Bad \\\[title\\\]\\\\ next\]\(https:\/\/example\.test\/a%20%28b%29\?q=hello%20world\)/);

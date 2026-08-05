@@ -93,7 +93,7 @@ function renderList(preferredId, updateDetail = true) {
     if (entry.id === selectedId) button.setAttribute("aria-current", "true");
     const date = document.createElement("time"); date.textContent = new Date(entry.ts).toLocaleString(document.documentElement.lang || undefined);
     const question = document.createElement("span");
-    const text = entry.task || entry.preview || entry.text || "";
+    const text = entry.task || entry.source?.title || entry.source?.url || entry.preview || entry.text || "";
     question.textContent = text.length > 52 ? text.slice(0, 52) + "…" : (text || "—");
     button.append(date, question);
     const sites = siteLabels(entry);

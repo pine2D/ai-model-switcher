@@ -79,7 +79,7 @@ async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   const now = Date.now();
   const runId = run.runId || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : now.toString(36) + Math.random().toString(36).slice(2));
-  const runMeta = { runId, text, task: String(run.task || text), source: run.source || null,
+  const runMeta = { runId, text, task: typeof run.task === "string" ? run.task : String(text), source: run.source || null,
     hosts: Array.isArray(run.hosts) ? run.hosts : sites.map((site) => site.host), tier: run.tier || tier || null, sentAt: run.sentAt || now };
   await chrome.storage.session.set({ amsLastRun: runMeta });
   const wins = await getWindows();

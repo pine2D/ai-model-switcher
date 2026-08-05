@@ -20,6 +20,8 @@ async function preservesRunMetadata() {
   await vm.runInContext('sendAll([], "Full prompt", "think", false, 0, [], { task: "Question", source: null })', context);
   assert.deepEqual(plain(saved.amsLastRun), { runId: "new-run", text: "Full prompt", task: "Question", source: null, hosts: [], tier: "think", sentAt: now });
   assert.deepEqual(plain(pushed.find((item) => item.type === "sendStart").run), plain(saved.amsLastRun));
+  await vm.runInContext('sendAll([], "Reference payload", null, false, 0, [], { task: "", source: { kind: "page" } })', context);
+  assert.equal(saved.amsLastRun.task, "", "后台不得把空任务替换成完整来源载荷");
 }
 
 async function retryKeepsLogicalRun() {
@@ -112,10 +114,17 @@ function runClearedResetsChips() {
   let receive;
   const elements = Object.fromEntries(["failsum", "live", "send", "retry"].map((id) => [id, new El()])), chip = new El();
   chip.dataset = { host: "a", label: "A" }; chip.title = "old"; chip.setAttribute("aria-label", "old"); ["send", "open", "done", "fail"].forEach((x) => chip.classList.add(x));
-  const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receive = fn; } }, sendMessage() {} } };
+  const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receive = fn; } }, sendMessage() {} }, storage: {
+    session: { get(_key, done) { done({ amsComposeDispatchUntil: Date.now() + 1000 }); }, remove(_key, done) { done?.(); } }, onChanged: { addListener() {} },
+  } };
   const context = { chrome, document: { documentElement: {}, getElementById: (id) => elements[id], querySelector: () => chip, querySelectorAll: () => [chip] },
     selected: {}, t: (key) => key, setTimeout: () => 0, clearTimeout: () => {}, Date, Map, console };
   vm.runInNewContext(source("console/status.js"), context);
+  assert.equal(elements.send.disabled, true, "新打开的控制台必须恢复工作区发送锁");
+  receive({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: { runId: "run", text: "Q", hosts: ["a"] }, hasImage: false });
+  assert.equal(elements.send.disabled, true, "外部工作区发起群发后控制台发送按钮必须锁定");
+  receive({ from: "AMS_BG", type: "siteResult", result: { host: "a", ok: true } });
+  assert.equal(elements.send.disabled, false, "全部站点完成后控制台发送按钮必须解锁");
   receive({ from: "AMS_BG", type: "runCleared" });
   ["send", "open", "done", "fail"].forEach((x) => assert.equal(chip.classList.contains(x), false));
   assert.equal(chip.title, "A · con_chipHint"); assert.equal(chip.getAttribute("aria-label"), "A");

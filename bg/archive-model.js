@@ -29,7 +29,7 @@ const ArchiveModel = (() => {
       ...(value.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLowerCase();
   }
   function normalize(entry = {}, { id, now, deviceId }) {
-    const results = Array.isArray(entry.results) ? entry.results : [], task = clean(entry.task || entry.text);
+    const results = Array.isArray(entry.results) ? entry.results : [], task = clean(typeof entry.task === "string" ? entry.task : entry.text);
     const record = { ...entry, id, text: String(entry.text || ""), task, source: cleanSource(entry.source), results,
       favorite: false, tags: [], note: "", winnerHost: null, synthesis: null,
       hosts: results.map((item) => clean(item.host)).filter(Boolean),

@@ -28,6 +28,11 @@ function savePrompt(text) {
   return new Promise((resolve, reject) => chrome.storage.local.set({ amsConsolePrompt: text },
     () => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve()));
 }
+function dispatchLock(until = 0) {
+  const method = until ? "set" : "remove", value = until ? { amsComposeDispatchUntil: until } : "amsComposeDispatchUntil";
+  return new Promise((resolve, reject) => chrome.storage.session[method](value,
+    () => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve()));
+}
 function finishFailed(key) { document.getElementById("cmp-status").textContent = t(key); setFinishing(false); }
 
 function itemLabel(item) {
@@ -197,10 +202,10 @@ elText.addEventListener("keydown", (e) => {
 });
 document.getElementById("ch-send").addEventListener("click", async () => {
   const task = elText.value.trim();
-  if (!task) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
   if (finishing) return; setFinishing(true);
   await composeContextReady;
   const payload = ComposeContext.payload(task);
+  if (!payload.text.trim()) { setFinishing(false); elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
   let c;
   try { c = await consoleSettings(); }
   catch (error) { finishFailed("cmp_settingsLoadFailed"); return; }
@@ -208,14 +213,16 @@ document.getElementById("ch-send").addEventListener("click", async () => {
   const sites = SITES.filter((s) => selected[s.host]);
   if (!sites.length) { setFinishing(false); const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
   const tier = c.tier || null;
-  try { await savePrompt(payload.text); }
+  try { await savePrompt(payload.text); await dispatchLock(Date.now() + 10000); }
   catch (error) { finishFailed("cmp_pendingSaveFailed"); return; }
-  if (!await requestConsoleReady()) { finishFailed("cmp_consoleOpenFailed"); return; }
+  if (!await requestConsoleReady()) { await dispatchLock().catch(() => {}); finishFailed("cmp_consoleOpenFailed"); return; }
   try { await RunMeta.clearPending(); }
-  catch (error) { finishFailed("cmp_pendingSaveFailed"); return; }
+  catch (error) { await dispatchLock().catch(() => {}); finishFailed("cmp_pendingSaveFailed"); return; }
   chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text: payload.text }, (result) => {
-    const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier, run: { task: payload.task, source: payload.source } }); window.close(); };
-    if (chrome.runtime.lastError || !result?.ok) chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, send);
-    else send();
+    if (chrome.runtime.lastError || !result?.ok) {
+      chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, () => window.close());
+    } else window.close();
   });
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier,
+    run: { task: payload.task, source: payload.source } });
 });

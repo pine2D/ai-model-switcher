@@ -17,12 +17,12 @@ class El {
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve));
 
-function harness({ localSetFails = false, localGetFails = false, initialLocalGetFails = false, sessionRemoveFails = false, settings = { selected: { "claude.ai": true }, tier: "think" } } = {}) {
+function harness({ localSetFails = false, localGetFails = false, initialLocalGetFails = false, sessionRemoveFails = false, delayHistory = false, settings = { selected: { "claude.ai": true }, tier: "think" } } = {}) {
   const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template", "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel", "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
   els["ch-text"].value = "question";
   const messages = [], localWrites = [], sessionWrites = [];
-  let closed = 0, openConsoleDone, localGets = 0, currentSettings = settings;
+  let closed = 0, openConsoleDone, historyDone, localGets = 0, currentSettings = settings;
   const timers = [];
   const chrome = {
     runtime: {
@@ -30,6 +30,7 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
       sendMessage(message, done) {
         messages.push(message);
         if (message.action === "openConsole") openConsoleDone = done;
+        else if (message.action === "historyAdd" && delayHistory) historyDone = done;
         else done?.({ ok: true });
       },
     },
@@ -72,6 +73,7 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
   return {
     ...els, messages, localWrites, sessionWrites, get closed() { return closed; },
     openConsoleDone(result) { assert.ok(openConsoleDone, "应已发出 openConsole"); openConsoleDone(result); },
+    historyDone(result) { assert.ok(historyDone, "应已发出 historyAdd"); historyDone(result); },
     timeout() { const timer = timers.find(Boolean); assert.ok(timer, "应已设置超时"); timer(); },
     setSettings(next) { currentSettings = next; },
   };
@@ -99,10 +101,16 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
   await tick();
   assert.equal(sending.messages.some((msg) => msg.action === "historyAdd" || msg.action === "sendAll"), false);
   assert.equal(sending["ch-send"].disabled, true); assert.equal(sending["ch-back"].disabled, true); assert.equal(sending["ch-close"].disabled, true);
+  assert.ok(Number(sending.sessionWrites[0]?.amsComposeDispatchUntil) > Date.now(), "聚焦控制台前必须建立跨窗口发送锁");
   await sending["ch-send"].fire("click");
   assert.equal(sending.messages.filter((msg) => msg.action === "openConsole").length, 1, "重复点击不得启动第二轮");
   sending.openConsoleDone({ ok: true }); await sendTask;
   assert.deepEqual(sending.messages.filter((msg) => ["openConsole", "historyAdd", "sendAll"].includes(msg.action)).map((msg) => msg.action), ["openConsole", "historyAdd", "sendAll"]);
+
+  const nonblockingHistory = harness({ delayHistory: true }); const nonblockingTask = nonblockingHistory["ch-send"].fire("click");
+  await tick(); nonblockingHistory.openConsoleDone({ ok: true }); await nonblockingTask;
+  assert.equal(nonblockingHistory.messages.some((msg) => msg.action === "sendAll"), true, "历史落盘不得延迟实际群发");
+  nonblockingHistory.historyDone({ ok: true });
 
   const rejected = harness();
   const rejectedTask = rejected["ch-send"].fire("click");

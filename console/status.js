@@ -48,6 +48,19 @@ function applyResults(results) {
 let progress = { total: 0, done: 0 };
 let lastSend = null; // {text, task, source, tier, hasImage, images}
 const elSend = document.getElementById("send");
+let dispatchTimer = null;
+function applyDispatchLock(until) {
+  clearTimeout(dispatchTimer); dispatchTimer = null;
+  const left = Number(until) - Date.now();
+  if (left > 0) { elSend.disabled = true; dispatchTimer = setTimeout(() => applyDispatchLock(0), left); }
+  else if (!(progress.total && progress.done < progress.total)) elSend.disabled = false;
+}
+chrome.storage.session.get("amsComposeDispatchUntil", (value) => {
+  if (!chrome.runtime.lastError) applyDispatchLock(value?.amsComposeDispatchUntil);
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "session" && changes.amsComposeDispatchUntil) applyDispatchLock(changes.amsComposeDispatchUntil.newValue);
+});
 function updateSendLabel() {
   elSend.textContent = (progress.total && progress.done < progress.total) ? t("con_sending", progress.done, progress.total) : t("con_sendAll");
 }
@@ -99,7 +112,7 @@ function archiveSummary(sites, results, q, run) {
   const byHost = {}; results.forEach((r) => { byHost[r.host] = r; });
   const meta = run || {};
   const entry = {
-    ts: Date.now(), text: meta.text || q || "", task: meta.task || q || "", source: meta.source || null,
+    ts: Date.now(), text: meta.text || q || "", task: typeof meta.task === "string" ? meta.task : q || "", source: meta.source || null,
     results: sites.map((s) => { const r = byHost[s.host] || {}; return { host: s.host, label: s.label, text: r.text || null, state: r.state || null, code: r.code || null }; }),
   };
   return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_DATA", action: "archiveAdd", entry }, (result) => resolve(!chrome.runtime.lastError && !!result?.ok)));
@@ -146,6 +159,7 @@ function armDotTimeouts(hosts, ms) {
       if (!chip || !chip.classList.contains("send")) return;
       setDot(h, "fail", t("con_errTimeout"));
       if (progress.total && progress.done < progress.total) { progress.done++; updateSendLabel(); }
+      if (progress.total && progress.done >= progress.total) elSend.disabled = false;
       updateRetry(); updateFailSum();
     }, ms || 50000);
     dotTimers.set(h, timer);
@@ -156,17 +170,19 @@ function clearRunState() {
   [...document.querySelectorAll(".chip")].forEach((chip) => {
     chip.classList.remove("send", "open", "done", "fail"); chip.title = chip.dataset.label + " · " + t("con_chipHint"); chip.setAttribute("aria-label", chip.dataset.label);
   });
-  lastSend = null; progress = { total: 0, done: 0 }; updateSendLabel(); updateRetry(); updateFailSum();
+  lastSend = null; progress = { total: 0, done: 0 }; elSend.disabled = false; updateSendLabel(); updateRetry(); updateFailSum();
 }
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.from === "AMS_COMPOSE" && msg.type === "historySaveFailed") { flashNote(t("con_historySaveFailed")); return; }
   if (!msg || msg.from !== "AMS_BG") return;
   if (msg.type === "sendStart") {
     ignoreResults = false; // 新一轮群发开始，恢复接收结果
-    const run = msg.run || { text: msg.text, task: msg.task || msg.text, source: msg.source || null, tier: msg.tier || null, hosts: msg.hosts };
+    const run = msg.run || { text: msg.text, task: typeof msg.task === "string" ? msg.task : msg.text, source: msg.source || null, tier: msg.tier || null, hosts: msg.hosts };
     const images = msg.hasImage && lastSend && (lastSend.runId === run.runId || !lastSend.runId && lastSend.text === run.text) ? lastSend.images : null;
     if (run.text) lastSend = { ...run, hasImage: !!msg.hasImage, images };
     progress = { total: msg.hosts.length, done: 0 };
+    clearTimeout(dispatchTimer); dispatchTimer = null; elSend.disabled = true;
+    chrome.storage.session.remove?.("amsComposeDispatchUntil", () => void chrome.runtime.lastError);
     msg.hosts.forEach((h) => setDot(h, "send", t("con_sendingDot")));
     armDotTimeouts(msg.hosts, msg.hasImage ? 95000 : undefined);
     updateSendLabel(); updateRetry(); updateFailSum();
@@ -176,6 +192,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (ignoreResults) return; // closeAll 后的迟到结果不复活芯片
     applyResults([msg.result]);
     progress.done++;
+    if (progress.done >= progress.total) elSend.disabled = false;
     updateSendLabel(); updateRetry(); updateFailSum();
   }
 });

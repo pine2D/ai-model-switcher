@@ -100,7 +100,7 @@ html,body{margin:0;height:100%;overflow:hidden;font:13px/1.4 -apple-system,"Sego
 #tierbuttons button:first-child{border-radius:8px 0 0 8px}
 #tierbuttons button:last-child{border-radius:0 8px 8px 0;border-right-width:1px}
 #tierbuttons button[aria-pressed="true"]{background:var(--active-bg);color:var(--active-text);box-shadow:inset 0 0 0 1px var(--active-line)}
-#prompt{height:34px;box-sizing:border-box;flex:1 1 320px;min-width:137px;padding:0 11px;border:1px solid var(--line-3);border-radius:9px;background:var(--fill-2);color:var(--text);font-size:13px}
+#prompt{height:34px;box-sizing:border-box;flex:1 1 320px;min-width:137px;padding:7px 11px;border:1px solid var(--line-3);border-radius:9px;background:var(--fill-2);color:var(--text);font:inherit;font-size:13px;line-height:18px;resize:none;overflow:hidden;white-space:pre}
 #prompt::placeholder{color:var(--faint)}
 #prompt:focus{border-color:var(--name-line)}
 #prompt[aria-invalid="true"],#group[aria-invalid="true"],#ch-text[aria-invalid="true"],#group-name[aria-invalid="true"]{border-color:var(--danger);box-shadow:0 0 0 2px var(--danger-fill)}

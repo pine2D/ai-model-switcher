@@ -14,10 +14,15 @@ const ArchiveDetail = (() => {
   function sourceUrl(source) {
     try { const url = new URL(source?.url); return ["http:", "https:"].includes(url.protocol) ? url.href : null; } catch (_) { return null; }
   }
+  function question(entry) {
+    if (entry.task) return entry.task;
+    const source = String(entry.source?.title || "").replace(/[\r\n]+/g, " ").trim();
+    return source || sourceUrl(entry.source) || entry.text || "";
+  }
   const markdownText = (value) => String(value).replace(/[\r\n]+/g, " ").replace(/[\\[\]]/g, "\\$&");
   const markdownUrl = (value) => value.replace(/[()]/g, (char) => char === "(" ? "%28" : "%29").replace(/\s/g, (char) => encodeURIComponent(char));
   function entryMarkdown(entry, errorText = (result) => result.code || t("con_errNoAnswer")) {
-    const markdown = ["# " + t("arc_question"), "\n" + (entry.task || entry.text || "")];
+    const markdown = ["# " + t("arc_question"), "\n" + question(entry)];
     const url = sourceUrl(entry.source);
     if (url) markdown.push("\n**" + t("arc_source") + "**: [" + markdownText(entry.source.title || url) + "](" + markdownUrl(url) + ")");
     for (const result of entry.results || []) {
@@ -33,7 +38,7 @@ const ArchiveDetail = (() => {
     cancelPendingNote();
     const root = document.getElementById("ar-detail");
     const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).then(() => true, () => false);
-    root.replaceChildren(node("h1", "ar-question", entry.task || entry.text || ""));
+    root.replaceChildren(node("h1", "ar-question", question(entry)));
     const capturedAt = new Date(Number(entry.ts || entry.createdAt));
     if (capturedAt.getTime() > 0) {
       const captured = node("time", "ar-captured", t("arc_capturedAt", capturedAt.toLocaleString(document.documentElement.lang || undefined)));
@@ -104,5 +109,5 @@ const ArchiveDetail = (() => {
     });
     root.appendChild(nav); root.append(...sections);
   }
-  return { render, entryMarkdown };
+  return { render, entryMarkdown, question };
 })();

@@ -69,21 +69,28 @@ const PageContext = (() => {
   }
 
   function extractPage(rootDocument = document) {
-    const root = rootDocument.querySelector("article") || rootDocument.querySelector("main") ||
-      rootDocument.querySelector('[role="main"]') || rootDocument.body;
-    return String(root?.innerText || "").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    const roots = [rootDocument.querySelector("article"), rootDocument.querySelector("main"),
+      rootDocument.querySelector('[role="main"]'), rootDocument.body];
+    for (const root of roots) {
+      const text = String(root?.innerText || "").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+      if (text) return text;
+    }
+    return "";
   }
 
-  async function pageFailure(code) {
+  async function pageFailure(code, current = () => true) {
     await callbackApi((done) => chrome.storage.session.set({ amsComposeContextError: code }, done));
+    if (!current()) return { ok: false, code: "superseded" };
     await openCompose();
     return { ok: false, code };
   }
 
+  let captureVersion = 0;
   async function handleClick(info, tab) {
     if (info?.menuItemId !== MENU_SELECTION && info?.menuItemId !== MENU_PAGE) return { ok: false };
+    const version = ++captureVersion, current = () => version === captureVersion;
     const isPage = info.menuItemId === MENU_PAGE;
-    if (!canRead(tab)) return isPage ? pageFailure("page_access_denied") : { ok: false, code: "page_access_denied" };
+    if (!canRead(tab)) return isPage ? pageFailure("page_access_denied", current) : { ok: false, code: "page_access_denied" };
 
     let value = info.selectionText;
     if (isPage) {
@@ -94,12 +101,13 @@ const PageContext = (() => {
         });
         value = result;
       } catch (e) {
-        return pageFailure("page_access_denied");
+        return current() ? pageFailure("page_access_denied", current) : { ok: false, code: "superseded" };
       }
     }
 
+    if (!current()) return { ok: false, code: "superseded" };
     const { text, truncated } = capText(value);
-    if (!text) return isPage ? pageFailure("page_empty") : { ok: false, code: "page_empty" };
+    if (!text) return isPage ? pageFailure("page_empty", current) : { ok: false, code: "page_empty" };
     const context = {
       kind: isPage ? "page" : "selection",
       title: String(tab.title || ""),
@@ -110,6 +118,7 @@ const PageContext = (() => {
     };
     const values = { amsComposeContext: context, amsComposeContextError: null };
     await callbackApi((done) => chrome.storage.session.set(values, done));
+    if (!current()) return { ok: false, code: "superseded" };
     await openCompose();
     return { ok: true, context };
   }
