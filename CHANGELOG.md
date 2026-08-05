@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.14.0] - 2026-08-05
+
 ### 新增
 
 - 结果库支持搜索、收藏、标签、备注和标记最佳答案；这些整理信息可通过 Google Drive 同步或迁移包转移
@@ -322,7 +324,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.13.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/pine2D/polyask/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/pine2D/polyask/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/pine2D/polyask/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/pine2D/polyask/compare/v0.10.0...v0.11.0
