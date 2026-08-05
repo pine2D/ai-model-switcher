@@ -137,7 +137,7 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
     createTextNode: () => new El(), addEventListener() {}, hasFocus: () => false,
   };
   const context = vm.createContext({
-    chrome, document, ComposeContext, SITES: [{ host: "a", label: "A" }], t: (key) => COPY[language][key] || key,
+    chrome, document, ComposeContext, SITES: [{ host: "a", label: "A" }], resolveSiteSelection: (saved) => ({ ...saved }), t: (key) => COPY[language][key] || key,
     applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console,
   });
   vm.runInContext(fs.readFileSync("console/run-meta.js", "utf8"), context);

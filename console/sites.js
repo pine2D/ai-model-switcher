@@ -10,3 +10,12 @@ const SITES = [
   { host: "yuanbao.tencent.com", label: "元宝", url: "https://yuanbao.tencent.com/chat/", on: false, image: true },
   { host: "chatglm.cn", label: "智谱", url: "https://chatglm.cn/main/alltoolsdetail", on: false },
 ];
+function resolveSiteSelection(saved, prefillHost = "") {
+  if (saved && Object.keys(saved).length) return { ...saved };
+  const selected = {};
+  const host = String(prefillHost || "");
+  const hit = host && SITES.find((site) => host.includes(site.host.replace(/^www\./, "")) || site.host.includes(host.replace(/^www\./, "")));
+  if (hit) selected[hit.host] = true;
+  else SITES.forEach((site) => { selected[site.host] = !!site.on; });
+  return selected;
+}

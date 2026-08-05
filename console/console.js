@@ -103,16 +103,11 @@ function load() {
   // 所需 key 单次 get：冷启动少一轮 storage IPC 往返
   chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsConsolePrefill"], (o) => {
     const c = (o && o.amsConsole) || {};
-    selected = c.selected || {};
-    const firstSelection = !Object.keys(selected).length;
+    const savedSelection = c.selected || {};
+    const firstSelection = !Object.keys(savedSelection).length;
     const pre = o && o.amsConsolePrefill; // popup「打开控制台」带来的当前站（一次性消费）
     if (pre) chrome.storage.local.remove("amsConsolePrefill");
-    if (!Object.keys(selected).length) {
-      // 首次使用（无勾选历史）：从 popup 带站进来就只预勾该站，否则用默认勾选集
-      const hit = pre && SITES.find((s) => pre.includes(s.host.replace(/^www\./, "")) || s.host.includes(pre.replace(/^www\./, "")));
-      if (hit) selected[hit.host] = true;
-      else SITES.forEach((s) => { selected[s.host] = !!s.on; });
-    }
+    selected = resolveSiteSelection(savedSelection, pre);
     if (c.tier) elTier.value = c.tier;
     syncTierButtons();
     const prompt = o.amsConsolePrompt != null ? o.amsConsolePrompt : c.prompt;

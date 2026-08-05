@@ -136,7 +136,7 @@ async function collectClickKeepsClickedRun() {
     session: { get(_key, done) { getDone = () => done({ amsLastRun: sessionRun }); } }, onChanged: { addListener() {} } } };
   const context = { chrome, document: { documentElement: {}, activeElement: null, getElementById: (id) => elements[id], querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, createElement: () => new El(), createTextNode: () => new El() },
     window: { addEventListener() {} }, navigator: { clipboard: { writeText: () => { clipboardWrites++; return Promise.resolve(); } } }, ResizeObserver: class { observe() {} }, SITES: [{ host: "a", label: "A", on: true }, { host: "b", label: "B" }],
-    t: (key) => key, applyI18n() {}, syncTierButtons() {}, syncGroupSelect() {}, history: [], histCursor: -1, histDraft: "", pendingImages: [], pushHistory() {}, imagePayloads: async () => [], setPendingImages() {}, setTimeout: () => 0, clearTimeout() {}, Date, Map, console };
+    resolveSiteSelection: (saved) => ({ ...saved }), t: (key) => key, applyI18n() {}, syncTierButtons() {}, syncGroupSelect() {}, history: [], histCursor: -1, histDraft: "", pendingImages: [], pushHistory() {}, imagePayloads: async () => [], setPendingImages() {}, setTimeout: () => 0, clearTimeout() {}, Date, Map, console };
   vm.runInNewContext(source("console/console.js"), context); vm.runInNewContext(source("console/status.js"), context);
   elements.collect.listeners.click[0](); await Promise.resolve();
   assert.equal(typeof getDone, "function", "重开控制台后必须读取 amsLastRun");

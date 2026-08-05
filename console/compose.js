@@ -137,10 +137,13 @@ function loadHistoryItem(id) {
 document.getElementById("cmp-more").addEventListener("click", () => loadHistory(false));
 chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates"], (o) => {
   const c = (o && o.amsConsole) || {};
+  const savedSelection = c.selected || {};
+  const selected = resolveSiteSelection(savedSelection);
+  if (!Object.keys(savedSelection).length) chrome.storage.local.set({ amsConsole: { ...c, selected } });
   const prompt = o.amsConsolePrompt != null ? o.amsConsolePrompt : c.prompt;
   if (prompt) elText.value = prompt;
   templates = (o && o.amsTemplates) || [];
-  renderScope(c.selected || {}); renderLibrary(); elText.focus();
+  renderScope(selected); renderLibrary(); elText.focus();
 });
 chrome.storage.onChanged.addListener((ch, area) => {
   if (area !== "local") return;
@@ -176,7 +179,10 @@ document.getElementById("ch-send").addEventListener("click", async () => {
   catch (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
   chrome.storage.local.get(["amsConsole"], (o) => {
     const c = (o && o.amsConsole) || {};
-    const sites = SITES.filter((s) => (c.selected || {})[s.host]);
+    const savedSelection = c.selected || {};
+    const selected = resolveSiteSelection(savedSelection);
+    if (!Object.keys(savedSelection).length) chrome.storage.local.set({ amsConsole: { ...c, selected } });
+    const sites = SITES.filter((s) => selected[s.host]);
     if (!sites.length) { const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
     chrome.storage.local.set({ amsConsolePrompt: payload.text }, () => {
       chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text: payload.text }, (result) => {

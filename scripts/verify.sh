@@ -36,6 +36,7 @@ echo "[test] 后台安全边界与控制台交互"
 node scripts/test-page-context.js
 node scripts/test-run-meta.js
 node scripts/test-compose-context.js
+node scripts/test-site-selection.js
 node scripts/test-background.js
 node scripts/test-archive-capture.js
 node scripts/test-archive-detail.js
