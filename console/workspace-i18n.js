@@ -34,6 +34,7 @@ Object.assign(MSG, {
   cmp_contextDenied: { en: "PolyAsk cannot read this page", zh_CN: "PolyAsk 无法读取此页面", zh_TW: "PolyAsk 無法讀取此頁面" },
   cmp_contextEmpty: { en: "No readable text was found", zh_CN: "未找到可读取的文字", zh_TW: "找不到可讀取的文字" },
   cmp_pendingSaveFailed: { en: "Could not save the source details. Try again.", zh_CN: "来源信息保存失败，请重试。", zh_TW: "來源資訊儲存失敗，請重試。" },
+  cmp_consoleOpenFailed: { en: "Could not open the broadcast console. Try again.", zh_CN: "无法打开群发控制台，请重试。", zh_TW: "無法開啟群發主控台，請重試。" },
   cmp_sourceUpdateFailed: { en: "Could not update the source. Try again.", zh_CN: "来源更新失败，请重试。", zh_TW: "來源更新失敗，請重試。" },
   cmp_sourceReplaceQuestion: { en: "Replace the current source?", zh_CN: "替换当前来源？", zh_TW: "取代目前的來源？" },
   cmp_sourceReplace: { en: "Replace", zh_CN: "替换", zh_TW: "取代" },

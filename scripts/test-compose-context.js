@@ -287,14 +287,14 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
     assert.equal(failedPrompt.closed(), 1, "完整 prompt 重试写入成功后才关闭");
   }
 
-  for (const button of ["ch-back", "ch-close"]) {
-    const back = composeHarness();
-    await back.els[button].fire("click");
-    assert.deepEqual(JSON.parse(JSON.stringify(back.localWrites.at(-1))), { amsConsolePrompt: "FULL:question" });
-    assert.deepEqual(JSON.parse(JSON.stringify(back.sessionWrites.at(-1))), { amsPendingRun: { text: "FULL:question", task: "question", source: back.sourceMeta } });
-    assert.equal(back.messages.some((message) => message.action === "sendAll"), false, `${button} 不得发送`);
-    assert.equal(back.closed(), 1, `${button} 保存后必须关闭`);
-  }
+  const back = composeHarness();
+  await back.els["ch-back"].fire("click");
+  assert.deepEqual(JSON.parse(JSON.stringify(back.localWrites.at(-1))), { amsConsolePrompt: "FULL:question" }); assert.deepEqual(JSON.parse(JSON.stringify(back.sessionWrites.at(-1))), { amsPendingRun: { text: "FULL:question", task: "question", source: back.sourceMeta } });
+  assert.equal(back.messages.some((message) => message.action === "sendAll"), false, "返回不得发送"); assert.equal(back.closed(), 1, "返回后必须关闭");
+
+  const close = composeHarness();
+  await close.els["ch-close"].fire("click");
+  assert.equal(close.localWrites.length, 0, "关闭不得保存 prompt"); assert.equal(close.sessionWrites.length, 0, "关闭不得写 pending run"); assert.equal(close.closed(), 1, "关闭必须直接关闭窗口");
 
   console.log("compose-context tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

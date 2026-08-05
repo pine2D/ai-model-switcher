@@ -6,7 +6,20 @@ const elList = document.getElementById("cmp-list");
 const elActions = document.getElementById("cmp-actions");
 const elNameRow = document.getElementById("cmp-name");
 const elConfirm = document.getElementById("cmp-confirm");
+const finishButtons = ["ch-close", "ch-back", "ch-send"].map((id) => document.getElementById(id));
 let templates = [], history = [], historyCursor = null, historyLoadToken = 0, activeKind = "templates", selectedTemplate = -1;
+let finishing = false;
+
+function setFinishing(value) { finishing = value; finishButtons.forEach((button) => { button.disabled = value; }); }
+function requestConsoleReady() {
+  return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openConsole" },
+    (result) => resolve(!chrome.runtime.lastError && result?.ok === true)));
+}
+function savePrompt(text) {
+  return new Promise((resolve, reject) => chrome.storage.local.set({ amsConsolePrompt: text },
+    () => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve()));
+}
+function finishFailed(key) { document.getElementById("cmp-status").textContent = t(key); setFinishing(false); }
 
 function itemLabel(item) {
   const text = item.text || item.preview || "";
@@ -58,17 +71,18 @@ function setKind(kind) {
 }
 document.querySelectorAll("#cmp-tabs [data-kind]").forEach((button) => button.addEventListener("click", () => setKind(button.dataset.kind)));
 
-async function persistAndClose() {
+async function persistAndReturn() {
+  if (finishing) return; setFinishing(true);
   await composeContextReady;
   const run = ComposeContext.payload(elText.value.trim());
-  chrome.storage.local.set({ amsConsolePrompt: run.text }, () => {
-    const error = chrome.runtime.lastError;
-    if (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
-    RunMeta.savePending(run).then(() => window.close(), () => { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); });
-  });
+  try {
+    await savePrompt(run.text); await RunMeta.savePending(run);
+    if (await requestConsoleReady()) window.close();
+    else finishFailed("cmp_consoleOpenFailed");
+  } catch (error) { finishFailed("cmp_pendingSaveFailed"); }
 }
-document.getElementById("ch-close").addEventListener("click", persistAndClose);
-document.getElementById("ch-back").addEventListener("click", persistAndClose);
+document.getElementById("ch-close").addEventListener("click", () => { if (!finishing) window.close(); });
+document.getElementById("ch-back").addEventListener("click", persistAndReturn);
 elText.addEventListener("input", () => {
   historyLoadToken++;
   elText.removeAttribute("aria-invalid");
@@ -173,23 +187,22 @@ elText.addEventListener("keydown", (e) => {
 document.getElementById("ch-send").addEventListener("click", async () => {
   const task = elText.value.trim();
   if (!task) { elText.setAttribute("aria-invalid", "true"); elText.focus(); return; }
+  if (finishing) return; setFinishing(true);
   await composeContextReady;
   const payload = ComposeContext.payload(task);
+  const c = ((await new Promise((resolve) => chrome.storage.local.get(["amsConsole"], resolve))) || {}).amsConsole || {};
+  const selected = resolveSiteSelection(c.selected || {});
+  const sites = SITES.filter((s) => selected[s.host]);
+  if (!sites.length) { setFinishing(false); const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
+  const tier = c.tier || null;
+  try { await savePrompt(payload.text); }
+  catch (error) { finishFailed("cmp_pendingSaveFailed"); return; }
+  if (!await requestConsoleReady()) { finishFailed("cmp_consoleOpenFailed"); return; }
   try { await RunMeta.clearPending(); }
-  catch (error) { document.getElementById("cmp-status").textContent = t("cmp_pendingSaveFailed"); return; }
-  chrome.storage.local.get(["amsConsole"], (o) => {
-    const c = (o && o.amsConsole) || {};
-    const savedSelection = c.selected || {};
-    const selected = resolveSiteSelection(savedSelection);
-    if (!Object.keys(savedSelection).length) chrome.storage.local.set({ amsConsole: { ...c, selected } });
-    const sites = SITES.filter((s) => selected[s.host]);
-    if (!sites.length) { const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }
-    chrome.storage.local.set({ amsConsolePrompt: payload.text }, () => {
-      chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text: payload.text }, (result) => {
-        const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier: c.tier || null, run: { task: payload.task, source: payload.source } }); window.close(); };
-        if (chrome.runtime.lastError || !result?.ok) chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, send);
-        else send();
-      });
-    });
+  catch (error) { finishFailed("cmp_pendingSaveFailed"); return; }
+  chrome.runtime.sendMessage({ source: "AMS_DATA", action: "historyAdd", text: payload.text }, (result) => {
+    const send = () => { chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier, run: { task: payload.task, source: payload.source } }); window.close(); };
+    if (chrome.runtime.lastError || !result?.ok) chrome.runtime.sendMessage({ from: "AMS_COMPOSE", type: "historySaveFailed" }, send);
+    else send();
   });
 });
