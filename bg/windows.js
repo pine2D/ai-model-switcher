@@ -129,12 +129,12 @@ async function _openConsole(prefillHost) {
   await chrome.storage.local.set({ amsConsoleWin: w.id });
   return w.id;
 }
-
+function isConsoleTab(tab, expected) { return !!tab && (tab.url === expected || tab.pendingUrl === expected); }
 async function ensureConsoleReady(prefillHost, timeoutMs = 5000) {
   const windowId = await openConsole(prefillHost);
   const expected = chrome.runtime.getURL("console/console.html");
   const tabs = await chrome.tabs.query({ windowId });
-  const tab = tabs.find((item) => item.url === expected || item.pendingUrl === expected);
+  const tab = tabs.find((item) => isConsoleTab(item, expected));
   if (!tab?.id) throw new Error("console_missing");
   if (tab.status === "complete") return windowId;
   return new Promise((resolve, reject) => {
@@ -144,11 +144,20 @@ async function ensureConsoleReady(prefillHost, timeoutMs = 5000) {
       clearTimeout(timer); chrome.tabs.onUpdated.removeListener(onUpdated); chrome.tabs.onRemoved.removeListener(onRemoved);
       error ? reject(error) : resolve(windowId);
     };
-    const onUpdated = (tabId, change) => { if (tabId === tab.id && change.status === "complete") finish(); };
+    const onUpdated = (tabId, change) => {
+      if (tabId !== tab.id) return;
+      chrome.tabs.get(tab.id).then((current) => {
+        if (!isConsoleTab(current, expected)) return finish(new Error("console_missing"));
+        if (change.status === "complete") finish();
+      }, () => finish(new Error("console_missing")));
+    };
     const onRemoved = (tabId) => { if (tabId === tab.id) finish(new Error("console_closed")); };
     chrome.tabs.onUpdated.addListener(onUpdated); chrome.tabs.onRemoved.addListener(onRemoved);
     timer = setTimeout(() => finish(new Error("console_timeout")), timeoutMs);
-    chrome.tabs.get(tab.id).then((current) => { if (current.status === "complete") finish(); }, () => finish(new Error("console_missing")));
+    chrome.tabs.get(tab.id).then((current) => {
+      if (!isConsoleTab(current, expected)) return finish(new Error("console_missing"));
+      if (current.status === "complete") finish();
+    }, () => finish(new Error("console_missing")));
   });
 }
 

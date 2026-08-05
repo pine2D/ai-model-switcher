@@ -26,7 +26,7 @@ function events() {
   };
 }
 
-function harness({ existing = false, missing = false, completeOnGet = false } = {}) {
+function harness({ existing = false, missing = false, completeOnGet = false, onGet = {} } = {}) {
   const updated = events(), removed = events();
   const windows = new Map(existing ? [[7, { id: 7, type: "popup" }]] : []);
   const tabs = new Map(existing ? [[41, { id: 41, windowId: 7, url: consoleUrl, status: "complete" }]] : []);
@@ -61,7 +61,7 @@ function harness({ existing = false, missing = false, completeOnGet = false } = 
       get: async (id) => {
         const tab = tabs.get(id);
         if (!tab) throw new Error("missing_tab");
-        return completeOnGet ? { ...tab, status: "complete" } : tab;
+        return completeOnGet ? { ...tab, status: "complete", ...onGet } : tab;
       },
       onUpdated: updated,
       onRemoved: removed,
@@ -69,7 +69,10 @@ function harness({ existing = false, missing = false, completeOnGet = false } = 
   };
   const context = vm.createContext({ chrome, console, setTimeout, clearTimeout, consoleWinId: null, composeWinId: null, archiveWinId: null });
   vm.runInContext(source("bg/windows.js"), context);
-  return { call: (expression) => vm.runInContext(expression, context), updated, removed, createdWindowId, consoleTabId };
+  return {
+    call: (expression) => vm.runInContext(expression, context), updated, removed, createdWindowId, consoleTabId,
+    setConsoleTab: (props) => Object.assign(tabs.get(consoleTabId), props),
+  };
 }
 
 async function testConsoleReadiness() {
@@ -90,6 +93,18 @@ async function testConsoleReadiness() {
   const raced = harness({ completeOnGet: true });
   assert.equal(await raced.call("ensureConsoleReady('', 20)"), raced.createdWindowId, "监听注册后的复查必须捕获完成竞态");
   assert.equal(raced.updated.size, 0); assert.equal(raced.removed.size, 0);
+
+  const navigated = harness();
+  const leftConsole = navigated.call("ensureConsoleReady('', 50)");
+  await waitFor(() => navigated.updated.size === 1);
+  navigated.setConsoleTab({ url: "chrome-extension://polyask/console/compose.html", pendingUrl: undefined, status: "complete" });
+  navigated.updated.emit(navigated.consoleTabId, { status: "complete" });
+  await assert.rejects(leftConsole, /console_missing/, "同一标签离开控制台 URL 后不得误报 ready");
+  assert.equal(navigated.updated.size, 0); assert.equal(navigated.removed.size, 0);
+
+  const rereadNavigated = harness({ completeOnGet: true, onGet: { url: "chrome-extension://polyask/console/compose.html", pendingUrl: undefined } });
+  await assert.rejects(rereadNavigated.call("ensureConsoleReady('', 20)"), /console_missing/, "监听后的复查也必须验证精确控制台 URL");
+  assert.equal(rereadNavigated.updated.size, 0); assert.equal(rereadNavigated.removed.size, 0);
 
   const timeout = harness();
   await assert.rejects(timeout.call("ensureConsoleReady('', 5)"), /console_timeout/);
