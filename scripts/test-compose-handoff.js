@@ -17,12 +17,13 @@ class El {
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve));
 
-function harness({ localSetFails = false } = {}) {
+function harness({ localSetFails = false, localGetFails = false, sessionRemoveFails = false, settings = { selected: { "claude.ai": true }, tier: "think" } } = {}) {
   const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template", "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel", "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
   els["ch-text"].value = "question";
   const messages = [], localWrites = [], sessionWrites = [];
-  let closed = 0, openConsoleDone;
+  let closed = 0, openConsoleDone, localGets = 0, currentSettings = settings;
+  const timers = [];
   const chrome = {
     runtime: {
       lastError: null, onMessage: { addListener() {} },
@@ -34,7 +35,11 @@ function harness({ localSetFails = false } = {}) {
     },
     storage: {
       local: {
-        get(_keys, done) { done({ amsConsole: { selected: { a: true }, tier: "think" } }); },
+        get(_keys, done) {
+          const failed = localGetFails && ++localGets > 1;
+          chrome.runtime.lastError = failed ? { message: "settings read failed" } : null;
+          done(failed ? undefined : { amsConsole: currentSettings }); chrome.runtime.lastError = null;
+        },
         set(value, done) {
           localWrites.push(value);
           chrome.runtime.lastError = localSetFails ? { message: "save failed" } : null;
@@ -43,7 +48,10 @@ function harness({ localSetFails = false } = {}) {
       },
       session: {
         set(value, done) { sessionWrites.push(value); done?.(); },
-        remove(_key, done) { done?.(); },
+        remove(_key, done) {
+          chrome.runtime.lastError = sessionRemoveFails ? { message: "session remove failed" } : null;
+          done?.(); chrome.runtime.lastError = null;
+        },
       },
       onChanged: { addListener() {} },
     },
@@ -53,15 +61,19 @@ function harness({ localSetFails = false } = {}) {
     createTextNode: () => new El(), addEventListener() {}, hasFocus: () => false,
   };
   const context = vm.createContext({
-    chrome, document, SITES: [{ host: "a", label: "A" }], resolveSiteSelection: (selected) => ({ ...selected }),
+    chrome, document,
     ComposeContext: { init: () => Promise.resolve(), payload: (task) => ({ text: `FULL:${task}`, task, source: null }) },
     t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console,
+    setTimeout(fn) { timers.push(fn); return timers.length - 1; }, clearTimeout(id) { timers[id] = null; },
   });
+  vm.runInContext(fs.readFileSync("console/sites.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("console/run-meta.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("console/compose.js", "utf8"), context);
   return {
     ...els, messages, localWrites, sessionWrites, get closed() { return closed; },
     openConsoleDone(result) { assert.ok(openConsoleDone, "应已发出 openConsole"); openConsoleDone(result); },
+    timeout() { const timer = timers.find(Boolean); assert.ok(timer, "应已设置超时"); timer(); },
+    setSettings(next) { currentSettings = next; },
   };
 }
 
@@ -103,5 +115,39 @@ function harness({ localSetFails = false } = {}) {
   await failedSave["ch-send"].fire("click");
   assert.equal(failedSave.messages.some((msg) => ["openConsole", "historyAdd", "sendAll"].includes(msg.action)), false);
   assert.equal(failedSave["cmp-status"].textContent, "cmp_pendingSaveFailed");
+
+  const failedSettings = harness({ localGetFails: true });
+  const failedSettingsTask = failedSettings["ch-send"].fire("click");
+  await tick();
+  assert.equal(failedSettings["ch-send"].disabled, false);
+  assert.equal(failedSettings["cmp-status"].textContent, "cmp_settingsLoadFailed");
+  assert.equal(failedSettings.messages.some((msg) => ["openConsole", "historyAdd", "sendAll"].includes(msg.action)), false);
+  await failedSettingsTask;
+
+  const timingOut = harness();
+  const timeoutTask = timingOut["ch-send"].fire("click");
+  await tick(); timingOut.timeout(); await timeoutTask;
+  assert.equal(timingOut.closed, 0); assert.equal(timingOut["ch-send"].disabled, false);
+  assert.equal(timingOut["cmp-status"].textContent, "cmp_consoleOpenFailed");
+  timingOut.openConsoleDone({ ok: true }); await tick();
+  assert.equal(timingOut.messages.some((msg) => msg.action === "historyAdd" || msg.action === "sendAll"), false);
+
+  const frozen = harness({ settings: { selected: { "claude.ai": true }, tier: "think" } });
+  const frozenTask = frozen["ch-send"].fire("click");
+  await tick(); frozen.setSettings({ selected: { "chatgpt.com": true }, tier: "fast" });
+  frozen.openConsoleDone({ ok: true }); await frozenTask;
+  const frozenSend = frozen.messages.find((msg) => msg.action === "sendAll");
+  assert.deepEqual(JSON.parse(JSON.stringify(frozenSend.sites.map((site) => site.host))), ["claude.ai"]); assert.equal(frozenSend.tier, "think");
+
+  const defaults = harness({ settings: { tier: "fast" } });
+  const defaultsTask = defaults["ch-send"].fire("click");
+  await tick(); defaults.openConsoleDone({ ok: true }); await defaultsTask;
+  assert.deepEqual(JSON.parse(JSON.stringify(defaults.messages.find((msg) => msg.action === "sendAll").sites.map((site) => site.host))), ["claude.ai", "chatgpt.com", "gemini.google.com"]);
+
+  const clearFailure = harness({ sessionRemoveFails: true });
+  const clearTask = clearFailure["ch-send"].fire("click");
+  await tick(); clearFailure.openConsoleDone({ ok: true }); await clearTask;
+  assert.equal(clearFailure["ch-send"].disabled, false); assert.equal(clearFailure["cmp-status"].textContent, "cmp_pendingSaveFailed");
+  assert.equal(clearFailure.messages.some((msg) => msg.action === "historyAdd" || msg.action === "sendAll"), false);
   console.log("compose-handoff tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -138,7 +138,7 @@ function composeHarness({ delayInit = false, sessionSetFailures = 0, localSetFai
   };
   const context = vm.createContext({
     chrome, document, ComposeContext, SITES: [{ host: "a", label: "A" }], resolveSiteSelection: (saved) => ({ ...saved }), t: (key) => COPY[language][key] || key,
-    applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console,
+    applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, setTimeout, clearTimeout, console,
   });
   vm.runInContext(fs.readFileSync("console/run-meta.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("console/compose.js", "utf8"), context);

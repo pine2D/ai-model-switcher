@@ -12,8 +12,17 @@ let finishing = false;
 
 function setFinishing(value) { finishing = value; finishButtons.forEach((button) => { button.disabled = value; }); }
 function requestConsoleReady() {
-  return new Promise((resolve) => chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openConsole" },
-    (result) => resolve(!chrome.runtime.lastError && result?.ok === true)));
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ready) => { if (!settled) { settled = true; clearTimeout(timer); resolve(ready); } };
+    const timer = setTimeout(() => finish(false), 6000);
+    chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openConsole" },
+      (result) => finish(!chrome.runtime.lastError && result?.ok === true));
+  });
+}
+function consoleSettings() {
+  return new Promise((resolve, reject) => chrome.storage.local.get(["amsConsole"],
+    (values) => chrome.runtime.lastError ? reject(chrome.runtime.lastError) : resolve((values && values.amsConsole) || {})));
 }
 function savePrompt(text) {
   return new Promise((resolve, reject) => chrome.storage.local.set({ amsConsolePrompt: text },
@@ -190,7 +199,9 @@ document.getElementById("ch-send").addEventListener("click", async () => {
   if (finishing) return; setFinishing(true);
   await composeContextReady;
   const payload = ComposeContext.payload(task);
-  const c = ((await new Promise((resolve) => chrome.storage.local.get(["amsConsole"], resolve))) || {}).amsConsole || {};
+  let c;
+  try { c = await consoleSettings(); }
+  catch (error) { finishFailed("cmp_settingsLoadFailed"); return; }
   const selected = resolveSiteSelection(c.selected || {});
   const sites = SITES.filter((s) => selected[s.host]);
   if (!sites.length) { setFinishing(false); const scope = document.getElementById("ch-scope"); scope.setAttribute("data-invalid", "true"); scope.focus(); return; }

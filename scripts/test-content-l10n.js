@@ -38,7 +38,7 @@ const rows = messages();
 const sourceKeys = ["cmp_source", "cmp_sourceSelection", "cmp_sourcePage", "cmp_sourceRemove", "cmp_sourceDetail",
   "cmp_sourceCount", "cmp_sourceTruncated", "cmp_contextDenied", "cmp_contextEmpty", "cmp_sourceReplaceQuestion",
   "cmp_sourceReplace", "cmp_sourceKeep", "cmp_payloadSource", "cmp_payloadUrl", "cmp_referenceNotice",
-  "cmp_referenceStart", "cmp_referenceEnd", "cmp_sendSave", "cmp_consoleOpenFailed"];
+  "cmp_referenceStart", "cmp_referenceEnd", "cmp_sendSave", "cmp_consoleOpenFailed", "cmp_settingsLoadFailed"];
 for (const key of sourceKeys) assert.ok(rows[key], `missing webpage context copy: ${key}`);
 assert.deepEqual(JSON.parse(JSON.stringify(rows.cmp_sendSave)), {
   en: "Sending saves this content to question history and to Google Drive when sync is enabled.",
