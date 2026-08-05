@@ -130,36 +130,36 @@ async function _openConsole(prefillHost) {
   return w.id;
 }
 function isConsoleTab(tab, expected) { return !!tab && (tab.url === expected || tab.pendingUrl === expected); }
-async function ensureConsoleReady(prefillHost, timeoutMs = 5000) {
-  const windowId = await openConsole(prefillHost);
-  const expected = chrome.runtime.getURL("console/console.html");
-  const tabs = await chrome.tabs.query({ windowId });
-  const tab = tabs.find((item) => isConsoleTab(item, expected));
-  if (!tab?.id) throw new Error("console_missing");
-  if (tab.status === "complete") return windowId;
-  return new Promise((resolve, reject) => {
-    let timer, settled = false;
+async function ensureConsoleReady(prefillHost, timeoutMs = 5000) { return new Promise((resolve, reject) => {
+    let timer, settled = false, onUpdated, onRemoved, windowId, tab, expected;
     const finish = (error) => {
       if (settled) return; settled = true;
-      clearTimeout(timer); chrome.tabs.onUpdated.removeListener(onUpdated); chrome.tabs.onRemoved.removeListener(onRemoved);
+      clearTimeout(timer); if (onUpdated) chrome.tabs.onUpdated.removeListener(onUpdated); if (onRemoved) chrome.tabs.onRemoved.removeListener(onRemoved);
       error ? reject(error) : resolve(windowId);
-    };
-    const onUpdated = (tabId, change) => {
-      if (tabId !== tab.id) return;
-      chrome.tabs.get(tab.id).then((current) => {
-        if (!isConsoleTab(current, expected)) return finish(new Error("console_missing"));
-        if (change.status === "complete") finish();
-      }, () => finish(new Error("console_missing")));
-    };
-    const onRemoved = (tabId) => { if (tabId === tab.id) finish(new Error("console_closed")); };
-    chrome.tabs.onUpdated.addListener(onUpdated); chrome.tabs.onRemoved.addListener(onRemoved);
-    timer = setTimeout(() => finish(new Error("console_timeout")), timeoutMs);
-    chrome.tabs.get(tab.id).then((current) => {
+    }; const verify = () => chrome.tabs.get(tab.id).then((current) => {
       if (!isConsoleTab(current, expected)) return finish(new Error("console_missing"));
       if (current.status === "complete") finish();
-    }, () => finish(new Error("console_missing")));
-  });
-}
+    }, () => finish(new Error("console_missing"))); timer = setTimeout(() => finish(new Error("console_timeout")), timeoutMs);
+    openConsole(prefillHost).then((id) => {
+      if (settled) return null;
+      windowId = id; expected = chrome.runtime.getURL("console/console.html");
+      return chrome.tabs.query({ windowId });
+    }).then((tabs) => {
+      if (settled || !tabs) return;
+      tab = tabs.find((item) => isConsoleTab(item, expected));
+      if (!tab?.id) return finish(new Error("console_missing"));
+      if (tab.status === "complete") return finish();
+      onUpdated = (tabId, change) => {
+        if (tabId !== tab.id) return;
+        chrome.tabs.get(tab.id).then((current) => {
+          if (!isConsoleTab(current, expected)) return finish(new Error("console_missing"));
+          if (change.status === "complete") finish();
+        }, () => finish(new Error("console_missing")));
+      };
+      onRemoved = (tabId) => { if (tabId === tab.id) finish(new Error("console_closed")); };
+      chrome.tabs.onUpdated.addListener(onUpdated); chrome.tabs.onRemoved.addListener(onRemoved); verify();
+    }, finish);
+  }); }
 
 // 伴侣编辑窗：控制面（同 console），绝不进 amsWindows；通过专属 id 随工作区联动和关闭。
 // anchor（可选）= console 输入框的视口内 {left,width}：据此把伴侣窗贴 console 底边、与输入框等宽，

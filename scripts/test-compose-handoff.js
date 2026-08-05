@@ -17,7 +17,7 @@ class El {
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve));
 
-function harness({ localSetFails = false, localGetFails = false, sessionRemoveFails = false, settings = { selected: { "claude.ai": true }, tier: "think" } } = {}) {
+function harness({ localSetFails = false, localGetFails = false, initialLocalGetFails = false, sessionRemoveFails = false, settings = { selected: { "claude.ai": true }, tier: "think" } } = {}) {
   const ids = ["ch-text", "cmp-list", "cmp-actions", "cmp-name", "cmp-confirm", "cmp-save-template", "cmp-delete-template", "cmp-more", "ch-close", "ch-back", "cmp-name-save", "cmp-name-cancel", "cmp-template-name", "cmp-confirm-yes", "cmp-confirm-no", "cmp-confirm-text", "ch-scope", "ch-send", "cmp-status"];
   const els = Object.fromEntries(ids.map((id) => [id, new El()]));
   els["ch-text"].value = "question";
@@ -36,7 +36,7 @@ function harness({ localSetFails = false, localGetFails = false, sessionRemoveFa
     storage: {
       local: {
         get(_keys, done) {
-          const failed = localGetFails && ++localGets > 1;
+          const failed = initialLocalGetFails ? localGets++ === 0 : localGetFails && ++localGets > 1;
           chrome.runtime.lastError = failed ? { message: "settings read failed" } : null;
           done(failed ? undefined : { amsConsole: currentSettings }); chrome.runtime.lastError = null;
         },
@@ -115,6 +115,10 @@ function harness({ localSetFails = false, localGetFails = false, sessionRemoveFa
   await failedSave["ch-send"].fire("click");
   assert.equal(failedSave.messages.some((msg) => ["openConsole", "historyAdd", "sendAll"].includes(msg.action)), false);
   assert.equal(failedSave["cmp-status"].textContent, "cmp_pendingSaveFailed");
+
+  const failedInitialSettings = harness({ initialLocalGetFails: true });
+  assert.equal(failedInitialSettings["cmp-status"].textContent, "cmp_settingsLoadFailed");
+  assert.equal(failedInitialSettings.localWrites.some((value) => value.amsConsole), false, "首次读取失败不得写入默认 amsConsole");
 
   const failedSettings = harness({ localGetFails: true });
   const failedSettingsTask = failedSettings["ch-send"].fire("click");

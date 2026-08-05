@@ -26,7 +26,7 @@ function events() {
   };
 }
 
-function harness({ existing = false, missing = false, completeOnGet = false, onGet = {} } = {}) {
+function harness({ existing = false, missing = false, completeOnGet = false, onGet = {}, createDelay = 0 } = {}) {
   const updated = events(), removed = events();
   const windows = new Map(existing ? [[7, { id: 7, type: "popup" }]] : []);
   const tabs = new Map(existing ? [[41, { id: 41, windowId: 7, url: consoleUrl, status: "complete" }]] : []);
@@ -50,6 +50,7 @@ function harness({ existing = false, missing = false, completeOnGet = false, onG
       },
       update: async (id, props) => Object.assign(await chrome.windows.get(id), props),
       create: async () => {
+        if (createDelay) await new Promise((resolve) => setTimeout(resolve, createDelay));
         const window = { id: createdWindowId, type: "popup" };
         windows.set(window.id, window);
         if (!missing) tabs.set(consoleTabId, { id: consoleTabId, windowId: window.id, pendingUrl: consoleUrl, status: "loading" });
@@ -71,6 +72,7 @@ function harness({ existing = false, missing = false, completeOnGet = false, onG
   vm.runInContext(source("bg/windows.js"), context);
   return {
     call: (expression) => vm.runInContext(expression, context), updated, removed, createdWindowId, consoleTabId,
+    get created() { return windows.has(createdWindowId); },
     setConsoleTab: (props) => Object.assign(tabs.get(consoleTabId), props),
   };
 }
@@ -109,6 +111,15 @@ async function testConsoleReadiness() {
   const timeout = harness();
   await assert.rejects(timeout.call("ensureConsoleReady('', 5)"), /console_timeout/);
   assert.equal(timeout.updated.size, 0); assert.equal(timeout.removed.size, 0, "失败也必须清理监听器");
+
+  const slowOpen = harness({ createDelay: 30 });
+  const slowResult = slowOpen.call("ensureConsoleReady('', 20)").then(() => null, (error) => error);
+  const slowError = await slowResult;
+  assert.equal(slowOpen.created, false, "超时必须先于慢开窗完成");
+  assert.match(slowError.message, /console_timeout/);
+  await waitFor(() => slowOpen.created);
+  assert.equal(slowOpen.updated.size, 0, "超时后的慢开窗不得注册更新监听器");
+  assert.equal(slowOpen.removed.size, 0, "慢开窗完成后不得泄漏关闭监听器");
 
   const closedHarness = harness();
   const closed = closedHarness.call("ensureConsoleReady('', 50)");

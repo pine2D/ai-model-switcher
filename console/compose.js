@@ -159,6 +159,7 @@ function loadHistoryItem(id) {
 }
 document.getElementById("cmp-more").addEventListener("click", () => loadHistory(false));
 chrome.storage.local.get(["amsConsole", "amsConsolePrompt", "amsTemplates"], (o) => {
+  if (chrome.runtime.lastError) { document.getElementById("cmp-status").textContent = t("cmp_settingsLoadFailed"); return; }
   const c = (o && o.amsConsole) || {};
   const savedSelection = c.selected || {};
   const selected = resolveSiteSelection(savedSelection);
