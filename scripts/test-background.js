@@ -83,7 +83,7 @@ function testFinalReviewRegressions() {
 }
 function testCompanionResponsibilities() {
   const compose = source("console/compose.html");
-  assert.ok(!compose.includes("<select") && compose.includes('id="cmp-tab-templates"') && compose.includes('id="cmp-tab-history"'), "编辑窗应使用自定义模板/历史列表");
+  assert.ok(compose.includes('id="cmp-tab-templates"') && compose.includes('id="cmp-tab-history"') && compose.includes('<select id="syn-target"'), "普通编辑模式保留自定义模板/历史列表，辅助综合使用原生选择控件");
   assert.ok(compose.includes('id="cmp-save-template"') && compose.includes('id="cmp-delete-template"'), "模板管理应归入编辑窗");
 
   const scope = source("console/scope.html");

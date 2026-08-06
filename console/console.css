@@ -190,6 +190,16 @@ body.compose [hidden]{display:none!important}
 #ch-foot .scope b{color:var(--accent);font-weight:600}
 #ch-back{margin-left:auto}
 #ch-send{font-weight:700;color:var(--send-text);border:1px solid transparent;background:var(--send-bg);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+#syn-panel{grid-column:1/-1;display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:12px;min-width:0;min-height:0}
+.syn-config,.syn-payload{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+.syn-config h1{margin:0;font-size:17px}.syn-field{display:flex;flex-direction:column;gap:4px;color:var(--text-3);font-size:11px}
+#syn-answers{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:9px;border:1px solid var(--line);border-radius:9px;color:var(--text-2)}
+#syn-answers legend{padding:0 4px;color:var(--text-3);font-size:11px}#syn-answers label{display:flex;align-items:center;gap:4px}.syn-count{color:var(--text-3);font-size:11px}
+#syn-target,#syn-tier,#syn-instruction,#syn-preview{box-sizing:border-box;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--fill-2);color:var(--text);font:inherit}
+#syn-instruction{min-height:76px;resize:vertical}.syn-preview{flex:1;min-height:0}#syn-preview{flex:1;min-height:160px;resize:none;font:11px/1.5 ui-monospace,Consolas,monospace}
+.syn-foot{display:flex;align-items:center;gap:8px}.syn-foot #syn-status{flex:1;color:var(--text-3);font-size:11px}.syn-foot #syn-status[data-warning]{color:var(--danger)}
+#syn-send{font-weight:700;color:var(--send-text);border-color:transparent;background:var(--send-bg)}#syn-send:disabled{opacity:.5;cursor:default}
+@media(max-width:620px){#syn-panel{grid-template-columns:1fr}.syn-payload{min-height:220px}}
 /* 滚动条随主题（暗/亮各取 --scroll） */
 body.compose,#ch-text{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
 #ch-text::-webkit-scrollbar{width:10px}

@@ -151,8 +151,12 @@ async function main() {
   assert.equal(exported.find((row) => row.kind === "setting").value.value, "local", "导出必须合并本地新 state 与远端物化快照");
   assert.deepEqual(exported.filter((row) => row.kind === "template").map((row) => row.value.id).sort(), ["local", "remote"]);
   assert.ok(exported.some((row) => row.kind === "group" && row.value.deletedAt === 3), "导出必须保留远端 tombstone");
-  await data.data.addHistory("h"); await data.data.addArchive({ text: "a", results: [] });
+  const addedHistory = await data.data.addHistory("h"); await data.data.addArchive({ text: "a", results: [] });
   assert.equal(data.scheduled(), 2, "历史和归档写入必须进入共享防抖调度器");
+  const historyTombstone = await data.data.deleteHistory(addedHistory.id);
+  assert.equal(historyTombstone.deletedAt, historyTombstone.updatedAt);
+  assert.equal(Object.hasOwn(historyTombstone, "text"), false, "历史 tombstone 不得保留正文");
+  assert.equal(data.outbox.get(`history:${addedHistory.id}:local`).kind, "history");
 
   const disconnected = syncRuntime(); disconnected.outbox.clear();
   await disconnected.store.putMeta("materializedState", { schema: 1, settings: { amsTheme: { value: "remote", updatedAt: 1, deviceId: "r" } }, templates: {}, groups: {} });

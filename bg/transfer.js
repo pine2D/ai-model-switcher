@@ -21,7 +21,8 @@ const Transfer = (() => {
     const valid = kind === "setting" ? text(value, "key") && Object.hasOwn(value, "value") && time(value, "updatedAt") && text(value, "deviceId")
       : kind === "template" ? text(value, "id") && time(value, "updatedAt") && (tombstone || typeof value.text === "string")
       : kind === "group" ? text(value, "id") && time(value, "updatedAt") && (tombstone || text(value, "name") && Array.isArray(value.hosts))
-      : kind === "history" ? text(value, "id") && text(value, "text") && text(value, "textHash") && time(value, "createdAt") && time(value, "lastUsedAt")
+      : kind === "history" ? text(value, "id") && text(value, "textHash") && time(value, "createdAt") && time(value, "lastUsedAt") &&
+        (tombstone ? time(value, "updatedAt") && text(value, "deviceId") && Number(value.schema) === SyncModel.SCHEMA : text(value, "text"))
       : text(value, "id") && time(value, "createdAt") && (time(value, "deletedAt") ||
         typeof value.text === "string" && Array.isArray(value.results) && ArchiveModel.validMetadata(value));
     if (!valid) throw coded("invalid_record");
@@ -34,7 +35,7 @@ const Transfer = (() => {
   async function validateContent(row) {
     validateRecord(row);
     const value = row.value;
-    if (row.kind === "history" && (value.id !== value.textHash || value.textHash !== await SyncModel.hashText(value.text))) throw coded("invalid_record");
+    if (row.kind === "history" && (value.id !== value.textHash || !Object.hasOwn(value, "deletedAt") && value.textHash !== await SyncModel.hashText(value.text))) throw coded("invalid_record");
     if (row.kind === "archive" && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id)) throw coded("invalid_record");
     return true;
   }
@@ -87,6 +88,7 @@ if (globalThis.chrome?.runtime?.onMessage) chrome.runtime.onMessage.addListener(
       else {
         for (const row of msg.records || []) await Transfer.validateContent(row);
         const changed = await Data.importRecords(msg.records || []);
+        if (changed?.histories) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "historyChanged" });
         if (changed?.archives) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" });
       }
     }

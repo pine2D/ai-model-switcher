@@ -59,7 +59,11 @@ const SyncModel = (() => {
     for (const item of records || []) {
       if (!item?.textHash) continue;
       const old = byHash.get(item.textHash);
-      if (!old || Number(item.lastUsedAt) > Number(old.lastUsedAt)) byHash.set(item.textHash, item);
+      const version = (value) => Math.max(Number(value?.updatedAt) || 0, Number(value?.deletedAt) || 0, Number(value?.lastUsedAt) || 0);
+      const wins = !old || version(item) > version(old) || version(item) === version(old) &&
+        (Object.hasOwn(item, "deletedAt") !== Object.hasOwn(old, "deletedAt") ? Object.hasOwn(item, "deletedAt") :
+          String(item.deviceId || "").localeCompare(String(old.deviceId || "")) > 0);
+      if (wins) byHash.set(item.textHash, item);
     }
     return [...byHash.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt);
   }

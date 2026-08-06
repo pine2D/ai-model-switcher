@@ -22,11 +22,19 @@ const ArchiveModel = (() => {
     return { kind: value.kind, title: clean(value.title), url: url.href, truncated: !!value.truncated,
       capturedAt: Number.isSafeInteger(value.capturedAt) && value.capturedAt >= 0 ? value.capturedAt : 0 };
   }
+  function cleanSynthesis(value) {
+    if (value == null) return null;
+    if (!exactKeys(value, ["host", "text", "state", "instruction", "createdAt"]) || !clean(value.host) || !bounded(clean(value.host), 256) ||
+      typeof value.text !== "string" || !value.text.trim() || typeof value.instruction !== "string" || !Number.isSafeInteger(value.createdAt) || value.createdAt < 0 || value.createdAt > 8_640_000_000_000_000)
+      throw new Error("invalid_synthesis");
+    return { host: clean(value.host), text: value.text, state: ["think", "fast"].includes(value.state) ? value.state : null,
+      instruction: clean(value.instruction), createdAt: value.createdAt };
+  }
   const successful = (value) => (value.results || []).filter((item) => item && typeof item.text === "string" && item.text.trim());
   function searchable(value) {
     return [value.task, value.source?.title, value.source?.url, value.note,
       ...(value.tags || []), ...(value.results || []).map((item) => item.label),
-      ...(value.resultPreviews || []).map((item) => item.text)].filter(Boolean).join("\n").toLowerCase();
+      ...(value.resultPreviews || []).map((item) => item.text), preview(value.synthesis?.text)].filter(Boolean).join("\n").toLowerCase();
   }
   function normalize(entry = {}, { id, now, deviceId }) {
     const results = Array.isArray(entry.results) ? entry.results : [], task = clean(typeof entry.task === "string" ? entry.task : entry.text);
@@ -40,7 +48,7 @@ const ArchiveModel = (() => {
     return record;
   }
   function update(record, patch = {}, { now, deviceId }) {
-    const allowed = new Set(["favorite", "tags", "note", "winnerHost"]);
+    const allowed = new Set(["favorite", "tags", "note", "winnerHost", "synthesis"]);
     if (!object(patch) || Object.keys(patch).some((key) => !allowed.has(key))) throw new Error("invalid_patch");
     if (!validMetadata(record)) throw new Error("invalid_record");
     const next = { ...record, updatedAt: now, deviceId };
@@ -52,6 +60,7 @@ const ArchiveModel = (() => {
       if (host && !successful(record).some((item) => item.host === host)) throw new Error("invalid_winner");
       next.winnerHost = host;
     }
+    if (own(patch, "synthesis")) next.synthesis = cleanSynthesis(patch.synthesis);
     next.searchText = searchable(next);
     return next;
   }
@@ -64,7 +73,7 @@ const ArchiveModel = (() => {
     try {
       const required = ["task", "source", "favorite", "tags", "note", "winnerHost", "synthesis", "hosts", "resultPreviews", "searchText"];
       if (!object(record) || required.some((key) => !own(record, key)) || typeof record.task !== "string" || record.task !== clean(record.task) ||
-        typeof record.favorite !== "boolean" || !bounded(record.note, 4000) || record.synthesis !== null || !Array.isArray(record.results) ||
+        typeof record.favorite !== "boolean" || !bounded(record.note, 4000) || !Array.isArray(record.results) ||
         !Array.isArray(record.hosts) || !Array.isArray(record.resultPreviews) || typeof record.searchText !== "string") return false;
       if (record.source !== null) {
         if (!exactKeys(record.source, ["kind", "title", "url", "truncated", "capturedAt"]) || typeof record.source.title !== "string" ||
@@ -84,6 +93,8 @@ const ArchiveModel = (() => {
         previews.some((item, at) => Object.keys(item).some((key) => item[key] !== record.resultPreviews[at][key]))) return false;
       if (record.winnerHost !== null && (!bounded(record.winnerHost, 256) || record.winnerHost !== clean(record.winnerHost) ||
         !successful(record).some((item) => item.host === record.winnerHost))) return false;
+      const synthesis = cleanSynthesis(record.synthesis);
+      if (synthesis && Object.keys(synthesis).some((key) => synthesis[key] !== record.synthesis[key])) return false;
       return record.searchText === searchable(record);
     } catch (_) { return false; }
   }

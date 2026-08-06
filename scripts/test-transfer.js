@@ -55,11 +55,15 @@ async function main() {
     results: [{ host: "a", label: "A", text: "Answer" }], favorite: true, tags: ["work"], note: "keep", winnerHost: "a",
     synthesis: null, hosts: ["a"], resultPreviews: [{ host: "a", label: "A", text: "Answer" }], searchText: "question\nkeep\nwork\na\nanswer" };
   assert.equal(await transferRuntime({ runForExport: async () => {}, rows: async function* () {} }).validateContent({ kind: "archive", value: JSON.parse(JSON.stringify(archive)) }), true);
+  const synthesized = { ...archive, synthesis: { host: "a", text: "Combined", state: "fast", instruction: "Compare", createdAt: 2 },
+    searchText: "question\nkeep\nwork\na\nanswer\ncombined" };
+  assert.equal(await transferRuntime({ runForExport: async () => {}, rows: async function* () {} }).validateContent({ kind: "archive", value: synthesized }), true);
   const invalid = (patch) => assert.throws(() => transferRuntime({ runForExport: async () => {}, rows: async function* () {} })
     .validateRecord({ kind: "archive", value: { ...archive, ...patch } }), (error) => error.code === "invalid_record");
   invalid({ note: "x".repeat(4001) });
   invalid({ tags: Array(21).fill("work") });
   invalid({ winnerHost: "b" });
+  invalid({ synthesis: { host: "a", text: "", state: null, instruction: "Compare", createdAt: 2 } });
   invalid({ resultPreviews: [null] });
   invalid({ source: { kind: "page", title: "Bad", url: "https://example.test/", truncated: false, capturedAt: 1, extra: true } });
   invalid({ source: { kind: "page", title: "Bad", url: "https://example.test/" } });
@@ -70,13 +74,14 @@ async function main() {
       searchText: "question\nweb\nhttps://example.test/path\nkeep\nwork\na\nanswer" } }));
 
   let changed = 2;
-  const migration = migrationRuntime(async () => ({ archives: changed }));
+  const migration = migrationRuntime(async () => ({ archives: changed, histories: changed ? 1 : 0 }));
   const rows = [1, 2].map((at) => ({ kind: "archive", value: { id: `00000000-0000-4000-8000-00000000000${at}`, createdAt: at, deletedAt: at } }));
   assert.equal((await migration.send({ source: "AMS_TRANSFER", action: "importBatch", records: rows })).ok, true);
-  assert.deepEqual(JSON.parse(JSON.stringify(migration.broadcasts)), [{ source: "AMS_DATA", type: "archiveChanged" }], "迁移批次有归档变化时只广播一次且不带 token");
+  assert.deepEqual(JSON.parse(JSON.stringify(migration.broadcasts)), [{ source: "AMS_DATA", type: "historyChanged" },
+    { source: "AMS_DATA", type: "archiveChanged" }], "迁移批次必须分别通知历史与归档变化");
   changed = 0;
   await migration.send({ source: "AMS_TRANSFER", action: "importBatch", records: rows });
-  assert.equal(migration.broadcasts.length, 1, "迁移批次未改变归档时不得广播");
+  assert.equal(migration.broadcasts.length, 2, "迁移批次未改变数据时不得广播");
   console.log("transfer tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

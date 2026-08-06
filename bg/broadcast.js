@@ -117,14 +117,14 @@ function pushSiteResult(res) { pushBroadcast({ type: "siteResult", result: res }
 // 故 content 未注入 / composer_not_found 都视为"还没好"继续等，其它 ok=false 才是真失败。
 // 失败原因走错误码协议（code），由 console 端按界面语言翻译——bg/content 不产出用户可见文案。
 // 任一出口都先 pushSiteResult 让该站圆点立刻变色，再返回参与 Promise.all 汇总。
-async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoch = currentSendEpoch(), images = []) {
+async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoch = currentSendEpoch(), images = [], notify = true) {
   const t0 = Date.now();
   const firstDeadline = t0 + timeoutMs, deadline = t0 + timeoutMs * 2;
   let retried = false; // 慢加载站首开超过 22s 后继续等到绝对截止线 44s
   const done = (ok, code, reason) => {
     const res = { host: s.host, ok, code, reason, ms: Date.now() - t0 }; // ms：逐站耗时，console 拼进 title 服务速度对比
     if (retried) res.retried = true;
-    pushSiteResult(res); return res;
+    if (notify) pushSiteResult(res); return res;
   };
   const wins = await getWindows(); // openTile 已在 Promise.all 前定稿登记表，轮询期不变，读一次即可
   for (;;) {

@@ -123,6 +123,7 @@ function showCurrent(state) {
   elDetail.replaceChildren();
   elDetail.setAttribute("data-empty", t(state || (e ? "arc_loading" : hasFilters() ? "arc_noMatches" : "arc_empty")));
   if (e && e.results) ArchiveDetail.render(e, { update: savePatch, errorText: resultError, draft: drafts.get(e.id), onDraft: rememberDraft });
+  if (typeof ArchiveSynthesis !== "undefined") ArchiveSynthesis.render(e && e.results ? e : null);
   elCopy.disabled = elExport.disabled = elDel.disabled = !e || !e.results;
 }
 function dataMessage(action, payload, done) {

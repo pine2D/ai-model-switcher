@@ -53,8 +53,8 @@ const SyncEngine = (() => {
     if (!object(body) || Number(body.schema) !== SyncModel.SCHEMA) return false;
     if (kind === "state") return body.deviceId === props.id && ["settings", "templates", "groups"].every((key) => body[key] == null || object(body[key])) &&
       Object.values(body.settings || {}).every(validVersion) && ["templates", "groups"].every((key) => Object.values(body[key] || {}).every((item) => item?.id && validVersion(item)));
-    if (kind === "history") return body.id === props.id && body.textHash === props.id && body.deviceId === props.device && typeof body.text === "string" &&
-      validTime(body.createdAt) && validTime(body.lastUsedAt) && await SyncModel.hashText(body.text) === body.textHash;
+    if (kind === "history") return body.id === props.id && body.textHash === props.id && body.deviceId === props.device && validTime(body.createdAt) && validTime(body.lastUsedAt) &&
+      (Object.hasOwn(body, "deletedAt") ? validTime(body.updatedAt) && validTime(body.deletedAt) && body.text == null : typeof body.text === "string" && await SyncModel.hashText(body.text) === body.textHash);
     return kind === "archive" && body.id === props.id && validTime(body.createdAt) && (!Object.hasOwn(body, "updatedAt") || validTime(body.updatedAt)) &&
       (Object.hasOwn(body, "deletedAt") ? validTime(body.deletedAt) : typeof body.text === "string" && Array.isArray(body.results) && ArchiveModel.validMetadata(body));
   }
@@ -162,7 +162,7 @@ const SyncEngine = (() => {
       existing = await SyncStore.findFile(key);
       record = await Data.getHistory(op.entityId); if (!record) return SyncStore.completeOutbox(op.key, op.revision);
       name = `history-${record.textHash}-${id}.json`;
-      props = { app: "polyask", schema: "1", kind: "history", id: record.textHash, device: id, preview: SyncModel.utf8Preview(record.text) };
+      props = { app: "polyask", schema: "1", kind: "history", id: record.textHash, device: id, deleted: Object.hasOwn(record, "deletedAt") ? "1" : "0", preview: SyncModel.utf8Preview(record.text) };
       body = { ...record, deviceId: id }; delete body.fileId;
     } else if (op.kind === "archive") {
       existing = await SyncStore.findFile(key);
@@ -259,11 +259,11 @@ const SyncEngine = (() => {
   async function resolve(kind, id) { let staleReads = 0;
     for (;;) {
       const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
-      if (!record || record.text != null || !record.fileId || kind === "archive" && Object.hasOwn(record, "deletedAt")) return record;
+      if (!record || record.text != null || !record.fileId || Object.hasOwn(record, "deletedAt")) return record;
       try { const body = await Drive.download(record.fileId), props = kind === "history" ? { id, device: record.deviceId } : { id };
         if (!await validBody(kind, body, props)) throw { code: "invalid_response" };
         const hydrated = await SyncStore.hydrateEntity(kind, id, record, body), latest = hydrated.record;
-        if (hydrated.hydrated || !latest || latest.text != null || !latest.fileId || kind === "archive" && Object.hasOwn(latest, "deletedAt")) return latest;
+        if (hydrated.hydrated || !latest || latest.text != null || !latest.fileId || Object.hasOwn(latest, "deletedAt")) return latest;
         if (++staleReads >= 2) throw coded("stale_body");
       } catch (error) {
         if (error?.code !== "not_found" && error?.status !== 404) throw error;
@@ -279,7 +279,7 @@ const SyncEngine = (() => {
     chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === "ams-sync") wake("alarm"); });
     chrome.runtime.onStartup.addListener(() => wake("startup"));
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local") return;
+      if (area !== "local" || globalThis.DataAdmin?.resetting()) return;
       const localChanges = unsuppressed(changes);
       if (!Object.keys(localChanges).some((key) => own(LOCAL_KEYS, key))) return;
       Data.noteStorageChanges(localChanges).then((state) => {

@@ -7,8 +7,8 @@ let composeWinId = null;
 let scopeWinId = null;       // 站点范围伴侣窗（失焦即关，不改变 console 高度）
 let archiveWinId = null;     // 归档查看窗（与伴侣窗同款受管：随 console 联动、closeAll 一起关）
 let raiseTimer = null;       // consoleFocused 抬窗去抖句柄（见 scheduleRaise）
-importScripts("bg/windows.js", "bg/panels.js", "bg/page-context.js", "bg/broadcast.js",
-  "bg/sync-model.js", "bg/archive-model.js", "bg/store.js", "bg/data.js", "bg/drive.js", "bg/sync.js", "bg/transfer.js");
+importScripts("bg/windows.js", "bg/panels.js", "bg/page-context.js", "bg/broadcast.js", "bg/synthesis.js",
+  "bg/sync-model.js", "bg/archive-model.js", "bg/store.js", "bg/data.js", "bg/drive.js", "bg/sync.js", "bg/data-admin.js", "bg/transfer.js");
 
 // 窗口 id 仅本次浏览器会话有效：重启后 id 重排，陈旧登记可能撞上无关 popup（如 OAuth 弹窗）
 // 被误关/误收编——按 id 的操作只验 type 无法防住 popup 撞 popup，故启动时一律清空登记。
@@ -103,12 +103,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     suppressFocusUntil = Date.now() + 600;
     openScope(msg.anchor); return;
   }
-  if (msg.action === "openCompose") { openCompose(msg.anchor); return; }
+  if (msg.action === "openCompose") { openCompose(msg.anchor, msg.mode); return; }
   if (msg.action === "openArchive") { openArchive(); return; }
   if (msg.action === "openTile") { serializeOp(() => openTile(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "sendAll") {
     const epoch = currentSendEpoch();
     serializeOp(() => sendAll(msg.sites || [], msg.text || "", msg.tier || null, msg.tile !== false, epoch, msg.images || [], msg.run || {})).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true;
+  }
+  if (msg.action === "sendOneNewSession") {
+    const site = msg.site || {};
+    if (!validSynthesisRequest(msg)) { sendResponse({ ok: false, code: "invalid_request" }); return; }
+    serializeOp(() => sendOneNewSession(site, msg.text, msg.tier || null)).then(sendResponse,
+      (error) => sendResponse({ host: site.host, ok: false, code: error?.code || "error" })); return true;
   }
   if (msg.action === "checkup") { serializeOp(() => checkupAll(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "collect") {

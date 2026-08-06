@@ -104,6 +104,14 @@ module.exports = async function testSyncEngine() {
   const archive = runtime({ listed: [{ id: "arc", appProperties: { app: "polyask", schema: "1", kind: "archive", id: "a" } }], bodies: { arc: tomb }, localArchives: [{ id: "a", createdAt: 1, updatedAt: 1, text: "live", deviceId: "a" }] });
   await archive.sync.connect();
   assert.equal(archive.imports.at(-1).archives[0].deletedAt, 3, "远端 tombstone 必须覆盖本地 active 记录");
+  const historyTomb = { schema: 1, id: "h", textHash: "h", createdAt: 1, lastUsedAt: 2, updatedAt: 3, deletedAt: 3, deviceId: "d" };
+  const deletedHistory = runtime({ listed: [{ id: "hist", appProperties: { app: "polyask", schema: "1", kind: "history", id: "h", device: "d" } }], bodies: { hist: historyTomb } });
+  await deletedHistory.sync.connect();
+  assert.equal(deletedHistory.imports.at(-1).history[0].deletedAt, 3, "远端历史 tombstone 必须通过校验并导入");
+  const uploadHistoryTomb = runtime({ queued: [{ key: "history:h:device", kind: "history", entityId: "h", nextAt: 0, attempt: 0 }],
+    localHistory: [{ ...historyTomb, deviceId: "device" }] });
+  await uploadHistoryTomb.sync.connect();
+  assert.equal(uploadHistoryTomb.uploads.at(-1).deletedAt, 3, "历史 tombstone 必须无正文上传");
 
   const liveFiles = ["one", "two"].map((id) => ({ id: `file-${id}`, appProperties: { app: "polyask", schema: "1", kind: "archive", id } }));
   const live = runtime({ listed: liveFiles, bodies: { "file-one": liveArchive("one"), "file-two": liveArchive("two") } });

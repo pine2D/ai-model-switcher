@@ -143,23 +143,23 @@ const SyncStore = (() => {
   const has = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
   function sameEntityVersion(kind, current, expected) {
     if (!current || current.fileId !== expected.fileId || current.deviceId !== expected.deviceId) return false;
-    if (kind === "history") return current.lastUsedAt === expected.lastUsedAt;
+    if (kind === "history") return compareEntityVersion(kind, current, expected) === 0 && has(current, "deletedAt") === has(expected, "deletedAt");
     return current.updatedAt === expected.updatedAt && has(current, "deletedAt") === has(expected, "deletedAt") &&
       (!has(current, "deletedAt") || current.deletedAt === expected.deletedAt);
   }
   function compareEntityVersion(kind, left, right) {
-    const time = (value) => kind === "history" ? Number(value.lastUsedAt) || 0 :
+    const time = (value) => kind === "history" ? Math.max(Number(value.updatedAt) || 0, Number(value.deletedAt) || 0, Number(value.lastUsedAt) || 0) :
       Math.max(Number(value.updatedAt) || 0, Number(value.deletedAt) || 0, Number(value.createdAt) || 0);
     const byTime = time(left) - time(right);
     if (byTime) return byTime;
-    if (kind === "archive" && has(left, "deletedAt") !== has(right, "deletedAt")) return has(left, "deletedAt") ? 1 : -1;
+    if (has(left, "deletedAt") !== has(right, "deletedAt")) return has(left, "deletedAt") ? 1 : -1;
     return String(left.deviceId || "").localeCompare(String(right.deviceId || ""));
   }
   async function hydrateEntity(kind, id, expected, body) {
     const name = kind === "history" ? "history" : "archives", db = await open();
     const tx = db.transaction(name, "readwrite"), store = tx.objectStore(name), completion = done(tx), current = await request(store.get(id));
     let result = { record: current, hydrated: false };
-    if (sameEntityVersion(kind, current, expected) && current.text == null && !(kind === "archive" && has(current, "deletedAt"))) {
+    if (sameEntityVersion(kind, current, expected) && current.text == null && !has(current, "deletedAt")) {
       const candidate = { ...body, deviceId: body.deviceId ?? current.deviceId };
       if (compareEntityVersion(kind, candidate, current) >= 0) {
         const newer = compareEntityVersion(kind, candidate, current) > 0;
@@ -196,14 +196,19 @@ const SyncStore = (() => {
     ]);
     await completion;
   }
+  async function clearLocalData() {
+    const db = await open(), tx = db.transaction(["history", "archives", "outbox", "files", "meta"], "readwrite");
+    for (const name of ["history", "archives", "outbox", "files", "meta"]) tx.objectStore(name).clear();
+    await done(tx);
+  }
 
   return {
     open, getMeta: (key) => read("meta", key).then((row) => row && row.value), putMeta: (key, value) => write("meta", { key, value }), deleteMeta: (key) => erase("meta", key),
-    putHistory: (record) => write("history", record), getHistory: (id) => read("history", id), pageHistory: (cursor, limit) => page("history", "lastUsed", cursor, limit),
+    putHistory: (record) => write("history", record), getHistory: (id) => read("history", id), pageHistory: (cursor, limit) => page("history", "lastUsed", cursor, limit, (value) => !has(value, "deletedAt")),
     putArchive: (record) => write("archives", record), getArchive: (id) => read("archives", id), pageArchives: (cursor, limit) => searchArchives(cursor, limit), searchArchives,
     enqueue, readyOutbox, completeOutbox, countOutbox,
     putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
     deleteFile: (fileId) => erase("files", fileId),
-    setEntityFile, markFile, hydrateEntity, trimBodies, iterate, next,
+    setEntityFile, markFile, hydrateEntity, trimBodies, clearLocalData, iterate, next,
   };
 })();

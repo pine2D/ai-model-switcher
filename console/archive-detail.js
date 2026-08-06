@@ -31,6 +31,11 @@ const ArchiveDetail = (() => {
       if (successful(result) && entry.winnerHost === result.host) markdown.push("\n**" + t("arc_bestAnswer", result.label) + "**");
       markdown.push("\n" + (successful(result) ? result.text : "> " + errorText(result)));
     }
+    if (entry.synthesis) {
+      const site = typeof SITES === "undefined" ? null : SITES.find((item) => item.host === entry.synthesis.host);
+      const tier = entry.synthesis.state === "think" ? t("con_mdThink") : entry.synthesis.state === "fast" ? t("con_mdFast") : "";
+      markdown.push("\n## " + t("syn_saved"), "\n**" + t("syn_target") + "**: " + (site?.label || entry.synthesis.host) + (tier ? " · " + tier : ""), "\n" + entry.synthesis.text);
+    }
     return markdown.join("\n");
   }
   function render(entry, { update, errorText, draft = {}, onDraft = () => {} }) {

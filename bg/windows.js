@@ -166,15 +166,15 @@ async function ensureConsoleReady(prefillHost, timeoutMs = 5000) { return new Pr
 // 制造「输入框向下展开」的错觉。取不到 console 几何则回退居中。
 // in-flight 去重同 openConsole：背靠背两条 openCompose 消息会双开伴侣窗并孤儿化前一个。
 let _openingCompose = null;
-async function openCompose(anchor) {
+async function openCompose(anchor, mode) {
   if (_openingCompose) return _openingCompose;
-  _openingCompose = _openCompose(anchor).finally(() => { _openingCompose = null; });
+  _openingCompose = _openCompose(anchor, mode).finally(() => { _openingCompose = null; });
   return _openingCompose;
 }
-async function _openCompose(anchor) {
+async function _openCompose(anchor, mode) {
+  const desired = chrome.runtime.getURL("console/compose.html") + (mode === "synthesis" ? "?mode=synthesis" : "");
   const cid = await getComposeWinId();
-  // 仅当确是伴侣 popup 才聚焦并返回；陈旧 id / 撞上日常窗口 → 不碰它、继续往下新建
-  if (cid != null && await updateIfPopup(cid, { focused: true, state: "normal" })) return;
+  if (cid != null && await updateIfPopup(cid, { focused: true, state: "normal" })) { const [tab] = await chrome.tabs.query({ active: true, windowId: cid }); if (tab && tab.url !== desired) await chrome.tabs.update(tab.id, { url: desired }); return; }
   const wa = await consoleWorkArea(); // 贴着 console 所在显示器展开
   const H = Math.min(460, wa.height);
   let W = Math.min(760, wa.width);
@@ -193,7 +193,7 @@ async function _openCompose(anchor) {
       }
     } catch (e) {}
   }
-  const w = await chrome.windows.create({ url: chrome.runtime.getURL("console/compose.html"), type: "popup", left, top, width: W, height: H, focused: true });
+  const w = await chrome.windows.create({ url: desired, type: "popup", left, top, width: W, height: H, focused: true });
   composeWinId = w.id;
   await chrome.storage.local.set({ amsComposeWin: w.id });
 }

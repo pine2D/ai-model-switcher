@@ -53,6 +53,10 @@ node scripts/test-claude-model.js
 node scripts/test-qwen-adapter.js
 
 echo "[test] 图片载荷与群发消息契约"
+node scripts/test-synthesis-model.js
+node scripts/test-synthesis-runtime.js
+node scripts/test-synthesis-ui.js
+node scripts/test-archive-synthesis.js
 node scripts/test-image.js
 node scripts/test-image-runtime.js
 node scripts/test-multi-image.js
@@ -67,6 +71,8 @@ node scripts/test-sync-ui.js
 node scripts/test-sync-feedback.js
 node scripts/test-sync-integrity.js
 node scripts/test-sync-scale.js
+node scripts/test-data-controls.js
+node scripts/test-data-controls-ui.js
 node scripts/test-options-ui.js
 
 git diff --check

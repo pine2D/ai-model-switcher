@@ -24,6 +24,8 @@ async function main() {
   assert.equal(Transfer.validateRecord({ kind: "template", value: { id: "t", updatedAt: 1, deletedAt: 1 } }), true);
   assert.equal(Transfer.validateRecord({ kind: "group", value: { id: "g", updatedAt: 1, deletedAt: 1 } }), true);
   await Transfer.validateContent({ kind: "history", value: { id: hash, textHash: hash, text: "same text", createdAt: 1, lastUsedAt: 1 } });
+  await Transfer.validateContent({ kind: "history", value: { id: hash, textHash: hash, createdAt: 1, lastUsedAt: 1,
+    updatedAt: 2, deletedAt: 2, deviceId: "device", schema: 1 } });
   await Transfer.validateContent({ kind: "archive", value: { id, createdAt: 1, deletedAt: 1 } });
   await assert.rejects(Transfer.validateContent({ kind: "history", value: { id: hash, textHash: hash, text: "other", createdAt: 1, lastUsedAt: 1 } }), /invalid_record/);
   await assert.rejects(Transfer.validateContent({ kind: "archive", value: { id: "not-uuid", createdAt: 1, deletedAt: 1 } }), /invalid_record/);
@@ -45,6 +47,12 @@ async function main() {
     { textHash: "h", text: "q", lastUsedAt: 3, deviceId: "b" },
   ]).length, 1);
   assert.equal(M.mergeHistory([{ textHash: "h", text: "q", lastUsedAt: 1 }, { textHash: "h", text: "q", lastUsedAt: 3 }])[0].lastUsedAt, 3);
+  const deletedHistory = { id: "h", textHash: "h", createdAt: 1, lastUsedAt: 2, updatedAt: 3, deletedAt: 3, deviceId: "b", schema: 1 };
+  assert.equal(M.mergeHistory([{ id: "h", textHash: "h", text: "q", createdAt: 1, lastUsedAt: 2, updatedAt: 2, deviceId: "a" }, deletedHistory])[0].deletedAt, 3,
+    "较新的历史 tombstone 必须保留并覆盖正文");
+  assert.equal(M.mergeHistory([{ ...deletedHistory, deletedAt: 2, updatedAt: 2, deviceId: "z" },
+    { id: "h", textHash: "h", text: "q", createdAt: 1, lastUsedAt: 2, updatedAt: 2, deviceId: "a" }])[0].deletedAt, 2,
+    "历史版本同刻时 tombstone 必须获胜");
 
   assert.equal(JSON.stringify(M.mergeArchives([
     { id: "x", createdAt: 1, text: "q" },

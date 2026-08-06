@@ -94,6 +94,8 @@ async function main() {
   const store = archiveStore([{ id: "new", createdAt: 3, favorite: true }, { id: "gone", createdAt: 2, deletedAt: 0 }, { id: "old", createdAt: 1 }]);
   assert.deepEqual(Array.from((await store.searchArchives(null, 50, (row) => row.favorite)).items, (row) => row.id), ["new"]);
   assert.deepEqual(Array.from((await store.pageArchives(null, 50)).items, (row) => row.id), ["new", "old"]);
+  const history = archiveStore([{ id: "new", lastUsedAt: 3 }, { id: "gone", lastUsedAt: 2, deletedAt: 2 }, { id: "old", lastUsedAt: 1 }]);
+  assert.deepEqual(Array.from((await history.pageHistory(null, 50)).items, (row) => row.id), ["new", "old"], "普通历史分页不得显示 tombstone");
   const verify = fs.readFileSync("scripts/verify.sh", "utf8");
   for (const file of ["test-sync-integrity.js", "test-sync-scale.js", "test-sync-feedback.js"])
     assert.ok(verify.includes(file), `verify.sh 必须执行 ${file}`);

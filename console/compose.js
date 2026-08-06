@@ -1,4 +1,5 @@
 // console/compose.js — 提示词工作区：编辑、模板、历史与发送。
+if (typeof SynthesisCompose === "undefined" || !SynthesisCompose.active) {
 applyI18n();
 const composeContextReady = ComposeContext.init().catch(() => false);
 const elText = document.getElementById("ch-text");
@@ -226,3 +227,4 @@ document.getElementById("ch-send").addEventListener("click", async () => {
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text: payload.text, tier,
     run: { task: payload.task, source: payload.source } });
 });
+}

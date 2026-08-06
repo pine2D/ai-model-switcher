@@ -31,7 +31,8 @@ const root = new El();
 const document = { documentElement: { lang: "en" }, createElement: (tag) => new El(tag), getElementById: (id) => id === "ar-detail" ? root : root.querySelector("#" + id) };
 const messages = { arc_favorites: "Favorites", arc_tags: "Tags", arc_note: "Note", arc_sites: "Sites",
   arc_question: "Question", arc_source: "Source", arc_bestAnswer: "Best answer: {0}", arc_best: "Mark as best", arc_unmarkBest: "Clear best answer",
-  arc_capturedAt: "Captured: {0}", con_mdThink: "Deep think", con_mdFast: "Fast", con_errNoAnswer: "No answer" };
+  arc_capturedAt: "Captured: {0}", con_mdThink: "Deep think", con_mdFast: "Fast", con_errNoAnswer: "No answer",
+  syn_saved: "Synthesis", syn_target: "Target AI" };
 const t = (key, ...values) => values.reduce((text, value, index) => text.replaceAll(`{${index}}`, value), messages[key] || key);
 const renderMd = (md, box) => { box.textContent = md; };
 const timers = [];
@@ -60,6 +61,9 @@ scope.detail.render(entry, { update: async () => entry, errorText: (item) => ite
 const markdown = scope.detail.entryMarkdown(entry);
 assert.match(markdown, /Best answer: A/);
 assert.doesNotMatch(markdown, /private note/);
+const synthesisMarkdown = scope.detail.entryMarkdown({ ...entry,
+  synthesis: { host: "a.test", text: "Combined answer", state: "fast", instruction: "Compare", createdAt: 2 } });
+assert.match(synthesisMarkdown, /## Synthesis\n\n\*\*Target AI\*\*: a\.test · Fast\n\nCombined answer/);
 assert.doesNotMatch(scope.detail.entryMarkdown({ ...entry, winnerHost: "b.test" }), /Best answer:/, "失败结果不能成为胜出答案");
 
 const updates = [];

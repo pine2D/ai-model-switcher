@@ -29,12 +29,22 @@ const Data = (() => {
     const id = await SyncModel.hashText(clean), now = Date.now(), deviceId = await getDeviceId();
     const old = await SyncStore.getHistory(id);
     const record = { id, textHash: id, text: clean, preview: SyncModel.utf8Preview(clean),
-      createdAt: old?.createdAt || now, lastUsedAt: now, deviceId, schema: SyncModel.SCHEMA };
+      createdAt: old?.createdAt || now, lastUsedAt: now, updatedAt: now, deviceId, schema: SyncModel.SCHEMA };
     await SyncStore.putHistory(record);
     await SyncStore.enqueue({ key: `history:${id}:${deviceId}`, kind: "history", entityId: id, nextAt: 0, attempt: 0 });
     await SyncStore.trimBodies(200, 50);
     scheduleLocal();
     return record;
+  }
+  async function deleteHistory(id) {
+    const old = await SyncStore.getHistory(id);
+    if (!old || Object.hasOwn(old, "deletedAt")) return null;
+    const now = Date.now(), deviceId = await getDeviceId();
+    const record = { id, textHash: old.textHash || id, createdAt: old.createdAt, lastUsedAt: old.lastUsedAt,
+      updatedAt: now, deletedAt: now, deviceId, schema: SyncModel.SCHEMA };
+    await SyncStore.putHistory(record);
+    await SyncStore.enqueue({ key: `history:${id}:${deviceId}`, kind: "history", entityId: id, nextAt: 0, attempt: 0 });
+    scheduleLocal(); return record;
   }
   async function addArchive(entry = {}) {
     const createdAt = entry.createdAt || Date.now(), id = entry.id || crypto.randomUUID(), deviceId = await getDeviceId();
@@ -135,17 +145,17 @@ const Data = (() => {
   const stamp = (record = {}) => ({ ...record, updatedAt: Math.max(Number(record.updatedAt) || 0, Number(record.deletedAt) || 0, Number(record.createdAt) || 0) });
   const newer = (old, next) => !old || SyncModel.compareVersion(stamp(old), stamp(next)) < 0;
   async function importRecords(records = []) {
-    let archiveChanges = 0;
+    let archiveChanges = 0, historyChanges = 0;
     if (!Array.isArray(records)) {
       for (const value of records.history || []) {
         const old = await SyncStore.getHistory(value.id), merged = SyncModel.mergeHistory([old, value])[0];
-        if (merged) await SyncStore.putHistory(merged);
+        if (merged && merged !== old) { await SyncStore.putHistory(merged); historyChanges++; }
       }
       for (const value of records.archives || []) if (await mutateArchive(value.id, async () => {
         if (!newer(await SyncStore.getArchive(value.id), value)) return false;
         await SyncStore.putArchive(value); return true;
       })) archiveChanges++;
-      return { archives: archiveChanges };
+      return { histories: historyChanges, archives: archiveChanges };
     }
     const rows = records;
     const id = await getDeviceId(), state = await deviceState();
@@ -160,8 +170,10 @@ const Data = (() => {
         const next = { ...value, deviceId: value.deviceId || id };
         if (newer(bucket[value.id], next)) { bucket[value.id] = next; stateChanged = true; }
       } else if (kind === "history") {
-        const next = { ...value, id: value.textHash, deviceId: id, schema: SyncModel.SCHEMA, preview: value.preview || SyncModel.utf8Preview(value.text) };
+        const next = { ...value, id: value.textHash, deviceId: id, schema: SyncModel.SCHEMA,
+          ...(Object.hasOwn(value, "deletedAt") ? {} : { preview: value.preview || SyncModel.utf8Preview(value.text) }) };
         const old = await SyncStore.getHistory(next.id), merged = SyncModel.mergeHistory([old, next])[0];
+        if (merged !== old) historyChanges++;
         await SyncStore.putHistory(merged);
         await SyncStore.enqueue({ key: `history:${next.id}:${id}`, kind: "history", entityId: next.id, nextAt: 0, attempt: 0 });
       } else if (kind === "archive") {
@@ -181,7 +193,7 @@ const Data = (() => {
       if (typeof SyncEngine !== "undefined") await SyncEngine.projectImportedState(state); else await projectState(state);
     }
     await SyncStore.trimBodies(200, 50);
-    return { archives: archiveChanges };
+    return { histories: historyChanges, archives: archiveChanges };
   }
   async function* exportRecords() {
     const state = SyncModel.mergeStateFragments([await SyncStore.getMeta("materializedState") || {}, await deviceState()]).materialized;
@@ -192,7 +204,7 @@ const Data = (() => {
       let after = null, item;
       while ((item = await SyncStore.next(store, after))) {
         after = item.key;
-        const isHistory = store === "history", tombstone = !isHistory && Object.hasOwn(item.value, "deletedAt");
+        const isHistory = store === "history", tombstone = Object.hasOwn(item.value, "deletedAt");
         const resolved = tombstone ? item.value : await resolve(isHistory ? "history" : "archive", item.value.id);
         if (!resolved || isHistory && resolved.text == null || !isHistory && !Object.hasOwn(resolved, "deletedAt") && (resolved.text == null || !Array.isArray(resolved.results)))
           throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
@@ -203,12 +215,12 @@ const Data = (() => {
   }
   async function resolve(kind, id) {
     const record = await (kind === "history" ? SyncStore.getHistory(id) : SyncStore.getArchive(id));
-    if (record?.text != null || !record?.fileId || typeof SyncEngine === "undefined") return record;
+    if (record?.text != null || record?.deletedAt != null || !record?.fileId || typeof SyncEngine === "undefined") return record;
     const config = (await chrome.storage.local.get({ amsSyncConfig: {} })).amsSyncConfig || {};
     if (!config.connected) throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
     return kind === "history" ? SyncEngine.resolveHistory(id) : SyncEngine.resolveArchive(id);
   }
-  return { deviceId: getDeviceId, deviceState, noteStorageChanges, applyRemoteState, addHistory,
+  return { deviceId: getDeviceId, resetDeviceId: () => { cachedDeviceId = undefined; deviceIdOpening = null; }, deviceState, noteStorageChanges, applyRemoteState, addHistory, deleteHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
     addArchive, updateArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), searchArchives, archiveTags, getArchive: (id) => resolve("archive", id),
     seedState, importRecords, exportRecords, projectState };
