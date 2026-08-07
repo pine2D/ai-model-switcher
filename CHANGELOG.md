@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.15.0] - 2026-08-07
+
 ### 新增
 
 - 新增辅助综合：从结果库选择多个回答，预览完整载荷后发送到指定 AI 的新会话，并可将综合结果采集回原记录
@@ -16,6 +18,14 @@
 ### 变更
 
 - 清空提问历史时保留同步删除标记，避免其他设备将已删除记录重新带回
+
+### 修复
+
+- 兼容 ChatGPT 新版对话结构，恢复最新回答的汇总采集
+- 修复 Claude 新版单行编辑器被误判为未就绪，导致群发延迟或失败的问题
+- DeepSeek 图片提问改用 Vision，并避免在图片解析失败时把用户问题误收为回答
+- 修复 Kimi 切换 K3 时页面重挂导致的发送误报，并适配新的图片附件入口
+- 适配千问新版模式菜单：思考档使用 `Qwen3.7-千问` 的「思考研究」，快速档使用 `Qwen3.8-Max` 的「快速」
 
 ## [0.14.0] - 2026-08-05
 
@@ -333,7 +343,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.14.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/pine2D/polyask/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/pine2D/polyask/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/pine2D/polyask/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/pine2D/polyask/compare/v0.11.0...v0.12.0
