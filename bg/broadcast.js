@@ -19,6 +19,21 @@ async function messageBefore(send, deadline) {
     return await Promise.race([send(), new Promise((resolve) => { timer = setTimeout(() => resolve(MESSAGE_TIMEOUT), left); })]);
   } finally { clearTimeout(timer); }
 }
+// Kimi 发送/切模会重挂页面并断开消息端口；新 content 明确确认“末条用户消息不存在”后才可重试。
+async function submittedAfterRerender(tabId, text, deadline) {
+  const end = Math.min(deadline, Date.now() + 1500);
+  let misses = 0;
+  while (Date.now() < end) {
+    try {
+      const r = await messageBefore(() => chrome.tabs.sendMessage(tabId, { source: "AMS", cmd: "wasSubmitted", text }), end);
+      if (r === MESSAGE_TIMEOUT) break;
+      if (r && r.supported === true) { if (r.ok) return true; if (++misses >= 5) return false; }
+      else if (r && r.supported === false) return null;
+    } catch (e) { /* 页面重挂中，等新 content 注入 */ }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(150, Math.max(0, end - Date.now()))));
+  }
+  return null;
+}
 
 // prune=false（sendAll 隐式开窗）：只为缺窗站开窗落格，不关未勾选站、不重排已有窗口的
 // 用户手调布局（追问少数站时不得动别人正摆着答案的窗）；显式「平铺」按钮保持全量重排语义。
@@ -121,6 +136,7 @@ async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoc
   const t0 = Date.now();
   const firstDeadline = t0 + timeoutMs, deadline = t0 + timeoutMs * 2;
   let retried = false; // 慢加载站首开超过 22s 后继续等到绝对截止线 44s
+  let submitRetried = false;
   const done = (ok, code, reason) => {
     const res = { host: s.host, ok, code, reason, ms: Date.now() - t0 }; // ms：逐站耗时，console 拼进 title 服务速度对比
     if (retried) res.retried = true;
@@ -133,21 +149,26 @@ async function submitWhenReady(s, text, tier, timeoutMs = 22000, gap = 800, epoc
     if (!retried && Date.now() >= firstDeadline) retried = true;
     const tabs = await tabsForHost(s.host, wins);
     if (tabs.length) {
-      let ready = false;
+      let ready = false, probe;
       try {
-        const probe = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "getState" }), deadline);
+        probe = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "getState" }), deadline);
         if (probe === MESSAGE_TIMEOUT) return done(false, "timeout");
         ready = !!probe && Object.prototype.hasOwnProperty.call(probe, "state");
       } catch (e) { /* content 尚未注入，继续等 */ }
       if (ready) {
         if (epoch !== currentSendEpoch()) return done(false, "cancelled");
         if (Date.now() >= deadline) return done(false, "timeout");
-        let r;
+        let r, dispatchFailed = false;
         try {
           r = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "submitPrompt", text, tier, deadline, images }), deadline);
-        } catch (e) { return done(false, "submit_unconfirmed"); } // 已派发后绝不自动重发，避免端口断开造成重复提问
-        if (r === MESSAGE_TIMEOUT) return done(false, "submit_unconfirmed");
-        if (!r || typeof r.ok !== "boolean") return done(false, "submit_unconfirmed");
+        } catch (e) { dispatchFailed = true; }
+        const uncertain = dispatchFailed || r === MESSAGE_TIMEOUT || !r || typeof r.ok !== "boolean" || (!r.ok && r.code === "submit_unconfirmed");
+        if (uncertain && probe.canConfirm) {
+          const submitted = await submittedAfterRerender(tabs[0].id, text, deadline);
+          if (submitted === true) return done(true);
+          if (submitted === false && !submitRetried) { submitRetried = true; retried = true; continue; }
+        }
+        if (uncertain) return done(false, "submit_unconfirmed"); // 无只读确认能力的站点仍绝不重发
         if (r && r.ok) return done(true, r.code); // ok 时 code 可携带 tier_unconfirmed 警示
         if (r.code !== "composer_not_found") {
           return done(false, r.code || "error", r.reason);

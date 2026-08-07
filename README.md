@@ -23,7 +23,7 @@ PolyAsk 是一款 Chrome 扩展，可将同一问题发送到 9 个 AI 站点，
 | Gemini (gemini.google.com) | 3.1 Pro + Thinking: Extended | 3.6 Flash |
 | DeepSeek (chat.deepseek.com) | Expert + DeepThink 开 | Instant + DeepThink 关 |
 | 豆包 (doubao.com) | 专家 | 快速 |
-| 千问 (qianwen.com) | Qwen3.8-Max + 思考开 | Qwen3.8-Max + 思考关 |
+| 千问 (qianwen.com) | Qwen3.7-千问 + 思考研究 | Qwen3.8-Max + 快速 |
 | Kimi (kimi.com) | K3 + Thinking Max | K3 + Thinking Standard |
 | 元宝 (yuanbao.tencent.com) | Deep Thinking 开 | Deep Thinking 关 |
 | 智谱清言 (chatglm.cn) | 深度思考：深度 | 快速 |

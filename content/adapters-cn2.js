@@ -71,7 +71,16 @@
       },
       think: async function () { if (this._model() !== "K3") await this._select("K3"); await this._setEffort(/^(Max|极致|最大|最高|最强)$/i); },
       fast: async function () { if (this._model() !== "K3") await this._select("K3"); await this._setEffort(/^(Standard|标准)$/i); },
-      attach: function (files, el, deadline) { return S.dropFiles(el, files, el, deadline); },
+      attach: async function (files, el, deadline) {
+        let input = document.querySelector('input.hidden-input[type="file"]');
+        if (!input) {
+          const trigger = document.querySelector(".toolkit-trigger-btn");
+          if (!trigger) return false;
+          trigger.click();
+          input = await waitFor(() => document.querySelector('input.hidden-input[type="file"]'), 1500);
+        }
+        return input ? S.setInputFiles(input, files, el, deadline) : false;
+      },
       // 新编辑器（真机 2026-07-21）：合成 beforeinput 会 DOM/model 分叉并冻死编辑器（发送键失灵、
       // 可信键盘也不再接受）；execCommand insertText 反而正常入 model → 站点特调注入改道
       inject: function (el, text) {
@@ -87,6 +96,14 @@
         const b = document.querySelector(".send-button-container");
         if (!b) return false;
         clickEl(b);
+      },
+      // Kimi 发送后会重挂页面/隔离世界；后台据最后一条用户消息判断是否真的需要安全重试。
+      submitted: function (text) {
+        const els = document.querySelectorAll(".chat-content-item-user");
+        if (!els.length) return false;
+        const el = els[els.length - 1].querySelector(".user-content") || els[els.length - 1];
+        const norm = (s) => this._zap(s).replace(/\s+/g, " ");
+        return norm(el.textContent || "") === norm(text || "");
       },
       // 最后一条回答（真机审计锚点 2026-07：.chat-content-item-assistant，正文在 .markdown）。
       // Thinking 档思考段也是 .markdown（祖先 .thinking-container，真机 2026-07-11），querySelector

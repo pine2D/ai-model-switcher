@@ -181,9 +181,11 @@
         if (/high|pro|高/i.test(t)) return "think";             // High/Extra High/Pro（含旧 Standard/Extended）
         return null;
       },
-      // 最后一条回答（真机审计锚点 2026-07：data-message-author-role，正文在 .markdown）
+      // 最后一条回答（真机审计 2026-08：每轮 section[data-turn]，正文仍在 .markdown）；
+      // data-message-author-role 是滚动发布中的旧内层，保留兜底。
       answer: function () {
-        const els = document.querySelectorAll('[data-message-author-role="assistant"]');
+        let els = document.querySelectorAll('[data-turn="assistant"]');
+        if (!els.length) els = document.querySelectorAll('[data-message-author-role="assistant"]');
         if (!els.length) return null;
         const el = els[els.length - 1];
         return el.querySelector(".markdown") || el;

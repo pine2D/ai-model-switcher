@@ -241,7 +241,7 @@ async function imageBroadcastDeadline() {
   await batchUploadContract();
   console.log("✓ Content 一次重建并附加最多四张图片");
   await deepSeekImageTiers();
-  console.log("✓ DeepSeek 图片档位映射为 Instant + DeepThink 开关");
+  console.log("✓ DeepSeek 图片档位映射为 Vision + DeepThink 开关");
   await imageBroadcastDeadline();
   console.log("✓ 图片广播使用独立的 90 秒处理窗口");
 })().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

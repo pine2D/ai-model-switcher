@@ -207,7 +207,7 @@ test("九站 attach 只选择入口并复用共享上传 helper", async () => {
   const { S, calls, input, drop } = loadAdapters();
   const expected = {
     "claude.ai": "input", "chatgpt.com": "input", "deepseek.com": "input", "doubao.com": "input",
-    "kimi.com": "drop", "yuanbao.tencent.com": "drop",
+    "kimi.com": "input", "yuanbao.tencent.com": "drop",
   };
   for (const host of ["gemini.google.com", "qianwen.com", "chatglm.cn"])
     assert.equal(S.adapters[host].attach, undefined, host + " 应明确报 unsupported");

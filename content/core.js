@@ -66,7 +66,7 @@
   function findComposer() {
     const cands = [...document.querySelectorAll('textarea, [contenteditable="true"]')]
       .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      .filter(({ r }) => r.width > 80 && r.height > 20 &&
+      .filter(({ r }) => r.width > 80 && r.height >= 20 &&
         r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth);
     if (!cands.length) return null;
     cands.sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height);
@@ -255,7 +255,7 @@
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (!msg || msg.source !== "AMS") return;
       if (msg.mode === "think" || msg.mode === "fast") runMode(msg.mode);
-      if (msg.cmd === "getState") sendResponse({ state: getState() });
+      if (msg.cmd === "getState") { const a = pickAdapter(); sendResponse({ state: getState(), canConfirm: !!(a && a.submitted) }); } if (msg.cmd === "wasSubmitted") { const a = pickAdapter(); let ok = false; try { ok = !!(a && a.submitted && a.submitted(msg.text || "")); } catch (e) {} sendResponse({ supported: !!(a && a.submitted), ok }); }
       if (msg.cmd === "collectAnswer") { // 只读快照：adapter.answer 返回最后一条回答的根节点，通用序列化为 Markdown
         let text = null;
         try {

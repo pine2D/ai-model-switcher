@@ -45,8 +45,8 @@
       },
       think: async function () { await this._selectMode(/Expert|专家/); await this._setDeepThink(true); },
       fast: async function () { await this._selectMode(/Instant|快速/); await this._setDeepThink(false); },
-      thinkImage: async function () { await this._selectMode(/Instant|快速/); await this._setDeepThink(true); },
-      fastImage: async function () { await this._selectMode(/Instant|快速/); await this._setDeepThink(false); },
+      thinkImage: async function () { await this._selectMode(/Vision|视觉/); await this._setDeepThink(true); },
+      fastImage: async function () { await this._selectMode(/Vision|视觉/); await this._setDeepThink(false); },
       // 2026-07-23 真机：常驻文件 input 接受合成 change；上传完成后预览 img.alt 保留文件名。
       attach: function (files, el, deadline) {
         return S.setInputFiles(document.querySelector('input[type="file"][accept*=".png"]'), files, el, deadline);
@@ -68,10 +68,11 @@
       // 最后一条回答：.ds-message 为 AI 消息容器，正文取思考段（.ds-think-content）之外的最后一个 .ds-markdown
       answer: function () {
         const msgs = document.querySelectorAll(".ds-message");
-        if (!msgs.length) return null;
-        const mds = [...msgs[msgs.length - 1].querySelectorAll(".ds-markdown")].filter((x) => !x.closest(".ds-think-content"));
-        const pick = mds[mds.length - 1] || msgs[msgs.length - 1];
-        return pick;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const mds = [...msgs[i].querySelectorAll(".ds-markdown")].filter((x) => !x.closest(".ds-think-content"));
+          if (mds.length) return mds[mds.length - 1];
+        }
+        return null;
       },
     },
 
@@ -126,8 +127,7 @@
       },
     },
 
-    // 千问：快速/思考都用 Qwen3.8-Max，仅用 composer「思考」按钮区分档位；
-    // composer「思考」按钮无 aria-pressed，状态靠 class：text-theme=开 / text-primary=关
+    // 千问：think=Qwen3.7-千问+思考研究，fast=Qwen3.8-Max+快速；兼容旧版裸思考按钮。
     "qianwen.com": {
       // 模型下拉触发器：aria-haspopup 属性由前端延迟水合，新加载页面一段时间内只有纯文本节点，
       // 先按 aria 找，找不到退回按可见文本找最内层节点（click 冒泡可达真正持有 handler 的祖先）
@@ -161,16 +161,34 @@
         escMenus();
       },
       _thinkBtn: function () {
+        const menu = [...document.querySelectorAll('button[aria-haspopup="menu"]')].find((b) => {
+          const r = b.getBoundingClientRect(), label = (b.getAttribute("aria-label") || b.textContent || "").trim();
+          return r.width > 0 && r.height > 0 && /^(快速|思考研究|Fast|Thinking Research)$/i.test(label);
+        });
+        if (menu) return menu;
         return [...document.querySelectorAll("button")]
           .find((b) => [...b.querySelectorAll("span")].some((x) => /^(思考|Thinking)$/i.test((x.textContent || "").trim())) || /^(思考|Thinking)$/i.test((b.textContent || "").trim()));
+      },
+      _isThink: function (b) {
+        if (b && b.getAttribute("aria-haspopup") === "menu")
+          return /思考研究|Thinking Research/i.test(b.getAttribute("aria-label") || b.textContent || "");
+        return !!b && (b.className || "").split(/\s+/).includes("text-theme");
       },
       _setThink: async function (on) {
         const b = this._thinkBtn();
         if (!b) throw new Error("千问: 思考按钮未找到"); // 常驻 composer，缺失即异常
-        const isOn = (b.className || "").split(/\s+/).includes("text-theme");
-        if (isOn !== on) { b.click(); await sleep(300); }
+        if (this._isThink(b) === on) return;
+        if (b.getAttribute("aria-haspopup") === "menu") {
+          b.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, view: window, detail: 1, button: 0 }));
+          const re = on ? /思考研究|Thinking Research/i : /^快速|^Fast/i;
+          const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemcheckbox"]')].find((x) => {
+            const r = x.getBoundingClientRect(); return r.width > 0 && r.height > 0 && re.test((x.textContent || "").trim());
+          }), 1500);
+          if (!item) throw new Error("千问: 模式选项未找到");
+          item.click(); await sleep(500);
+        } else { b.click(); await sleep(300); }
         const after = this._thinkBtn();
-        if (!after || (after.className || "").split(/\s+/).includes("text-theme") !== on) throw new Error("千问: 思考开关未生效");
+        if (!after || this._isThink(after) !== on) throw new Error("千问: 思考开关未生效");
       },
       diagnose: function () {
         return [
@@ -183,11 +201,12 @@
         const m = this._trigger();
         const t = m ? m.textContent || "" : "";
         const b = this._thinkBtn();
-        if (!b || !/Qwen3\.8-Max(?!-Preview)/i.test(t)) return null;
-        const on = (b.className || "").split(/\s+/).includes("text-theme");
-        return on ? "think" : "fast";
+        if (!b) return null;
+        const on = this._isThink(b);
+        if (on && /Qwen3\.7-千问(?!-Max)/i.test(t)) return "think";
+        return !on && /Qwen3\.8-Max(?!-Preview)/i.test(t) ? "fast" : null;
       },
-      think: async function () { await this._selectModel(/Qwen3\.8-Max(?!-Preview)/i); await this._setThink(true); },
+      think: async function () { await this._selectModel(/Qwen3\.7-千问(?!-Max)/i); await this._setThink(true); },
       fast: async function () { await this._selectModel(/Qwen3\.8-Max(?!-Preview)/i); await this._setThink(false); },
       // 动态 input 需可信菜单点击，合成 drop/paste 被忽略（2026-07-23 真机），明确报 unsupported。
       // 最后一条回答（真机审计锚点 2026-07：.answer-common-card，正文在 .qk-markdown）。
