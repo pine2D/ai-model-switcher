@@ -147,10 +147,9 @@
     const sendBtn = () => document.querySelector('button[data-testid*="send" i], button[aria-label*="send" i], button[aria-label*="发送"]');
     const _txtBefore = readText(el);
     let btn = sendBtn();
-    if (btn && !btn.disabled) {
-      btn.click();
-      return (await confirmSubmitted(_txtBefore, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
-    }
+    if (btn && !btn.disabled) { btn.click(); if (await confirmSubmitted(_txtBefore, confirmUntil)) return { ok: true }; }
+    // 点了没生效也要退回 Enter：Claude 新版发送键拒绝一切合成点击（真机 2026-08，原生 click 与 detail:1
+    // 指针序列都无效），只吃键盘事件；早先"有按钮就点、点完即判"会在按钮已渲染时直接报 submit_unconfirmed。
     ["keydown", "keypress", "keyup"].forEach((t) =>
       el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
     await sleep(150);

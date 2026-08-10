@@ -17,11 +17,16 @@
         if (!ok) { openMenu(trig); ok = await waitFor(() => document.querySelector('[role="menuitemradio"]')); }
         if (!ok) throw new Error("Claude: 模型菜单未展开");
       },
+      // 2026-08 改版：顶层只留当前模型一项，其余收进「More models」子菜单；顶层找不到再展开子菜单。
       _selectModel: async function (re) {
         await this._open();
-        const item = await waitFor(() => findByText('[role="menuitemradio"]', re));
+        let item = await waitFor(() => findByText('[role="menuitemradio"]', re), 900);
+        if (!item) {
+          const more = findByText('[role="menuitem"][aria-haspopup="menu"]', /more models|更多模型/i);
+          if (more) { openMenu(more); item = await waitFor(() => findByText('[role="menuitemradio"]', re), 1500); }
+        }
         if (!item) { escMenus(); throw new Error("Claude: 未找到模型 " + re); }
-        clickEl(item); await sleep(700);
+        clickEl(item); await sleep(700); escMenus(); // 收尾：子菜单不关会罩住输入框，也会让后续动作点空
       },
       // effort 子菜单内的 Thinking 开关（与 effort-option-* 同层）
       _thinkSwitch: function () {
@@ -133,17 +138,35 @@
             'button.__composer-pill[aria-haspopup="menu"], button[aria-haspopup="menu"]')]
           .find((x) => this._LABELS.test(this._tier(x.textContent)));
       },
-      _radios: function () {
-        const wrap = document.querySelector("[data-radix-popper-content-wrapper]") || document;
-        return [...wrap.querySelectorAll('[role="menuitemradio"]')];
-      },
-      // 打开档位菜单，返回 radio 列表（DOM 升序：极速…Pro 扩展）
-      _openEffort: async function () {
+      // 子菜单渲染在独立 popper 里，只看第一个 wrapper 会漏，故全局取
+      _radios: function () { return [...document.querySelectorAll('[role="menuitemradio"]')]; },
+      // 打开 pill 菜单第一层（2026-08 改版：Power 滑块 + Advanced 视图里的 Model/Effort 子菜单入口）
+      _openRoot: async function () {
         const anchor = this._anchor();
         if (!anchor) throw new Error("ChatGPT: Intelligence 按钮未找到");
-        if (!this._radios().length) openMenu(anchor);
-        let rs = await waitFor(() => { const r = this._radios(); return r.length ? r : null; }, 1500);
-        if (!rs) { openMenu(anchor); rs = await waitFor(() => { const r = this._radios(); return r.length ? r : null; }); }
+        const open = () => anchor.getAttribute("aria-expanded") === "true" &&
+          !!(document.querySelector('[role="menuitem"][aria-haspopup="menu"]') || this._radios().length);
+        for (let i = 0; i < 2; i++) { if (open()) return; openMenu(anchor); if (await waitFor(open, 1500)) return; }
+        escMenus(); throw new Error("ChatGPT: 档位菜单未展开");
+      },
+      // 档位项只认标签集，整份列表带模型名即判为 Model 子菜单：两处子菜单同为 menuitemradio，混用
+      // 会把「最高档」点成末位模型（真机 2026-08：think 先选模型，残留的正是模型列表 → 点成 o3）。
+      _tiers: function () {
+        const rs = this._radios();
+        if (!rs.length || rs.some((x) => /gpt-|claude/i.test(x.textContent || ""))) return null;
+        const tiers = rs.filter((x) => this._LABELS.test(this._tier(x.textContent)));
+        return tiers.length ? tiers : null;
+      },
+      // 打开档位菜单，返回 radio 列表（DOM 升序：极速…Pro）
+      _openEffort: async function () {
+        await this._openRoot();
+        if (!this._tiers()) { // 新布局档位在 Effort 子菜单里；旧布局第一层就是档位，无此入口
+          const trig = findByText('[role="menuitem"][aria-haspopup="menu"]', /^(effort|强度|推理|思考|力度)/i)
+            || [...document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]')]
+              .filter((x) => !/gpt-|^o3$|claude/i.test((x.textContent || "").trim())).pop();
+          if (trig) trig.click();
+        }
+        const rs = await waitFor(() => this._tiers(), 1500);
         if (!rs) { escMenus(); throw new Error("ChatGPT: 档位菜单未展开"); }
         return rs;
       },
@@ -156,7 +179,7 @@
       },
       // 模型子菜单靠原生 click 展开；通用 pointer 序列会连续触发开/关而把两级菜单一起收起。
       _selectModel: async function (re) {
-        await this._openEffort();
+        await this._openRoot();
         const trig = await waitFor(() => [...document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]')]
           .find((x) => /GPT-|^o3$/i.test((x.textContent || "").trim())), 1500);
         if (!trig) { escMenus(); throw new Error("ChatGPT: 模型入口未找到"); }
@@ -164,7 +187,7 @@
         trig.click();
         const item = await waitFor(() => findByText('[role="menuitemradio"]', re), 1500);
         if (!item) { escMenus(); throw new Error("ChatGPT: GPT-5.6 Sol 未找到"); }
-        item.click(); await sleep(700);
+        item.click(); await sleep(700); escMenus(); await sleep(200); // 子菜单开着时点 Effort 只会把它关掉
       },
       diagnose: function () {
         return [
