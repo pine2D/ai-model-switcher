@@ -62,11 +62,12 @@
         exit.finished.then(() => d.remove(), () => d.remove()); }, 2390);
     } catch (e) {}
   }
-  // 视口内可见、面积最大的编辑区（textarea / contenteditable）；找不到返回 null
+  // 视口内可见、面积最大的编辑区（textarea / contenteditable）；找不到返回 null。高度阈值须留余量：
+  // Claude 单行编辑器标称 20px，缩放机器上实测 19.99…，贴着实测值的 >=20 会筛掉唯一的真编辑器（2026-08）
   function findComposer() {
     const cands = [...document.querySelectorAll('textarea, [contenteditable="true"]')]
       .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      .filter(({ r }) => r.width > 80 && r.height >= 20 &&
+      .filter(({ r }) => r.width > 80 && r.height >= 16 &&
         r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth);
     if (!cands.length) return null;
     cands.sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height);

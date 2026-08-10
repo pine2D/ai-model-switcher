@@ -26,9 +26,9 @@ function chatGptNewTurnMustBeCollected() {
 }
 
 function twentyPixelComposerMustBeFound() {
-  const composer = {
+  const composer = { // 19.98 而非 20：页面缩放会让标称 20px 的单行编辑器算出小数高度
     tagName: "DIV", textContent: "", focus() {}, dispatchEvent() {},
-    getBoundingClientRect: () => ({ left: 100, right: 500, top: 500, bottom: 520, width: 400, height: 20 }),
+    getBoundingClientRect: () => ({ left: 100, right: 500, top: 500, bottom: 519.98, width: 400, height: 19.98 }),
   };
   class FakeEvent { constructor(type, options) { this.type = type; Object.assign(this, options); } }
   const context = {
