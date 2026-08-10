@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.15.1] - 2026-08-10
+
 ### 修复
 
 - 适配 Claude 新版模型菜单：深度思考与快速档改从「More models」子菜单选择模型，修复档位切换失败导致的群发变慢与档位未确认
@@ -351,7 +353,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.15.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/pine2D/polyask/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/pine2D/polyask/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/pine2D/polyask/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/pine2D/polyask/compare/v0.12.0...v0.13.0
