@@ -74,7 +74,7 @@
 
 ## 群发（`sendAll` / `submitWhenReady`）
 
-- 有站点没窗口先 `openTile(sites, false)`，**初次使用无需先点平铺**（勾选 → 输入 → Enter 一步开窗 + 群发）。开窗失败或 retry 不开窗时缺窗站立即报 `no_window`，不空转到 timeout。
+- 有站点没窗口先 `openTile(sites, true)`——缺窗说明勾选集变了，与显式「平铺」同语义：**全量重排 + 清理未勾选**（owned 关闭、复用仅解除登记；曾用 `prune=false` 只给新窗落格 → 新旧两套布局错位重叠，2026-08-18 用户实报）。勾选未变（无缺窗）的追问不调 openTile，手调布局不受扰（`test-tile-reflow.js`）。**初次使用无需先点平铺**（勾选 → 输入 → Enter 一步开窗 + 群发）。开窗失败或 retry 不开窗时缺窗站立即报 `no_window`，不空转到 timeout。
 - 各站**并行轮询**页面就绪再提交：content 未注入 / `composer_not_found` 都视为「还没好」继续等，其它 `ok=false` 才是真失败。任一出口都先 `pushSiteResult` 让圆点立刻变色，再返回参与 `Promise.all`。
 - **单站结果即时回填**：每站完成即 `pushSiteResult`（`{from:"AMS_BG", type:"siteResult"}`），圆点逐个变色不等最慢站；结果带 `ms` 逐站耗时，console 拼进 title 直接服务「对比各家响应速度」。
 - **`submittedAfterRerender`**：Kimi 发送/切模会重挂页面并断开消息端口。只有新 content 明确回 `supported:true` 且连续 5 次确认「末条用户消息不存在」才判未发送、才允许重试一次；`supported:false` 或探测超时一律不重发。

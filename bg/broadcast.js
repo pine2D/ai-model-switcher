@@ -35,8 +35,11 @@ async function submittedAfterRerender(tabId, text, deadline) {
   return null;
 }
 
-// prune=false（sendAll 隐式开窗）：只为缺窗站开窗落格，不关未勾选站、不重排已有窗口的
-// 用户手调布局（追问少数站时不得动别人正摆着答案的窗）；显式「平铺」按钮保持全量重排语义。
+// prune=true（显式「平铺」与 sendAll 隐式开窗共用）：全量重排 + 清理未勾选（owned 关闭、复用仅解除登记）。
+// prune=false 仅剩辅助综合单站隐式开窗（bg/synthesis.js）：只为缺窗站落格，绝不关别的窗、不动既有布局。
+// sendAll 曾走 prune=false「不重排既有窗口」，但缺窗本身说明勾选集变了：新窗按新布局落格、旧窗停在旧
+// 布局原地 → 错位重叠，且取消勾选的站不清理（用户实报 2026-08-18）。「追问少数站不得动手调布局」的
+// 保护仍在——勾选集没新增缺窗时 sendAll 根本不会调 openTile（见 anyMissing 判定与 test-tile-reflow.js ③）。
 async function openTile(sites, prune = true) {
   const wa = await consoleWorkArea(); // console 拖到哪个显示器就铺哪个显示器
 
@@ -73,7 +76,13 @@ async function openTile(sites, prune = true) {
       if (prune) { try { await chrome.windows.update(windowId, Object.assign({ state: "normal", focused: false }, bounds)); } catch (e) {} } // 隐式开窗不重排既有窗
     } else {
       // 新建窗口始终从该站的新会话入口开始；只有已存在的受管 popup 才延续当前对话。
-      try { const w = await chrome.windows.create(Object.assign({ url: s.url, type: "popup", focused: false }, bounds)); windowId = w.id; owned = true; } catch (e) {}
+      // create 后补一次 update 落格：部分窗口管理器（WSLg/X 系，真机 2026-08-18 实证）忽略 create 的
+      // 初始 bounds、但服从 update——不补这行新窗会叠在 WM 默认位置。
+      try {
+        const w = await chrome.windows.create(Object.assign({ url: s.url, type: "popup", focused: false }, bounds));
+        windowId = w.id; owned = true;
+        await chrome.windows.update(windowId, bounds);
+      } catch (e) {}
     }
     if (windowId != null) wins[s.host] = { id: windowId, owned };
     out.push({ host: s.host, windowId, reused, opened: !reused && windowId != null });
@@ -100,7 +109,7 @@ async function sendAll(sites, text, tier, tile = true, epoch = currentSendEpoch(
   const wins = await getWindows();
   let anyMissing = false;
   for (const s of sites) { if ((await popupWindowForHost(s.host, wins)) == null) { anyMissing = true; break; } }
-  if (tile && anyMissing) await openTile(sites, false); // 隐式开窗不 prune/不重排；retry 传 tile=false 连开窗也免
+  if (tile && anyMissing) await openTile(sites, true); // 勾选集变了（有缺窗）→ 全量重排+清理未勾选；retry 传 tile=false 连开窗也免
   if (epoch !== currentSendEpoch()) return sites.map((s) => ({ host: s.host, ok: false, code: "cancelled" }));
   // 进度起点（console/compose 发起都统一）；带 text/tier 让 console 重建 lastSend（compose 发起的失败也能一键重试）
   pushBroadcast({ type: "sendStart", hosts: sites.map((site) => site.host), run: runMeta, text, task: runMeta.task,

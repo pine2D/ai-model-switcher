@@ -64,6 +64,7 @@ node scripts/test-compose-handoff.js
 node scripts/test-console-prompt.js
 node scripts/test-site-selection.js
 node scripts/test-background.js
+node scripts/test-tile-reflow.js
 node scripts/test-console-ready.js
 node scripts/test-archive-capture.js
 node scripts/test-archive-detail.js
