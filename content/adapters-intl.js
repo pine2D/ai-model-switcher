@@ -228,42 +228,42 @@
 
     "gemini.google.com": {
       _MI: "button.mat-mdc-menu-item, [role=menuitem]",
-      _modelBtn: function () {
-        return [...document.querySelectorAll("button")]
-          .find((b) => /mode picker/i.test(b.getAttribute("aria-label") || ""))
-          || document.querySelector('button[class*="input-area-swi"]');
-      },
+      // 只认可见项：页面常驻隐藏的导出菜单（`gv-pm-saved-export-menu gv-hidden` 的 JSON/Markdown 也是
+      // [role=menuitem]），拿它当「菜单已展开」会让模型按钮永远不被点开（真机 2026-08-14）。
+      _items: function () { return [...document.querySelectorAll(this._MI)]
+        .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }); },
+      _find: function (re) { return this._items().find((el) => re.test((el.textContent || "").trim())) || null; },
+      _modelBtn: function () { return [...document.querySelectorAll("button")]
+        .find((b) => /mode picker/i.test(b.getAttribute("aria-label") || "")) ||
+        document.querySelector('button[class*="input-area-swi"]'); },
       _openModelMenu: async function () {
         const btn = this._modelBtn();
         if (!btn) throw new Error("Gemini: 模型按钮未找到");
-        if (!document.querySelector(this._MI)) openMenu(btn);
-        let ok = await waitFor(() => document.querySelector(this._MI), 1500);
-        if (!ok) { openMenu(btn); ok = await waitFor(() => document.querySelector(this._MI)); }
+        if (btn.getAttribute("aria-expanded") !== "true" || !this._items().length) openMenu(btn);
+        let ok = await waitFor(() => this._items().length, 1500);
+        if (!ok) { openMenu(btn); ok = await waitFor(() => this._items().length); }
         if (!ok) throw new Error("Gemini: 模型菜单未展开");
       },
       _selectModel: async function (re) {
         await this._openModelMenu();
-        const item = await waitFor(() => findByText(this._MI, re));
+        const item = await waitFor(() => this._find(re));
         if (!item) { escMenus(); throw new Error("Gemini: 未找到模型 " + re); }
         clickEl(item); await sleep(700);
       },
       // 当前布局把 Extended thinking 作为模型菜单直达开关；旧布局仍走 Thinking level 嵌套子菜单。
       _setThinking: async function (re, on = true) {
         await this._openModelMenu();
-        const direct = findByText(this._MI, re);
+        const direct = this._find(re);
         if (direct) {
           const active = direct.classList.contains("selected") || direct.getAttribute("aria-checked") === "true";
           if (active !== on) clickEl(direct);
           await sleep(400); escMenus(); return;
         }
         if (!on) { escMenus(); return; }
-        const trig = await waitFor(() => findByText(this._MI, /thinking level|思考(等级|程度)?/i));
+        const trig = await waitFor(() => this._find(/thinking level|思考(等级|程度)?/i));
         if (!trig) { escMenus(); return; } // 无等级子菜单的布局（窄屏/模型无此项）：合法缺席，静默跳过
         let lvl = null;
-        for (let i = 0; i < 6 && !lvl; i++) {
-          if (!findByText(this._MI, re)) openMenu(trig);
-          lvl = await waitFor(() => findByText(this._MI, re), 600);
-        }
+        for (let i = 0; i < 6 && !lvl; i++) { if (!this._find(re)) openMenu(trig); lvl = await waitFor(() => this._find(re), 600); }
         if (!lvl) { escMenus(); throw new Error("Gemini: 思考等级选项未找到"); } // 子菜单在但目标缺 → 报错可见（静默会漏设等级）
         if (lvl.focus) lvl.focus();
         lvl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -275,12 +275,10 @@
           { name: t("diag_tierReadable"), ok: this.state() != null },
         ];
       },
-      state: function () {
-        const b = this._modelBtn();
-        const t = b ? b.getAttribute("aria-label") || "" : "";
-        if (/extended|扩展/i.test(t)) return /pro\b/i.test(t) ? "think" : null;
-        return /flash/i.test(t) ? "fast" : null;
-      },
+      // aria-label 只报模式名（"…currently Pro/Flash"），不含 Extended thinking 状态，故按粗档位判；
+      // think() 仍会幂等地把 Extended thinking 一并打开（真机 2026-08-14 改版）。
+      state: function () { const b = this._modelBtn(), t = b ? b.getAttribute("aria-label") || "" : "";
+        return /flash/i.test(t) ? "fast" : (/\bpro\b|extended|扩展/i.test(t) ? "think" : null); },
       // 最后一条回答（真机审计锚点 2026-07：每条回答一个 <message-content>，正文在 .markdown）
       answer: function () {
         const els = document.querySelectorAll("message-content");

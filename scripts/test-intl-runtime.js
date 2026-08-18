@@ -138,14 +138,21 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
     dispatchEvent(event) { if (event.type === "keydown" && event.key === "Enter") composerText = ""; return true; },
     getBoundingClientRect: () => ({ left: 100, right: 500, top: 500, bottom: 540, width: 400, height: 40 }),
   };
-  const sendButton = { disabled: false, click() { clicks++; } }; // 站点忽略合成点击
+  const sendButton = { disabled: false, click() { clicks++; }, // 站点忽略合成点击
+    getBoundingClientRect: () => ({ left: 420, right: 452, top: 505, bottom: 537, width: 32, height: 32 }) };
+  // 侧栏里标题含「发送」二字的历史项按钮：同样匹配选择器、DOM 顺序在前、位置远离输入框（真机 2026-08-14
+  // Claude：querySelector 取文档顺序第一个 → 真发送键从没被点过，带图时确认窗口空转满 90s）
+  let sidebarClicks = 0;
+  const sidebarDecoy = { disabled: false, click() { sidebarClicks++; },
+    getBoundingClientRect: () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }) };
   class FakeEvent { constructor(type, options) { this.type = type; Object.assign(this, options); } }
   const context = {
     window: {}, location: { hostname: "claude.ai" }, innerHeight: 800, innerWidth: 900,
     document: {
       body: { dispatchEvent() {}, appendChild() {} }, dispatchEvent() {}, createElement: () => ({}),
-      querySelectorAll: (selector) => selector === 'textarea, [contenteditable="true"]' ? [composer] : [],
-      querySelector: (selector) => selector.includes("send") ? sendButton : null,
+      querySelectorAll: (selector) => selector === 'textarea, [contenteditable="true"]' ? [composer]
+        : selector.includes("send") ? [sidebarDecoy, sendButton] : [],
+      querySelector: (selector) => selector.includes("send") ? sidebarDecoy : null,
       execCommand: (command, _ui, value) => { if (command === "insertText") composerText = value; return true; },
     },
     chrome: { runtime: { onMessage: { addListener() {} } } }, t: (key) => key,
@@ -156,6 +163,7 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
   const result = await context.window.__AMS.submitPrompt("hello", 0);
   assert.equal(result.ok, true, "发送键点不动时必须退回 Enter 并确认提交成功");
   assert.ok(clicks >= 1, "回退前仍应先尝试原生发送键");
+  assert.equal(sidebarClicks, 0, "绝不能点侧栏那个同样匹配、但远离输入框的假发送键");
 }
 
 let failed = 0;

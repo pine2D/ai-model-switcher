@@ -109,6 +109,7 @@ const MSG = {
   con_errNoComposer: { en: "Composer not found (page not ready, not signed in, or site changed)", zh_CN: "输入框未找到（页面未就绪、未登录或站点改版）", zh_TW: "找不到輸入框（頁面尚未就緒、未登入或網站已改版）" },
   con_errGeneric: { en: "Unexpected error", zh_CN: "未知错误", zh_TW: "未知錯誤" },
   con_errCancelled: { en: "Cancelled", zh_CN: "已取消", zh_TW: "已取消" },
+  con_errInvalidRequest: { en: "Invalid request. Reselect the target AI and send again.", zh_CN: "请求无效，请重新选择目标 AI 后再次发送。", zh_TW: "請求無效，請重新選擇目標 AI 後再次傳送。" },
   con_allDone: { en: "Sent to all {0} sites", zh_CN: "已发送到全部 {0} 站", zh_TW: "已傳送到全部 {0} 個網站" },
   con_errInject: { en: "Input failed because the editor rejected the text", zh_CN: "输入失败，站点编辑器拒绝写入文字", zh_TW: "輸入失敗，網站編輯器拒絕寫入文字" },
   con_errSubmit: { en: "Submit not confirmed", zh_CN: "提交未确认", zh_TW: "提交未確認" },

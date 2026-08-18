@@ -40,10 +40,24 @@ function itemLabel(item) {
   const text = item.text || item.preview || "";
   return item.name || (text.length > 40 ? text.slice(0, 40) + "…" : text);
 }
+let rowOpener = null; // 打开命名/删除确认行的按钮：收尾归还焦点，键盘用户不必从头 Tab
 function showLibraryRow(row) {
+  if (row !== elActions) rowOpener = document.activeElement;
   elActions.hidden = row !== elActions;
   elNameRow.hidden = row !== elNameRow;
   elConfirm.hidden = row !== elConfirm;
+}
+// 收尾统一归还焦点：优先回到打开该行的按钮；它若已被置灰（保存/删除成功后会 disabled），
+// focus() 会静默失败、焦点掉回 body（audit B14 的症状），故退回正文框。调用前先跑完 render/sync，
+// 否则读到的是旧的 disabled 状态。
+function restoreRowFocus() {
+  const target = rowOpener && !rowOpener.disabled ? rowOpener : elText;
+  rowOpener = null;
+  try { target.focus(); } catch (e) {}
+}
+function closeLibraryRow() { // 取消 / Escape / 删除确认取消共用的收尾
+  showLibraryRow(elActions);
+  restoreRowFocus();
 }
 function syncTemplateActions() {
   const text = elText.value.trim();
@@ -111,17 +125,17 @@ document.getElementById("cmp-save-template").addEventListener("click", () => {
 });
 function saveTemplate() {
   const text = elText.value.trim();
-  if (!text || templates.some((item) => item.text === text)) { showLibraryRow(elActions); syncTemplateActions(); return; }
+  if (!text || templates.some((item) => item.text === text)) { showLibraryRow(elActions); syncTemplateActions(); restoreRowFocus(); return; }
   const name = document.getElementById("cmp-template-name");
   templates = [...templates, { id: crypto.randomUUID(), name: name.value.trim(), text, updatedAt: Date.now() }];
   selectedTemplate = templates.length - 1; name.value = "";
-  chrome.storage.local.set({ amsTemplates: templates }); showLibraryRow(elActions); renderLibrary();
+  chrome.storage.local.set({ amsTemplates: templates }); showLibraryRow(elActions); renderLibrary(); restoreRowFocus();
 }
 document.getElementById("cmp-name-save").addEventListener("click", saveTemplate);
-document.getElementById("cmp-name-cancel").addEventListener("click", () => showLibraryRow(elActions));
+document.getElementById("cmp-name-cancel").addEventListener("click", closeLibraryRow);
 document.getElementById("cmp-template-name").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); saveTemplate(); }
-  else if (event.key === "Escape") { event.preventDefault(); showLibraryRow(elActions); }
+  else if (event.key === "Escape") { event.preventDefault(); closeLibraryRow(); }
 });
 document.getElementById("cmp-delete-template").addEventListener("click", () => {
   if (selectedTemplate < 0) return;
@@ -131,9 +145,12 @@ document.getElementById("cmp-delete-template").addEventListener("click", () => {
 document.getElementById("cmp-confirm-yes").addEventListener("click", () => {
   if (selectedTemplate >= 0) templates = templates.filter((_, index) => index !== selectedTemplate);
   selectedTemplate = -1; chrome.storage.local.set({ amsTemplates: templates });
-  showLibraryRow(elActions); renderLibrary();
+  showLibraryRow(elActions); renderLibrary(); restoreRowFocus();
 });
-document.getElementById("cmp-confirm-no").addEventListener("click", () => showLibraryRow(elActions));
+document.getElementById("cmp-confirm-no").addEventListener("click", closeLibraryRow);
+elConfirm.addEventListener("keydown", (event) => { // 迁移时丢的：确认行原本可 Escape 关闭
+  if (event.key === "Escape") { event.preventDefault(); closeLibraryRow(); }
+});
 
 function renderScope(selected) {
   const chosen = SITES.filter((s) => selected[s.host]);

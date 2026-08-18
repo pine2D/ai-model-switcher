@@ -5,15 +5,15 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 class El {
-  constructor() { this.events = {}; this.attributes = {}; this.value = ""; this.textContent = ""; this.hidden = false; this.disabled = false; }
+  constructor() { this.events = {}; this.attributes = {}; this.value = ""; this.textContent = ""; this.hidden = false; this.disabled = false; this.focused = 0; }
   addEventListener(type, listener) { (this.events[type] ||= []).push(listener); }
-  fire(type) { return Promise.all((this.events[type] || []).map((listener) => listener({ preventDefault() {}, key: "" }))); }
+  fire(type, event) { return Promise.all((this.events[type] || []).map((listener) => listener({ preventDefault() {}, key: "", ...event }))); }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   replaceChildren() {}
   appendChild() {}
   append() {}
-  focus() {}
+  focus() { this.focused++; }
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve));
 
@@ -76,6 +76,7 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
     historyDone(result) { assert.ok(historyDone, "应已发出 historyAdd"); historyDone(result); },
     timeout() { const timer = timers.find(Boolean); assert.ok(timer, "应已设置超时"); timer(); },
     setSettings(next) { currentSettings = next; },
+    setActive(el) { document.activeElement = el; },
   };
 }
 
@@ -161,5 +162,47 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
   await tick(); clearFailure.openConsoleDone({ ok: true }); await clearTask;
   assert.equal(clearFailure["ch-send"].disabled, false); assert.equal(clearFailure["cmp-status"].textContent, "cmp_pendingSaveFailed");
   assert.equal(clearFailure.messages.some((msg) => msg.action === "historyAdd" || msg.action === "sendAll"), false);
+  // 命名行/删除确认行收尾必须把焦点还给打开它的按钮（迁移进 compose.js 时曾整体丢失）
+  const focusBack = harness();
+  const saveOpener = focusBack["cmp-save-template"], nameInput = focusBack["cmp-template-name"];
+  const openName = async () => { focusBack.setActive(saveOpener); await saveOpener.fire("click"); focusBack.setActive(nameInput); };
+  await openName();
+  assert.equal(focusBack["cmp-name"].hidden, false, "点「保存为模板…」应展开命名行");
+  await focusBack["cmp-name-cancel"].fire("click");
+  assert.equal(saveOpener.focused, 1, "取消命名后焦点应回到打开它的按钮");
+  assert.equal(focusBack["cmp-actions"].hidden, false, "取消后应还原动作行");
+  await openName();
+  await nameInput.fire("keydown", { key: "Escape" });
+  assert.equal(saveOpener.focused, 2, "Escape 关闭命名行后焦点应回到打开它的按钮");
+
+  await openName();
+  nameInput.value = "tpl";
+  const beforeSaveFocus = saveOpener.focused + focusBack["ch-text"].focused;
+  await focusBack["cmp-name-save"].fire("click");            // 存一条模板，删除按钮才可用
+  assert.ok(saveOpener.focused + focusBack["ch-text"].focused > beforeSaveFocus,
+    "保存成功后焦点必须收回 opener 或正文框，不能掉回 body");
+  const delOpener = focusBack["cmp-delete-template"];
+  focusBack.setActive(delOpener); await delOpener.fire("click");
+  assert.equal(focusBack["cmp-confirm"].hidden, false, "删除应先展开二次确认行");
+  assert.equal(focusBack["cmp-confirm-no"].focused, 1, "删除确认默认焦点必须落在「取消」");
+  focusBack.setActive(focusBack["cmp-confirm-no"]);
+  await focusBack["cmp-confirm-no"].fire("click");
+  assert.equal(delOpener.focused, 1, "取消删除后焦点应回到「删除模板」");
+
+  // opener 置灰时（保存/删除成功后的真实状态）focus() 静默失效，必须退回正文框
+  await openName();
+  saveOpener.disabled = true;
+  const openerFocusBefore = saveOpener.focused, textFocusBefore = focusBack["ch-text"].focused;
+  await focusBack["cmp-name-cancel"].fire("click");
+  assert.equal(saveOpener.focused, openerFocusBefore, "opener 已置灰就不该再 focus 它（静默失效＝焦点掉 body）");
+  assert.equal(focusBack["ch-text"].focused, textFocusBefore + 1, "opener 置灰时焦点应退回正文框");
+  saveOpener.disabled = false;
+
+  // 确认行的 Escape 关闭（迁移时丢失）
+  focusBack.setActive(delOpener); await delOpener.fire("click");
+  await focusBack["cmp-confirm"].fire("keydown", { key: "Escape" });
+  assert.equal(focusBack["cmp-confirm"].hidden, true, "确认行应可 Escape 关闭");
+  assert.equal(delOpener.focused, 2, "Escape 关闭确认行后焦点应回到「删除模板」");
+
   console.log("compose-handoff tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

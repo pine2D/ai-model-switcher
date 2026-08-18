@@ -1,95 +1,65 @@
 # PolyAsk · AI 众答
 
-Chrome MV3 扩展。两大能力：①**群发对比**——一个问题群发到多个 AI、真实窗口同屏平铺对比，各站最新回答可一键**汇总复制为 Markdown**（核心）；②在 9 个 AI 站点**独立访问**时一键切换「深度思考/快速模型」。另提供 Google Drive 数据同步、迁移包和统一设置页。
+Chrome MV3 扩展。**群发对比是核心**：一个问题群发到 9 个 AI 站点，真实窗口平铺对比，回答一键汇总复制为 Markdown；各站独立访问时一键切「深度思考/快速」档是附带能力（切档失败可以诚实报错，群发链路断了不行）。另有图片群发、右键带入网页内容、辅助综合、Drive 同步与迁移包。纯原生 JS，无构建、无框架、classic script。
 
-## 加新站点
+<!-- 最后与代码核对：2026-08-10 · manifest v0.15.2。发版前重跑核对并更新这行。
+     本文件常驻上下文，控制在 11 KB 内：要加一条硬约束，先挤掉一条或把查表内容外迁到 docs/。 -->
 
-加站点改三处（漏一处=该站静默缺席）：`manifest.json` 的 `matches` + 对应适配器（intl 或 cn/cn2）+ `console/sites.js` 的 `SITES` 清单。群发的发送/切档复用 `content/core.js` 的通用 `submitPrompt`/`runMode`，多数站点无需在适配器写 `submit`；仅当发送键不带 `send/发送` 标签、且 Enter 提交不灵时，加可选 `submit(el)`（原生点真实发送键）。要进「汇总复制」需加可选 `answer()`（返回最后一条回答的根节点）。
+## 先读哪份（下面几份不常驻上下文，动到对应部分再读）
 
-## 架构
+| 你要做的事 | 先读 |
+| --- | --- |
+| 动 `content/` 任一文件：注入/提交/切档/汇总复制、加新站点、图片上传、某站改版后失灵 | `docs/adapters.md`（契约全表、九张站点卡、图片限额） |
+| 动 `background.js`/`bg/`/`console/`/`popup/`/`options/`/`manifest.json`：开窗平铺、群发编排、联动最小化、进度圆点、96px 细条 UI、存储与 Drive 同步、迁移包、权限与快捷键 | `docs/console-windows.md`（错误码全表、超时预算表、epoch 与交接协议、逐文件职责） |
+| 写回归测试、真机复现、chrome-dbg/CDP 探锚点 | `docs/verify.md` |
+| 发版打 tag、改任何用户可见文案或三语词条（`i18n.js`/`_locales`/各 `*-i18n.js`）、动 `scripts/` 打包白名单 | `docs/release.md`（含 i18n 落点表） |
 
+专题文档比这里细，**但只要与本文「硬约束」冲突，一律以 CLAUDE.md 为准**——然后立刻回去把那份专题文档改对，不要留两套说法。
+专题之间的分工：站点特有的 DOM/时序坑写进 `docs/adapters.md` 的站点卡，只在 CDP/工具层才咬人的坑写进 `docs/verify.md`，同一条别两边各写一遍。
+
+## 硬约束（违反不报错，只会静默出事）
+
+- **popup-only 铁律**：所有「host→窗口」解析只走 `popupWindowForHost(host,wins)`，只返回 `type:"popup"`；关窗 `removeIfPopup(id)`、改窗 `updateIfPopup(id,props)`（先 get 校验 type）。**禁止用 `tabs.query({url})` 按 URL 反查窗口**（`{active,currentWindow}` 取当前标签、`{windowId}` 取已登记窗口的标签不在此列）——曾因此把用户日常 `type:"normal"` 窗口收编进平铺/广播/新会话并清空其对话。openTile/sendAll/focusAll/minimizeAll/newSession 全走它。
+- **提交不确定 ≠ 可以重发**：消息超时、端口断开、`submit_unconfirmed` 一律 `done(false,"submit_unconfirmed")` 交给用户点 retry。**只有**实现了只读 `adapter.submitted(text)` 的站（目前仅 Kimi）、且明确确认「末条用户消息不是本次内容」，才允许自动重试一次。给没有 `submitted()` 的站加自动重发 = 同一个问题被问两遍且用户无从察觉。
+- **删除一律 tombstone**：写 `deletedAt` + 入 outbox，不物理删；清空提问历史也要留删除标记，否则其它设备下次同步把数据带回来。本机重置不删 Drive 数据（对用户的承诺语义，要改先改文案）。
+- **判定阈值绝不贴着实测值写**：`findComposer` 的高度阈值是 `>=16` 不是 `>=20`。标称 20px 的编辑器在开了显示缩放的机器上实测 19.999998px，零余量的 `>=20` 筛掉唯一真编辑器 → `findComposer` 返回 null → 整条群发链空跑到 44s 截止线（v0.15.2 事故根因）。**凡拿实测值定阈值，一律留 ≥20% 余量**（标称 20 → 写 16）。
+- **`deadline` 是绝对时间戳、全链路透传**：`bg/broadcast.js` 算出 → content `submitPrompt` → `adapter.submit`/`attach` → `confirmSubmitted`。**循环等待、以及 ≥1s 的固定等待，一律夹取**：`Math.min(x, Math.max(0, deadline - Date.now()))`。唯一例外是「让编辑器/菜单渲染跟上」的毫秒级 sleep（inject 后 150ms、点击后 250/400ms）——既有惯例可不夹取，但单条 ≤500ms，且不得在一条路径上叠成秒级。console 客户端兜底必须严格大于后台预算。
+- **只产 `code`，不产用户可见文案**：bg 与 content 一律返回错误码，翻译在 console 侧按界面语言做；bg 的轮询判定认 `r.code`，**绝不正则匹配文案**。新增用户可见码要同时补三张翻译表与三语词条（三张表的位置见 `docs/console-windows.md` 错误码全表），漏一处那个页面就裸露英文 reason。
+- **适配器协议**：每站必需 `{think, fast, state, diagnose}` 四项，其余钩子可选、不实现 = 该能力静默降级（不是报错）。`state`/`diagnose`/`answer`/`submitted` **只读同步，不得开菜单**。`return false` = 落回 core 通用链；`throw` = 通用链对本站不安全，core 直接失败**不回退**。全表与九站映射见 `docs/adapters.md`。
+- **切档控件缺失一律 `throw`，不要静默 `return`**——静默 return 会让 `runMode` 误报「已切到」并弹假成功 toast。例外只有 4 处（DeepSeek 首屏 radio、Claude 无-effort-入口回退、Gemini 两处），全部写死在适配器里；加新例外前先读 `docs/adapters.md` 的例外清单及其理由。
+- **站点 UI 三条通用规则**：① 控件正在下沉到二级子菜单（顶层只留当前值），写新逻辑默认「顶层找不到 → 找子菜单入口 → 展开 → 再找」，别假设一层列表；② 同一页面里不同语义的列表可能共用同一个 role（ChatGPT 的 Model 与 Effort 都是 `[role=menuitemradio]`），取列表必须校验语义，否则「最高档」被点成末位模型；③ **每个菜单动作自己 `escMenus()` 收尾**，子菜单不关会罩住输入框，并让后续动作点空。
+- **群发取消（epoch）**：`_sendEpoch` / `cancelPendingSends()`。新写的长流程必须在每个 `await` 后核对 epoch，否则用户关了控制台、后台还在往站点输入框里打字。现成写法：`bg/broadcast.js` 轮询循环每轮核对，`background.js` 的 collect 在入口前后各核对一次。
+- **compose ↔ console 一次性交接只走 `console/run-meta.js`**：写 `storage.session` 的 `amsPendingRun`，取出即删，且必须 `text` 匹配才认。**不要新增 storage.local 常驻键或点对点消息**——这条路径已返工八次，每次都是「交接窗口没关严，旧上下文漏进下一次发送」。
+- **新增持久化键要同时登记多处**——同步白名单 / 跨设备设置投影 / 重置清单 /（要进迁移包）迁移类型 /（设置页可见开关）`PREFS`，五处文件与常量名见 `docs/console-windows.md` 数据位置。范例 `displayMode` 同时在同步白名单与重置清单里；漏一处，同步/迁移/重置/回填静默失效。
+- **不申请任何 AI 站点 host 权限**（站点访问只靠 `content_scripts.matches` 那 9 条），`host_permissions` 仅 `https://www.googleapis.com/*`。动权限必须同步 options 设置页 `#privacy` 区的隐私文案 + README + CHANGELOG。
+- **图片限额（张数 / 类型 / 单批大小，数值见 `docs/adapters.md`）改任何一个数**，就要同改 `content/upload.js` + `console/images.js` + README + 三语文案。
+- **加站点要同时改三处**：`manifest.json` 的 `content_scripts.matches` + 对应适配器 + `console/sites.js` 的 `SITES`，漏一处该站静默缺席（不报错）——但 `scripts/test-site-selection.js` 会红并指出该补哪份文件。步骤见 `docs/adapters.md`。
+- **单文件 ≤300 行（JS）**：`scripts/verify.sh` 直接 `exit 1`。`bg/sync.js`、`bg/windows.js`、`content/core.js` 正好 300 行，加一行就红——动这三个必须同时想好拆分方案：按站点或职责分卷（`adapters-cn` → `adapters-cn2` 即此例），不要靠压行/删注释续命。`scripts/` 同样受限。
+- **MV3 扩展页 CSP 是 `script-src 'self'`**：内联 `<script>` 与 `on*=` 被拦，连「防首帧闪烁的主题预应用」也必须外链（`console/theme.js` 放 `<head>` 内，外链脚本仍先于首帧执行；各页 head 顺序见 docs）。
+- **真机验证不可省，且本机全绿 ≠ 用户环境可用**：改适配器、切档、发送相关的 bug，必须先重载扩展 + 刷新站点标签，再用生产 `__AMS` 复现和回归，不得只凭静态代码或官方文案推断。**用户报的 bug 在本机复现不出时，先要现象再猜层次**——问「输入框里有没有出现文字 / 有没有发出去 / 有没有报错文案」，据此定位坏在 composer / inject / submit / state 哪一层再动手。两机差异见 `docs/verify.md`——本机跑通不构成「已修复」的证据。
+- **`console.html` 的 `#live` 播报区不可删**：群发进度、失败汇总、收集结果都要写进去。96px 细条上的圆点变色对读屏用户不可见，这是唯一进度通道——「精简 UI」类重构最容易顺手删掉它，且删了不报错。
+- **已发布 tag 不覆盖**，改内容必须升新版本；新增顶层文件或目录必须加进 `scripts/package.sh` 的 `RUNTIME` 数组（漏了本地 unpacked 一切正常，只有在干净机器装 zip 才炸）。
+
+## 命令
+
+```bash
+bash scripts/verify.sh               # 语法 + JSON + 300 行 + 文档/测试登记 + 全部 node 测试 + git diff --check
+node scripts/test-<name>.js          # 单跑一个（改完仍要跑 verify.sh 全量）
+bash scripts/prepare-release.sh auto # 推导版本、晋升 CHANGELOG、同步 manifest（只改文件不 commit）
+bash scripts/release.sh --publish    # 推 tag（--build-only 只验包；前置条件见 docs/release.md）
 ```
-background.js               Service Worker 入口：快捷键转发并加载 bg/ 模块
-bg/                         窗口/面板/群发编排 + IndexedDB 数据 + Google Drive 同步/迁移
-content/core.js             helpers + toast + __AMS 注册表 + runMode/switchTier + submitPrompt + onMessage
-content/md.js               可见 DOM→Markdown 通用序列化（汇总复制用，挂 __AMS.toMarkdown；隐藏节点/按钮剔除）
-content/adapters-intl.js    Claude/ChatGPT/Gemini
-content/adapters-cn.js      DeepSeek/豆包/千问
-content/adapters-cn2.js     Kimi/元宝/智谱清言（cn 触及 300 行上限后按站拆分）
-content/pill.js             三态悬浮控件(handle/always/hidden, storage.local displayMode, Shadow DOM)
-content/upload.js           图片选择、校验与站点附件注入
-console/console.html|css|js 群发指挥台(固定 96px 单行专业紧凑条 popup；档位/发送/平铺/汇总复制/联动)
-console/scope.html|js       站点范围伴侣窗(连续多选/分组管理/站点巡检；失焦关闭，不改变主 console 高度)
-console/status.js           群发进度/结果状态(圆点状态机/错误码翻译/失败汇总/汇总复制拼装/aria-live；console.js 之后加载共享其全局)
-console/compose.html|js     提示词工作区(长文本编辑/模板管理/历史/发送)
-console/archive.html|js     结果工作区(采集当前结果/归档列表/复制/导出/删除)
-console/sites|theme.js      站点清单(console/伴侣窗共享)、主题
-popup/                      🧠/⚡按钮 + 快捷键展示 + 🩺诊断 + 打开控制台/设置
-options/                    统一设置页：常规 + Google Drive 同步 + 迁移包 + 数据与隐私
-```
-- 权限：`storage`、`tabs`、`system.display`、`identity`、`alarms`（群发窗口、Google OAuth 与定时同步；无 host_permissions）。
-- 适配器契约：每站 `{think, fast, state(), diagnose()}`（可选 `submit(el)`、`answer()`、`inject(el,text)`）；state/diagnose/answer **只读不开菜单**。`inject` 返回 false=交回通用注入链（beforeinput→execCommand→textContent）；**抛异常=通用链对本站不安全**（如 Kimi），core 直接报 `inject_failed` 不回退。
 
-## 群发控制台（console）编排 —— 实战沉淀
+## 架构（先在这里定位入口文件）
 
-控制台是贴顶、占满屏宽、固定高 96px(`STRIP_H`) 的独立 `type:"popup"` 窗口；下方平铺各 AI 站点窗口。`background.js` 是入口，具体编排按职责拆在 `bg/`。
+- **群发编排**：`background.js`（SW 入口：快捷键转发、窗口登记清理、消息路由、`importScripts`）→ `bg/`（窗口/平铺/群发/伴侣窗/右键读页/辅助综合）。
+- **站点适配**：`content/core.js`（`__AMS` 注册表、`runMode`/`switchTier`、`submitPrompt`、`onMessage`）+ `content/{md,upload,pill,adapters-intl,adapters-cn,adapters-cn2}.js`。
+- **数据与同步**：`bg/` 的 8 个数据模块（`store` 是 IndexedDB `polyask`，另有 data / sync-model / sync / drive / archive-model / transfer / data-admin）。
+- **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
 
-- **popup-only 铁律（安全核心）**：所有「host→窗口」解析收敛到 `popupWindowForHost(host,wins)`，**只返回 `type:"popup"`，绝不碰用户日常浏览窗口(`type:"normal"`)**；关窗经 `removeIfPopup(id)`（get 校验 type 再 remove）。openTile/sendAll/focusAll/minimizeAll/newSession 全走它。曾因裸 `tabs.query({url})` 误把用户日常窗口收编进平铺/广播/新会话（清空对话），故铁律不可破。
-- **登记表 `amsWindows` host→{id,owned}**：owned=true 仅 `windows.create(popup)` 新建（closeAll 可自动关）；复用/收编窗口 owned=false（不擅自关）。
-- **sendAll（发送到全部 / Enter）**：有站点没窗口先 `openTile(sites, false)` 开窗——**隐式开窗不 prune 不重排**（追问少数站不关不动其他窗口与手调布局；显式「平铺」按钮才全量重排）→ 各站**并行轮询**页面就绪再提交（content 未注入 / `composer_not_found` 都视为还没好、继续等，~22s）。**初次使用无需先点平铺**（勾选→输入→Enter）。每站完成即 `pushSiteResult` 推单站结果（`{from:"AMS_BG",type:"siteResult"}`），圆点逐个变色、不等最慢站。
-- **错误码协议**：失败原因走 `code`（timeout/composer_not_found/inject_failed/submit_unconfirmed/tier_unconfirmed/no_window/not_ready/no_answer…），bg/content **不产出用户可见文案**，console/status.js 的 `ERR_KEYS` 按界面语言翻译；bg 轮询判定认 `r.code`，绝不正则匹配文案。另有只读编排消息：`checkup`（巡检→逐站 diagnose 标芯片）、`collect`（汇总→逐站 answer→Markdown）。
-- **联动**（弃用 `onFocusChanged`——Windows 上常不派发也不唤醒 SW）：由 console **页面 DOM 事件**驱动——window `focus` → `consoleFocused` 消息经 ~180ms 去抖抬整组工作区；`visibilitychange` hidden → `consoleHidden`，后台核实 `state==="minimized"` 才联动 `minimizeAllManaged`（区分最小化 vs 被遮挡）。`onRemoved`==console 窗口 → `closeAll`(仅 owned)。console 窗口 id 存 `amsConsoleWin`。
-- **平铺基准与保留高度**：基准工作区取 `consoleWorkArea()`（console 中心点所在显示器——拖到哪屏铺哪屏，也根治副屏 reserve 混坐标系）；保留高度用控制台**实际底边 `c.top+c.height`**（非硬编码 96）——WSL2/X410 给每个窗口套 ~30px 标题栏（Chrome 如实报告在 `top`），只用 height 会漏掉上移、致平铺压住控制台。
-- **薄弹窗限制**：96px 窗口里的自定义 DOM 浮层会被裁切；需要纵向空间的历史/模板、站点范围/巡检、归档/导出分别进入 `compose.html`、`scope.html`、`archive.html` 独立 popup，主 console 不使用原生下拉且始终保持 96px。
-- 数据位置：常规设置、模板、分组和同步状态在 `storage.local`；受管站点窗口表 `amsWindows` 在 `storage.session`；问题历史、归档、同步 outbox 和远端文件索引在 IndexedDB。历史与归档不设 PolyAsk 条数上限，但本地仅缓存近期正文，较旧正文按需从 Google Drive 读取。`amsConsoleWin`、`amsComposeWin`、`amsScopeWin`、`amsArchiveWin` 等窗口 id 在 `onStartup` 清空（id 跨重启失效）；每个新建平铺窗都使用站点新会话 URL，只有既有受管 popup 延续当前对话。
-
-## 注入与提交（submitPrompt / switchTier）—— 实战沉淀
-
-- **受控编辑器**（Lexical/ProseMirror/Slate，如千问/Kimi）**无视 `execCommand` 的 DOM 写入**（写进 DOM 但编辑器 model 不注册 → 发送键禁用）：contenteditable 改用**合成 `beforeinput`**（`inputType:"insertText", data`）注入，编辑器才注册；没进去再退回 execCommand。textarea/input 仍用原生 value setter。
-- **提交优先原生点击发送键**（`button[aria-label*=send/发送]`，国产站拒合成事件、且避免对受控编辑器发 Enter 产生多余换行），`!disabled` 防误触；无匹配按钮再退回合成 Enter+`confirmSubmitted` 校验。真机审计（2026-07）：千问/Claude/ChatGPT/Gemini 发送键带标签走通用原生点；**DeepSeek/豆包/Kimi/元宝已各自 `submit(el)` 原生点真实发送键**（`.ds-button--primary.ds-button--circle`、`#flow-end-msg-send`、`.send-button-container`、`span.icon-send`）；chatglm 靠 Enter（textarea 可发）。
-- **切档位要验证**：`switchTier(mode)` 静默重试 `runMode` 直到 `state()` 确认切到目标档再提交（~10s 兜底）。新开页面切换器渲染晚于输入框，旧逻辑"没抛错就算切了"会"切换失败仍直接提交"。`runMode(mode, silent?)` 返回成功布尔供其重试。
-- **adapter.submit 契约**：返回 `false`=发送键此刻不可用 → 落回通用路径；点击成功也必须过 `confirmSubmitted`（输入框清空/变化=已发出）再判成功。**submit() 内部须自行判空兜底、缺件返回 false 而非抛异常**——core 对 submit 抛异常直接终止（code:error），不会落回通用路径，漏判空=丢掉本可成功的兜底。已知限制（真机证实）：聊天站流式生成期间普遍把发送键复用为「停止」（class/id 不变仅换图标），流式中对同站二次群发会点成停止、截断上一条——诚实报失败可 retry，图标判别脆弱故不做守卫。
-- **adapter.answer 契约**（汇总复制用）：只读同步，返回最后一条 AI 回答的**根节点**（或字符串）或 null；core 经 `content/md.js` 通用序列化为 Markdown（表格→GFM、链接/代码围栏保留、隐藏水印与按钮/svg 剔除）——**逐站不维护 markdown 规则**，九站回答都是 md 渲染的标准 HTML 故一个串行器通吃。快照以点击时刻为准（不等流式），档位标注取收集时刻 `state()`。
-
-## 适配器编写原则（实战沉淀）
-
-- **模型名匹配语言无关**（Fable/Qwen/K3/GLM…），**UI 词必须中英双写**（`/Expert|专家/`、`/^(high|高)$/i`）；zh/en 之外不承诺，靠诊断兜底。
-- 优先**结构/语义锚点**（data-testid、稳定 class、aria-label、aria-checked/pressed），文本是次选。
-- **国产站常拒绝合成事件**（isTrusted=false 被忽略）：菜单项/radio/toggle 用**原生 `el.click()`**；国际站 Radix/Material 菜单用 pointer 事件序列 `openMenu()`。
-- 站点常有**宽窄两种布局**（窗口宽窄不同）：Claude 窄屏是 Adaptive thinking 开关、宽屏是 effort 子菜单；Gemini 窄屏模型按钮无 aria-haspopup。适配器须双布局兼容。
-- **Claude 档位映射**：think=Fable 5 + Thinking 开 + effort High；fast=**Sonnet 5 默认设置**（只选模型，不把 Fable 的 High effort 强加给快档；state() 见模型名带 sonnet 恒判 fast）。Anthropic 换代时同步 `fast()`/`think()` 里的模型正则。
-- **Kimi 档位映射（2026-07-21 用户定案）**：think=K3+Max、fast=K3+Standard。换模型会 SPA 路由跳 `/agent?chat_enter_method=change_model`（含会话内切换，会离开会话视图）；该面发送**偶发**对真人也失效（2026-07-21 真机连可信打字/点击/Enter 都发不出，用户判断为站点高峰限流禁用对话）——发送失败诚实报 `submit_unconfirmed` 可 retry，不要因此改掉 K3 映射。effort 切换不导航；K2.6 无 Max 档（仅 Standard/High）。中文 UI 的 effort 标签与英文不同：Max=「极致」（用户实证）；chrome-dbg 站点跟账号语言恒英文，中文标签只能靠用户回报。Kimi 编辑器（Lexical）被合成 beforeinput 写死（DOM/model 分叉、编辑器冻结）→ 用适配器 `inject`（execCommand+显式 Range，失败抛异常禁回退）。
-- 有状态控件**先读后点**（幂等）；Gemini Thinking 需兼容当前模型菜单直达项与旧版 Thinking level 嵌套子菜单。
-- 文案可能含**零宽字符**（Claude "Max" 实为 4 字符）：用 contains 匹配，别用 `^...$` 配长度。
-
-## 测试与调试（chrome-dbg 实战）
-
-- **用户实测环境（2026-07-14 确认）**：`chrome-dbg` 中已安装本仓扩展，相关 AI 网站均有登录态；修适配器、切档或发送 bug 时，默认必须先重载扩展并新开/刷新站点，再通过生产 `__AMS` 真机复现和回归，不得只凭静态代码或官方文案推断。
-- 重载扩展：在 `chrome://extensions` 标签页执行 `chrome.developerPrivate.reload("<本仓unpacked ID>",{failQuietly:false})`；**重载后旧标签的 content script 变孤儿**，需刷新页面重注入。
-- **直连 chrome-dbg 最灵活**：本机 chrome-dbg 在 `127.0.0.1:9222`，**装有本扩展且各 AI 站已登录**（2026-07 实证）——站点 DOM 适配审计可全程自主完成（开站→注入→点发送→探锚点）。工具：`scratchpad/cdp.js`(list/open/eval，node≥22 全局 WebSocket)、`scratchpad/iso-eval.js`（隔离世界遍历——多扩展环境有多个 isolated world，须逐个找 `__AMS`，别只看最后一个）。坑：豆包渲染在中英文与数字间插空格（marker 匹配先去空白再比）；后台标签 eval 可能挂起，先 `/json/activate` 激活再探；Gemini 会 prerender 出**同 URL 双 page target**（按 urlSub 匹配会打到影子页、发送与探测对不上），探前先 `/json/list` 数一下同站 target 数、关掉多余的再操作。
-- **chrome-devtools-mcp 默认自启一个 `--disable-extensions` 的全新 Chrome**（about:blank、无登录态、无扩展）；要连本机 chrome-dbg 须给其 MCP server 配 `--browserUrl http://127.0.0.1:9222` 再重启。
-- **claude-in-chrome** 进不了 `chrome://` / `chrome-extension://`（被拦），且需逐站授权、多浏览器要先 `select_browser`；适合驱动已授权的普通站点，但逐站授权慢。
-- 验证快捷键链路：MV3 SW 休眠，reload 唤醒后 30s 内 CDP `Target.attachToTarget` 执行 onCommand 等价代码；物理按键→onCommand 无法合成，留人工。
-- 平铺安全回归（核心）：日常 normal 窗口开某站 → 触发 openTile → 断言该 normal 窗口 bounds 不变、登记的是新 popup；污染登记为 normal id 后断言不被关、自愈为 popup。
-- 仿真窄窗：`Emulation.setDeviceMetricsOverride {width:639}`。
-- **断言用生产逻辑**（`__AMS.getState()`/`_isOn()`），不要在测试 lambda 里重写正则——shell/python 转义会把 `\s` 变 `\\s`，产生"幽灵失败"（实战吃过亏）。注意 `__AMS` 在 content script 隔离世界，主世界 DevTools 控制台默认看不到（要切上下文）。
-- chatglm.cn 加载极重：水合期（~30s）连扩展消息都无响应，安定后正常；新开标签+长等待。
+逐文件职责、各 html 的 script 加载顺序（即依赖顺序）、存储键位置见 `docs/console-windows.md`——新增细条功能先按那份判断归属。
 
 ## Git
 
-- 提交用 git-commit skill（Conventional Commits、可带 AI 署名 trailer）；仓库无 user 配置，用内联身份提交。
-- 发版前持续维护 `CHANGELOG.md` 的「未发布」分类条目；`bash scripts/prepare-release.sh auto` 按 Conventional Commits 推导语义版本，并一次性晋升 CHANGELOG、同步 manifest 与比较链接（只改文件，不自动 commit）。
-- 审阅发版变更、commit 并 push main 后，运行 `bash scripts/release.sh --publish`：本地与 CI 共用 `--build-only` 验证链路，只有工作区干净、`main == origin/main`、exact-HEAD CI 成功且 tag 不存在时才推送 `v*`。Release workflow 随后发布 ZIP、SHA-256 与本版 CHANGELOG 正文。
-- 已发布 tag 不覆盖；若需改内容必须升新版本。仅验包可运行 `bash scripts/release.sh --build-only`。
-- `docs/superpowers/`、`.superpowers/`、`.spec-workflow/` 与 `.codegraph/` 已 gitignore（本地工作文档不入库）。
-- 单文件 ≤300 行（JS）；超了按 intl/cn 之类职责拆分。
-
-### 发布前文案与文档核查
-
-- 核对 `README.md`、`CHANGELOG.md`、扩展说明和设置页是否覆盖本版新增功能、限制、权限、隐私行为及最新模型映射；删除已经失效的入口或描述。
-- 凡修改用户可见文案，必须使用 `content-l10n` skill 检查三语语义、术语、占位符、快捷键、URL、文件格式和长度限制。不得只改一种语言。
-- 英文散文用 `humanizer` 自查，中文散文用 `humanizer-zh` 自查。重点清理破折号群、广告腔、三连套式、空泛总结和宣传性强化，不改写技术事实。
-- 破坏性操作、明文存储、权限范围、不可撤销后果和数据保留规则不得弱化；按钮、确认文案与实际动作必须一致。
-- 运行 `node scripts/test-content-l10n.js`，确认三语键覆盖、占位符一致、HTML i18n 引用有效，且英文用户文案不含长破折号。
-- 在 English、简体中文和繁體中文下检查 popup、控制台、范围、提示词、归档和设置页，确认切换语言后无截断、异常换行或缺失的 aria-label。
-- 确认 `CHANGELOG.md` 的「未发布」段已记录所有用户可感知变更，再运行 `bash scripts/verify.sh` 和 `bash scripts/release.sh --build-only`。
+- 提交用 `git-commit` skill（Conventional Commits，可带 AI 署名 trailer）；仓库无 user 配置，用内联身份提交。
+- 持续维护 `CHANGELOG.md` 的「未发布」段，所有用户可感知变更都要记。发版流程见 `docs/release.md`。
+- 本地工作目录（`docs/superpowers/`、`.superpowers/`、`.spec-workflow/`、`.codegraph/`、`.serena/`、`dist/`、`scratchpad/`）已 gitignore——别把需要入库的东西放进去，也别在文档里假设克隆者有 `scratchpad/`。

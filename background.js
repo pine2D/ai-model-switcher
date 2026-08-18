@@ -12,8 +12,9 @@ importScripts("bg/windows.js", "bg/panels.js", "bg/page-context.js", "bg/broadca
 
 // 窗口 id 仅本次浏览器会话有效：重启后 id 重排，陈旧登记可能撞上无关 popup（如 OAuth 弹窗）
 // 被误关/误收编——按 id 的操作只验 type 无法防住 popup 撞 popup，故启动时一律清空登记。
+// 这里只清 local 里的四个伴侣窗 id；受管站点窗口表 amsWindows 在 storage.session，随浏览器关闭自动清空。
 chrome.runtime.onStartup.addListener(() =>
-  chrome.storage.local.remove(["amsWindows", "amsConsoleWin", "amsComposeWin", "amsScopeWin", "amsArchiveWin"])
+  chrome.storage.local.remove(["amsConsoleWin", "amsComposeWin", "amsScopeWin", "amsArchiveWin"])
 );
 
 // console 获焦 → 延迟 ~180ms 再抬整组工作区。点 console 的「最小化按钮」会先让窗口获焦（→ 本会立刻

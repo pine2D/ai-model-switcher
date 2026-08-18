@@ -10,7 +10,9 @@ const SynthesisCompose = (() => {
   const preview = document.getElementById("syn-preview"), send = document.getElementById("syn-send"), status = document.getElementById("syn-status");
   const MAX_PAYLOAD = 60000;
   const ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
-    submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow", not_ready: "con_errNotReady", error: "con_errGeneric" };
+    submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow", not_ready: "con_errNotReady",
+    cancelled: "con_errCancelled", invalid_request: "con_errInvalidRequest", error: "con_errGeneric" };
+  // cancelled（epoch 变化）与 invalid_request（validSynthesisRequest 校验失败）都真会到达，漏了会兜底成「未知错误」
   let context = null, busy = false, statusKey = null;
   const runtimeMessage = (message) => new Promise((resolve) => chrome.runtime.sendMessage(message, (result) => {
     const error = chrome.runtime.lastError; resolve(error ? null : result);

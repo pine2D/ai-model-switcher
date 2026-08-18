@@ -145,17 +145,16 @@
       } catch (e) { return { ok: false, code: "error", reason: String((e && e.message) || e) }; }
     }
     // 通用提交优先原生发送按钮，无可用按钮再发 Enter；所有路径都用 confirmSubmitted 防假成功。
-    const sendBtn = () => document.querySelector('button[data-testid*="send" i], button[aria-label*="send" i], button[aria-label*="发送"]');
-    const _txtBefore = readText(el);
-    let btn = sendBtn();
-    if (btn && !btn.disabled) { btn.click(); if (await confirmSubmitted(_txtBefore, confirmUntil)) return { ok: true }; }
-    // 点了没生效也要退回 Enter：Claude 新版发送键拒绝一切合成点击（真机 2026-08，原生 click 与 detail:1
-    // 指针序列都无效），只吃键盘事件；早先"有按钮就点、点完即判"会在按钮已渲染时直接报 submit_unconfirmed。
-    ["keydown", "keypress", "keyup"].forEach((t) =>
-      el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
-    await sleep(150);
-    btn = sendBtn();
-    if (btn && !btn.disabled) btn.click(); // Enter 没发出去且按钮可用 → 原生点
+    // 发送键必须挨着输入框再认：`aria-label*="发送"` 会命中侧栏里标题含「发送」二字的历史项按钮，而
+    // querySelector 取文档顺序第一个（侧栏在前）→ 真发送键从没被点过（真机 2026-08-14，它其实一点就发）。
+    const sendBtn = () => { const y = (findComposer() || el).getBoundingClientRect().top;
+      return [...document.querySelectorAll('button[data-testid*="send" i], button[aria-label*="send" i], button[aria-label*="发送"]')]
+        .find((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && Math.abs(r.top - y) < 240; }) || null; };
+    const _txtBefore = readText(el); let btn = sendBtn();
+    // 点击只给 3s 确认：带图时 confirmUntil 是 90s 绝对截止线，在这里等满会把下面的 Enter 回退整个吃掉
+    if (btn && !btn.disabled) { btn.click(); if (await confirmSubmitted(_txtBefore, Date.now() + 3000)) return { ok: true }; }
+    ["keydown", "keypress", "keyup"].forEach((t) => el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
+    await sleep(150); btn = sendBtn(); if (btn && !btn.disabled) btn.click(); // Enter 没发出去且按钮可用 → 原生点
     return (await confirmSubmitted(_txtBefore, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
   }
 

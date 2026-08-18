@@ -77,12 +77,16 @@
   }
   async function waitAttachments(anchor, before, deadline, fileNames) {
     let candidate = "", since = 0;
+    const t0 = Date.now();
     while (Date.now() < deadline) {
       const current = snapshot(anchor);
       if ([...current.errors].some((value) => !before.errors.has(value))) return false;
       const added = [...current.tokens].filter((value) => !before.tokens.has(value));
       const named = fileNames.every((name) => added.some((value) => value.includes(name)));
-      if ((named || added.length >= fileNames.length) && (!current.busy || before.busy)) {
+      // busy 最多压制 5s：DeepSeek 传完后仍常驻一个 .ds-loading（真机 2026-08-14），老条件
+      // (!current.busy || before.busy) 会一路等到超时返回 attachment_timeout，文字压根来不及注入。
+      const blocked = current.busy && !before.busy && Date.now() - t0 < 5000;
+      if ((named || added.length >= fileNames.length) && !blocked) {
         const signature = added.sort().join("\n");
         if (signature !== candidate) { candidate = signature; since = Date.now(); }
         else if (Date.now() - since >= 400) return true;

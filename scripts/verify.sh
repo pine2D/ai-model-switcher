@@ -29,8 +29,25 @@ for file in "${JS_FILES[@]}"; do
   [ "$lines" -le 300 ] || { echo "✗ $file: $lines 行" >&2; exit 1; }
 done
 
+echo "[docs] 检查文档引用未失效"
+mapfile -t DOC_REFS < <(grep -ohE 'docs/[A-Za-z0-9._-]+\.md' CLAUDE.md README.md docs/*.md | sort -u)
+[ "${#DOC_REFS[@]}" -gt 0 ] || { echo "✗ 未提取到任何 docs/*.md 引用，检查本身已失效" >&2; exit 1; }
+for doc in "${DOC_REFS[@]}"; do
+  [ -s "$doc" ] || { echo "✗ 文档引用失效或为空: $doc" >&2; exit 1; }
+done
+
+echo "[docs] 检查 test-*.js 均已登记"
+for file in scripts/test-*.js; do
+  grep -qxF "node $file" scripts/verify.sh && continue   # 整行匹配：注释掉的登记行不算数
+  grep -qF "verify-skip: $file " scripts/verify.sh && continue
+  echo "✗ $file 未被 verify.sh 调用；登记进下方清单，或加一行注释 '# verify-skip: $file <理由>'" >&2
+  exit 1
+done
+# verify-skip: scripts/test-sync-engine.js 是被 test-sync-runtime.js require 的用例模块，直接 node 跑只定义不执行
+
 echo "[test] 用户可见文案与本地化"
 node scripts/test-content-l10n.js
+node scripts/test-err-codes.js
 
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-page-context.js

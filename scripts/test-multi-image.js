@@ -233,6 +233,35 @@ async function imageBroadcastDeadline() {
   assert.match(read("console/console.js"), /images\.length\s*\?\s*95000/);
 }
 
+// DeepSeek 真机 2026-08-14：图片传完、发送键已可用，页面仍常驻一个 .ds-loading。before.busy=false +
+// current.busy=true 落进老条件 (!current.busy || before.busy) 的永久否决，waitAttachments 一路等到
+// attachment_timeout，core 于是在注入文字之前就 return——表现为「图片和文字都留在输入框」。
+async function persistentLoadingMustNotBlockForever() {
+  let shown = false, busy = false, now = 0;
+  const rect = (o) => () => o;
+  const preview = { tagName: "IMG", className: "attachment-preview", textContent: "", src: "blob:x",
+    getAttribute: (n) => n === "src" ? "blob:x" : n === "alt" ? "probe.png" : "",
+    getBoundingClientRect: rect({ left: 120, right: 220, top: 400, bottom: 480, width: 100, height: 80 }) };
+  const spin = Object.assign({}, preview, { tagName: "DIV", className: "ds-loading", src: "" });
+  const context = vm.createContext({
+    window: { __AMS: {} }, console,
+    document: { querySelectorAll: (sel) => busy && /class\*="loading"/.test(sel) ? [spin]
+      : shown && /img|role=img|attach|preview/.test(sel) ? [preview] : [] },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", backgroundImage: "none" }),
+    Date: { now: () => now }, DataTransfer: class { constructor() { this.items = { add() {} }; this.files = []; } },
+    Event: class { constructor(type) { this.type = type; } },
+    createImageBitmap: async () => ({ close() {} }), File: class {}, atob: (v) => Buffer.from(v, "base64").toString("binary"),
+  });
+  context.window.__AMS.sleep = async (ms) => { now += Math.max(1, ms || 1); };
+  vm.runInContext(read("content/upload.js"), context);
+  const S = context.window.__AMS;
+  const composer = { getBoundingClientRect: rect({ left: 100, right: 500, top: 500, bottom: 540, width: 400, height: 40 }) };
+  const input = { files: [], dispatchEvent: (e) => { if (e.type === "change") { shown = true; busy = true; } } };
+  const ok = await S.setInputFiles(input, [{ name: "probe.png" }], composer, 30000);
+  assert.equal(ok, true, "loading 常驻也必须在限时压制后放行，否则文字来不及注入");
+  assert.ok(now >= 5000 && now < 30000, `应压制约 5s 后放行、不等到 deadline，实得 ${now}`);
+}
+
 (async () => {
   consoleContract();
   console.log("✓ Console 与后台使用多图数组契约");
@@ -244,4 +273,6 @@ async function imageBroadcastDeadline() {
   console.log("✓ DeepSeek 图片档位映射为 Vision + DeepThink 开关");
   await imageBroadcastDeadline();
   console.log("✓ 图片广播使用独立的 90 秒处理窗口");
+  await persistentLoadingMustNotBlockForever();
+  console.log("✓ 上传后常驻的 loading 不会永远否决附件确认");
 })().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });
