@@ -53,6 +53,8 @@
       },
       // 发送键无 send/发送 标签（真机审计 2026-07：composer 右下 primary 圆钮）；图片处理期间仅加
       // ds-button--disabled，不设 aria-disabled，需等按钮真正可用后再原生点击。
+      // sendSel 供 content/diag.js 做只读存在性巡检，与下方 submit 的选择子同步维护。
+      sendSel: '[role="button"].ds-button--primary.ds-button--circle',
       // 已知限制（真机证实，DeepSeek/豆包/Kimi 同）：流式生成期间站点把同一按钮复用为「停止」（class/id 不变
       // 仅换图标），流式中二次群发会点成停止、截断上一条回答——confirmSubmitted 会诚实报失败，retry 可恢复；
       // 图标判别太脆弱不做守卫，属窄窗口取舍。
@@ -110,7 +112,8 @@
       attach: function (files, el, deadline) {
         return S.setInputFiles(document.querySelector('input[type="file"][accept*="png"]'), files, el, deadline);
       },
-      // 发送键无标签但有稳定 id（真机审计 2026-07）；不可用时落回通用路径（textarea Enter 可发）
+      // 发送键无标签但有稳定 id（真机审计 2026-07）；不可用时落回通用路径（textarea Enter 可发）。
+      // 有意不声明 sendSel：真机 2026-08-18 实测空输入框时该按钮整个不在 DOM（非常驻），列进巡检会恒红误报
       submit: function () {
         const b = document.getElementById("flow-end-msg-send");
         if (!b || b.disabled || b.getAttribute("aria-disabled") === "true" || b.getAttribute("data-disabled") === "true") return false;

@@ -92,6 +92,7 @@
         if (!document.execCommand("insertText", false, text)) throw new Error("Kimi: execCommand 注入失败");
       },
       // 发送键是无 role 的 div（真机审计 2026-07），Enter 只插换行 → clickEl（detail:1 拟真）点它
+      sendSel: ".send-button-container", // 供 diag.js 巡检，与 submit 同步维护
       submit: function () {
         const b = document.querySelector(".send-button-container");
         if (!b) return false;
@@ -151,6 +152,7 @@
       },
       // 发送键是 icon-font span（chrome-dbg 真机审计 2026-07：点击后 composer 清空实证可发）；
       // 没找到落回 Enter+校验兜底。注入侧真机实证：元宝 beforeinput 不生效、execCommand 生效（既有回退链覆盖）
+      sendSel: ".icon-send", // 供 diag.js 巡检，与 submit 同步维护
       submit: function () {
         const b = document.querySelector(".icon-send");
         if (!b) return false;

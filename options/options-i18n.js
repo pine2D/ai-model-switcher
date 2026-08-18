@@ -71,5 +71,8 @@ Object.assign(MSG, {
   settings_displayHandle: { en: "Edge handle", zh_CN: "贴边", zh_TW: "貼邊" },
   settings_displayAlways: { en: "Always show", zh_CN: "始终显示", zh_TW: "始終顯示" },
   settings_displayHidden: { en: "Hidden (shortcuts only)", zh_CN: "隐藏（仅快捷键）", zh_TW: "隱藏（僅快速鍵）" },
+  settings_feedback: { en: "Feedback", zh_CN: "反馈", zh_TW: "意見回饋" },
+  settings_feedbackDetail: { en: "If a site stops working after a redesign, run a check in the console's site picker, copy the diagnostic report, and attach it to a GitHub issue.", zh_CN: "站点改版导致功能失灵时，先在控制台的站点选择窗里巡检并「复制诊断报告」，然后附在 GitHub 问题里提交。", zh_TW: "網站改版導致功能失靈時，先在主控台的網站選擇窗裡巡檢並「複製診斷報告」，然後附在 GitHub 問題裡提交。" },
+  settings_feedbackLink: { en: "Report a site issue on GitHub", zh_CN: "在 GitHub 报告站点问题", zh_TW: "在 GitHub 回報網站問題" },
 });
 applyI18n();

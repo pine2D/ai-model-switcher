@@ -2,6 +2,7 @@ let consoleState = {};
 let selected = {};
 let groups = [];
 let checks = {};
+let checksAt = 0; // 最近一次巡检完成时刻——诊断报告用它，不用复制时刻（隔久了会误导改版时点比对）
 let checking = false;
 const ALL_HOSTS = SITES.map((site) => site.host);
 const IMAGE_HOSTS = SITES.filter((site) => site.image).map((site) => site.host);
@@ -97,6 +98,8 @@ function renderScope() {
   document.getElementById("grp-save").disabled = !canSaveGroup(currentHosts());
   document.getElementById("grp-del").disabled = currentGroupIndex() < 0;
   document.getElementById("scope-checkup").disabled = checking || !currentHosts().length;
+  document.getElementById("scope-report").disabled = checking ||
+    !Object.values(checks).some((check) => check.state === "ok" || check.state === "fail");
   fitScopeHeight();
 }
 function showOnly(row) {
@@ -133,11 +136,32 @@ document.getElementById("scope-checkup").addEventListener("click", () => {
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "checkup", sites }, (response) => {
     const results = (response && response.results) || [];
     checks = Object.fromEntries(results.map((result) => [result.host, { state: result.ok ? "ok" : "fail", text: checkText(result) }]));
+    checksAt = Date.now();
     checking = false;
     const ok = results.filter((result) => result.ok).length;
     document.getElementById("scope-live").textContent = t("scope_checkDone", ok, sites.length - ok);
     renderScope();
   });
+});
+// 报障出口：把最近一次巡检结果整理成可粘贴的诊断报告（不含任何对话内容），配合 GitHub issue 模板使用
+function buildReport() {
+  const manifest = chrome.runtime.getManifest();
+  // dpr 必带：v0.15.2 事故根因就是显示缩放（19.999998px），这是报障里最值钱的一个环境值
+  const lines = [
+    `PolyAsk ${manifest.version} · ${document.documentElement.lang || "?"} · dpr ${devicePixelRatio} · ${new Date(checksAt || Date.now()).toISOString()}`,
+    navigator.userAgent,
+  ];
+  SITES.forEach((site) => {
+    const check = checks[site.host];
+    if (check && check.state !== "checking") lines.push(`${site.host}: ${check.state === "ok" ? "OK" : "FAIL"} · ${check.text || ""}`);
+  });
+  lines.push("", t("scope_reportHint"));
+  return lines.join("\n");
+}
+document.getElementById("scope-report").addEventListener("click", () => {
+  navigator.clipboard.writeText(buildReport()).then(
+    () => { document.getElementById("scope-live").textContent = t("scope_reportCopied"); },
+    () => { document.getElementById("scope-live").textContent = t("con_collectFail"); });
 });
 document.getElementById("grp-save").addEventListener("click", () => { showOnly(elNameRow); elName.focus(); });
 document.getElementById("group-name-cancel").addEventListener("click", () => { clearGroupName(); showOnly(elManage); });

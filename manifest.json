@@ -28,7 +28,7 @@
         "https://yuanbao.tencent.com/*",
         "https://chatglm.cn/*"
       ],
-      "js": ["i18n.js", "content/core.js", "content/upload.js", "content/md.js", "content/adapters-intl.js", "content/adapters-cn.js", "content/adapters-cn2.js", "content/pill.js"],
+      "js": ["i18n.js", "content/core.js", "content/upload.js", "content/md.js", "content/adapters-intl.js", "content/adapters-cn.js", "content/adapters-cn2.js", "content/diag.js", "content/pill.js"],
       "run_at": "document_idle"
     }
   ],

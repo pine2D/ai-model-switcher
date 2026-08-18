@@ -17,12 +17,13 @@
 
 ## 真机环境（本机 chrome-dbg）
 
-- `chrome-dbg` 在 `127.0.0.1:9222`，**已安装本仓扩展且各 AI 站有登录态**（2026-07-14 用户确认）。站点 DOM 适配审计可全程自主完成：开站 → 注入 → 点发送 → 探锚点。
+- `chrome-dbg` 在 `127.0.0.1:9222`，**已安装本仓扩展且各 AI 站有登录态**（2026-08-18 九站复核）。站点 DOM 适配审计可全程自主完成：开站 → 注入 → 点发送 → 探锚点。
+- **判「掉登录」要用强证据**（2026-08-18 误判教训：曾凭「水合中 `.current-model` 缺失 + 页面存在 `[class*=login]` 类名」错判 Kimi 掉登录，实际是探测打在水合窗口里，且登录弹窗容器常驻 DOM）。强证据组合：可见头像/会话历史列表非空、**没有可见的**「登录/Sign in」按钮文本；弱类名匹配只能当线索。另：Kimi 入口当前模型可能停在非 K3（如 Instant），此时 `state()` 按既有语义返回 null，属正常态不是故障。
 - **重载扩展**：在 `chrome://extensions` 标签页执行 `chrome.developerPrivate.reload("<本仓 unpacked ID>", {failQuietly:false})`。
 - **重载后旧标签的 content script 变孤儿**（抛 `Extension context invalidated`），必须刷新页面重注入。`scratchpad/reload-sites.js` 每个 host **只刷第一个匹配标签**——同站开了多个标签时另一个仍是孤儿，会表现为 `Could not establish connection` 的误判。探测前先数一下同站标签。
 - **断言只用生产逻辑**（`__AMS.getState()` / `_isOn()`），**不要在测试 lambda 里重写正则**——shell/python 转义会把 `\s` 变 `\\s`，产生「幽灵失败」（实战吃过亏）。
 - `__AMS` 在 content script 隔离世界，主世界 DevTools 控制台默认看不到（要切上下文）。
-- **开发机与用户机不等价**：开发机是 WSL2 + Linux chrome-dbg（无显示缩放、扩展干净、界面英文），用户机是 Windows Chrome（有缩放、装了多个同类 AI 扩展、界面可能非英文），layout 数值不同。本机跑通不构成「已修复」的证据；本机复现不出时先按 `CLAUDE.md` 的「先要现象再猜层次」定位到 composer / inject / submit / state 哪一层。
+- **开发机与用户机不等价**：开发机是 WSL2 + Linux chrome-dbg（启动别名带 `--force-device-scale-factor=1.5`，实测 `devicePixelRatio=1.5`——**不是无缩放**，缩放类量级问题本机可复现；扩展干净、界面英文），用户机是 Windows Chrome（缩放比例可能不同、装了多个同类 AI 扩展、界面可能非英文），layout 数值不同。本机跑通不构成「已修复」的证据；本机复现不出时先按 `CLAUDE.md` 的「先要现象再猜层次」定位到 composer / inject / submit / state 哪一层。
 
 ## 工具（都在 `scratchpad/`，已 gitignore、克隆后没有）
 
@@ -46,3 +47,8 @@
 - `chrome-devtools-mcp` 默认自启一个 `--disable-extensions` 的全新 Chrome（about:blank、无登录态、无扩展）；要连本机 chrome-dbg 须给其 MCP server 配 `--browserUrl http://127.0.0.1:9222` 再重启。
 - `claude-in-chrome` 进不了 `chrome://` / `chrome-extension://`（被拦），需逐站授权，多浏览器要先 `select_browser`。
 - 两者都不如直连 `127.0.0.1:9222`。
+
+## 哨兵与报障
+
+- **模型发布哨兵**：`scripts/watch-releases.js` + `.github/workflows/release-watch.yml`，每周一/四轮询五家官方 changelog/RSS，有新条目自动开 issue（label `release-watch`）。定位是闹钟——公告名 ≠ 网页 UI 标签，**禁止直接抄进适配器正则**（先真机核对）。真机/联网脚本**不得用 `test-` 前缀命名**：verify.sh 会强制把 `test-*.js` 登记进无浏览器无网络的 CI。仓库 60 天无 push 时 GitHub 会停用 scheduled workflow，Actions 页点一下即可重新启用。**`release-watch` label 是去重依据**（脚本按它拉已见标题集），分流整理时不要从旧 issue 上摘掉，否则对应条目会被重复开单。
+- **用户报障出口**：scope 窗「复制诊断报告」（巡检结果 + 版本 + 语言，不含对话内容）+ `.github/ISSUE_TEMPLATE/site-breakage.yml`（按 `CLAUDE.md` 四层定位法预置问题）。

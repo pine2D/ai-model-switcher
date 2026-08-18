@@ -135,9 +135,8 @@ body.scope{height:100vh;box-sizing:border-box;padding:12px;overflow:auto;backgro
 @starting-style{.scope-site[data-state] .scope-state{opacity:.35}}
 .scope-foot{min-height:42px;padding-top:9px;border-top:1px solid var(--edge)}
 body.scope [hidden]{display:none}
-#scope-tools{flex-wrap:nowrap}
 #scope-tools button{flex:0 0 auto}
-#scope-live{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px}
+#scope-live{min-width:0;flex:1 1 140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px}
 #scope-manage button{flex:1 1 145px}
 #group-name{height:32px;box-sizing:border-box;min-width:180px;flex:1;padding:0 9px;border:1px solid var(--name-line);border-radius:8px;background:var(--name-fill);color:var(--text)}
 #scope-confirm-text{flex:1;color:var(--text-2)}

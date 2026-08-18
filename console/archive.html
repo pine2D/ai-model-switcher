@@ -24,6 +24,11 @@
       <select id="ar-tag" data-i18n-aria="arc_tagFilter"><option value="" data-i18n="arc_allTags">全部标签</option></select>
       <div id="ar-list" data-i18n-aria="arc_listAria" aria-label="结果库条目"></div>
       <button id="ar-more" type="button" hidden data-i18n="arc_more">加载更多</button>
+      <details id="ar-stats">
+        <summary data-i18n="arc_stats">站点健康统计</summary>
+        <p id="ar-stats-note" data-i18n="arc_statsScope">仅统计已保存到结果库的收集结果；发送失败不落盘，较早已同步条目正文被裁剪后也不参与。</p>
+        <div id="ar-stats-body"></div>
+      </details>
     </div>
     <div id="ar-detail" data-empty="正在加载已保存的结果…"></div>
   </div>
@@ -32,4 +37,5 @@
   <script src="archive-detail.js"></script>
   <script src="archive-synthesis.js"></script>
   <script src="archive.js"></script>
+  <script src="archive-stats.js"></script>
 </body></html>

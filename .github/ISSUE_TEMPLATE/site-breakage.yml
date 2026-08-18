@@ -1,0 +1,47 @@
+# 站点报障模板：问题按 CLAUDE.md 的「四层定位法」组织（composer / inject / submit / state），
+# 让报告直接指向坏在哪一层，省掉一轮来回追问。
+name: 站点适配失灵 / Site adapter broken
+description: 某个 AI 站点发不出去、切不了档、抓不到回答（站点改版类问题）
+title: "[site] "
+labels: ["site-breakage"]
+body:
+  - type: dropdown
+    id: site
+    attributes:
+      label: 哪个站点？/ Which site?
+      multiple: true
+      options:
+        - Claude (claude.ai)
+        - ChatGPT (chatgpt.com)
+        - Gemini (gemini.google.com)
+        - DeepSeek (chat.deepseek.com)
+        - 豆包 (www.doubao.com)
+        - 千问 (www.qianwen.com)
+        - Kimi (www.kimi.com)
+        - 元宝 (yuanbao.tencent.com)
+        - 智谱 (chatglm.cn)
+    validations:
+      required: true
+  - type: textarea
+    id: symptoms
+    attributes:
+      label: 现象四问 / Symptoms
+      description: 逐条回答，这决定了定位在哪一层
+      value: |
+        ① 输入框里有没有出现文字？/ Did text appear in the composer?
+        ② 有没有真的发出去？/ Was it actually sent?
+        ③ 有没有报错文案（原文或截图）？/ Any error message (exact text or screenshot)?
+        ④ 坏在哪一步——发送、切档、汇总复制、图片？/ Which step broke — send, tier switch, summary copy, images?
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: 诊断报告 / Diagnostic report
+      description: 控制台 → 站点选择窗 → 「巡检所选站点」→ 「复制诊断报告」，粘贴到这里（不含对话内容）
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: 环境 / Environment
+      placeholder: "PolyAsk 版本 · Chrome 版本 · 系统 · 显示缩放（如 125%）· 站点界面语言"

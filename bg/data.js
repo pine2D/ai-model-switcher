@@ -82,6 +82,27 @@ const Data = (() => {
     });
     return [...tags].sort((left, right) => left.localeCompare(right));
   }
+  // 站点健康统计（只读扫描）：聚合归档 results[].code——收集层失败信号，no_answer 集中出现 ≈ 该站
+  // answer() 锚点漂移，是唯一来自用户真机的维护信号。发送层失败不落盘（需新增持久化键，有意不做）；
+  // 已上云旧条目会被 trimBodies 裁掉 results，统计覆盖近 50 条 + 全部未上云条目。
+  async function archiveFailStats() {
+    const byHost = new Map();
+    await SyncStore.iterate("archives", (record) => {
+      if (Object.hasOwn(record, "deletedAt")) return;
+      const ts = Number(record.ts || record.createdAt) || 0;
+      for (const item of record.results || []) {
+        if (!item || !item.host) continue;
+        const row = byHost.get(item.host) || { host: item.host, label: item.label || item.host, total: 0, codes: {}, lastFailTs: 0, lastFailCode: null };
+        row.total++;
+        if (item.code) {
+          row.codes[item.code] = (row.codes[item.code] || 0) + 1;
+          if (ts >= row.lastFailTs) { row.lastFailTs = ts; row.lastFailCode = item.code; }
+        }
+        byHost.set(item.host, row);
+      }
+    });
+    return [...byHost.values()].sort((a, b) => b.total - a.total);
+  }
   async function writeArchiveDelete(id) {
     const old = await SyncStore.getArchive(id);
     if (!old) return null;
@@ -222,7 +243,7 @@ const Data = (() => {
   }
   return { deviceId: getDeviceId, resetDeviceId: () => { cachedDeviceId = undefined; deviceIdOpening = null; }, deviceState, noteStorageChanges, applyRemoteState, addHistory, deleteHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
-    addArchive, updateArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), searchArchives, archiveTags, getArchive: (id) => resolve("archive", id),
+    addArchive, updateArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), searchArchives, archiveTags, archiveFailStats, getArchive: (id) => resolve("archive", id),
     seedState, importRecords, exportRecords, projectState };
 })();
 
@@ -238,6 +259,7 @@ if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addList
     archiveGet: async () => ({ record: await Data.getArchive(msg.id) }),
     archiveSearch: () => Data.searchArchives(msg.cursor, msg.limit, msg.filters || {}),
     archiveTags: async () => ({ tags: await Data.archiveTags() }),
+    archiveFailStats: async () => ({ stats: await Data.archiveFailStats() }),
     archiveUpdate: async () => ({ record: await Data.updateArchive(msg.id, msg.patch), changed: "archiveChanged",
       changeToken: typeof msg.changeToken === "string" ? msg.changeToken : undefined }),
   };

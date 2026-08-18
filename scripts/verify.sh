@@ -36,6 +36,12 @@ for doc in "${DOC_REFS[@]}"; do
   [ -s "$doc" ] || { echo "✗ 文档引用失效或为空: $doc" >&2; exit 1; }
 done
 
+echo "[docs] 检查 .github 引用未失效"
+mapfile -t GH_REFS < <(grep -ohE '\.github/[A-Za-z0-9._/-]+\.ya?ml' CLAUDE.md README.md docs/*.md 2>/dev/null | sort -u)
+for ref in "${GH_REFS[@]}"; do
+  [ -s "$ref" ] || { echo "✗ 文档引用的 .github 文件失效或为空: $ref" >&2; exit 1; }
+done
+
 echo "[docs] 检查 test-*.js 均已登记"
 for file in scripts/test-*.js; do
   grep -qxF "node $file" scripts/verify.sh && continue   # 整行匹配：注释掉的登记行不算数
@@ -71,6 +77,7 @@ node scripts/test-claude-model.js
 node scripts/test-qwen-adapter.js
 node scripts/test-site-send-runtime.js
 node scripts/test-submit-recovery.js
+node scripts/test-diag-runtime.js
 
 echo "[test] 图片载荷与群发消息契约"
 node scripts/test-synthesis-model.js

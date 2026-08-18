@@ -69,7 +69,7 @@ for (const file of files) {
     assert.equal(sha256(svgBody(svg)), LUCIDE_BODY_HASHES[name], `${file} 的 ${name} 不是官方 Lucide 1.28.0 body`);
   }
 }
-assert.equal(lucideCount, 30, "内联 Lucide 图标应恰好为 30 个");
+assert.equal(lucideCount, 31, "内联 Lucide 图标应恰好为 31 个");
 assert.equal(brandCount, 2, "data-brand-icon 应恰好为 2 个");
 assert.deepEqual([...lucideNames].sort(), Object.keys(LUCIDE_BODY_HASHES).sort(), "内联 Lucide 应恰好覆盖 27 个固定名称");
 for (const file of ["popup/popup.css", "console/console.css"]) {

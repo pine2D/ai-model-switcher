@@ -24,7 +24,7 @@ Chrome MV3 扩展。**群发对比是核心**：一个问题群发到 9 个 AI �
 - **删除一律 tombstone**：写 `deletedAt` + 入 outbox，不物理删；清空提问历史也要留删除标记，否则其它设备下次同步把数据带回来。本机重置不删 Drive 数据（对用户的承诺语义，要改先改文案）。
 - **判定阈值绝不贴着实测值写**：`findComposer` 的高度阈值是 `>=16` 不是 `>=20`。标称 20px 的编辑器在开了显示缩放的机器上实测 19.999998px，零余量的 `>=20` 筛掉唯一真编辑器 → `findComposer` 返回 null → 整条群发链空跑到 44s 截止线（v0.15.2 事故根因）。**凡拿实测值定阈值，一律留 ≥20% 余量**（标称 20 → 写 16）。
 - **`deadline` 是绝对时间戳、全链路透传**：`bg/broadcast.js` 算出 → content `submitPrompt` → `adapter.submit`/`attach` → `confirmSubmitted`。**循环等待、以及 ≥1s 的固定等待，一律夹取**：`Math.min(x, Math.max(0, deadline - Date.now()))`。唯一例外是「让编辑器/菜单渲染跟上」的毫秒级 sleep（inject 后 150ms、点击后 250/400ms）——既有惯例可不夹取，但单条 ≤500ms，且不得在一条路径上叠成秒级。console 客户端兜底必须严格大于后台预算。
-- **只产 `code`，不产用户可见文案**：bg 与 content 一律返回错误码，翻译在 console 侧按界面语言做；bg 的轮询判定认 `r.code`，**绝不正则匹配文案**。新增用户可见码要同时补三张翻译表与三语词条（三张表的位置见 `docs/console-windows.md` 错误码全表），漏一处那个页面就裸露英文 reason。
+- **只产 `code`，不产用户可见文案**：bg 与 content 一律返回错误码，翻译在 console 侧按界面语言做；bg 的轮询判定认 `r.code`，**绝不正则匹配文案**。新增用户可见码要同时补四张翻译表与三语词条（四张表的位置见 `docs/console-windows.md` 错误码全表），漏一处那个页面就裸露英文 reason。
 - **适配器协议**：每站必需 `{think, fast, state, diagnose}` 四项，其余钩子可选、不实现 = 该能力静默降级（不是报错）。`state`/`diagnose`/`answer`/`submitted` **只读同步，不得开菜单**。`return false` = 落回 core 通用链；`throw` = 通用链对本站不安全，core 直接失败**不回退**。全表与九站映射见 `docs/adapters.md`。
 - **切档控件缺失一律 `throw`，不要静默 `return`**——静默 return 会让 `runMode` 误报「已切到」并弹假成功 toast。例外只有 4 处（DeepSeek 首屏 radio、Claude 无-effort-入口回退、Gemini 两处），全部写死在适配器里；加新例外前先读 `docs/adapters.md` 的例外清单及其理由。
 - **站点 UI 三条通用规则**：① 控件正在下沉到二级子菜单（顶层只留当前值），写新逻辑默认「顶层找不到 → 找子菜单入口 → 展开 → 再找」，别假设一层列表；② 同一页面里不同语义的列表可能共用同一个 role（ChatGPT 的 Model 与 Effort 都是 `[role=menuitemradio]`），取列表必须校验语义，否则「最高档」被点成末位模型；③ **每个菜单动作自己 `escMenus()` 收尾**，子菜单不关会罩住输入框，并让后续动作点空。
@@ -52,7 +52,7 @@ bash scripts/release.sh --publish    # 推 tag（--build-only 只验包；前置
 ## 架构（先在这里定位入口文件）
 
 - **群发编排**：`background.js`（SW 入口：快捷键转发、窗口登记清理、消息路由、`importScripts`）→ `bg/`（窗口/平铺/群发/伴侣窗/右键读页/辅助综合）。
-- **站点适配**：`content/core.js`（`__AMS` 注册表、`runMode`/`switchTier`、`submitPrompt`、`onMessage`）+ `content/{md,upload,pill,adapters-intl,adapters-cn,adapters-cn2}.js`。
+- **站点适配**：`content/core.js`（`__AMS` 注册表、`runMode`/`switchTier`、`submitPrompt`、`onMessage`）+ `content/{md,upload,pill,diag,adapters-intl,adapters-cn,adapters-cn2}.js`。
 - **数据与同步**：`bg/` 的 8 个数据模块（`store` 是 IndexedDB `polyask`，另有 data / sync-model / sync / drive / archive-model / transfer / data-admin）。
 - **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
 

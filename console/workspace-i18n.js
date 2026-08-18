@@ -1,4 +1,12 @@
 Object.assign(MSG, {
+  arc_stats: { en: "Site health stats", zh_CN: "站点健康统计", zh_TW: "網站健康統計" },
+  arc_statsScope: { en: "Counts only collections saved to the result library (send failures are not recorded; older synced entries are trimmed and excluded).", zh_CN: "仅统计已保存到结果库的收集结果；发送失败不落盘，较早已同步条目正文被裁剪后也不参与。", zh_TW: "僅統計已儲存到結果庫的蒐集結果；傳送失敗不落盤，較早已同步項目正文被裁剪後也不參與。" },
+  arc_statsSite: { en: "Site", zh_CN: "站点", zh_TW: "網站" },
+  arc_statsCollects: { en: "Collected", zh_CN: "收集次数", zh_TW: "蒐集次數" },
+  arc_statsNoAnswer: { en: "No answer", zh_CN: "无回答", zh_TW: "無回答" },
+  arc_statsOtherFail: { en: "Other collect failures", zh_CN: "其他收集失败", zh_TW: "其他蒐集失敗" },
+  arc_statsLastFail: { en: "Last failure", zh_CN: "最近失败", zh_TW: "最近失敗" },
+  arc_statsEmpty: { en: "No stats yet. Save results to the library first.", zh_CN: "暂无统计，先保存过结果才有数据。", zh_TW: "尚無統計，先儲存過結果才有資料。" },
   arc_sites: { en: "Answers by site", zh_CN: "各站回答", zh_TW: "各網站回答" },
   arc_question: { en: "Question", zh_CN: "问题", zh_TW: "問題" },
   arc_bestAnswer: { en: "Best answer: {0}", zh_CN: "最佳回答：{0}", zh_TW: "最佳答案：{0}" },

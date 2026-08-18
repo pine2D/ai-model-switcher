@@ -32,8 +32,11 @@
 | `attach(files, el, deadline)` | | `async` | 真值 = 已确认附件；`false` = 失败（按是否已过 deadline 归 `attachment_timeout` / `attachment_failed`）；**返回字符串 = 直接当错误码用**；抛异常 = `attachment_failed`。不实现就整个不写（core 如实报 `attachment_unsupported`），不要写半吊子上传 |
 | `thinkImage()` / `fastImage()` | | `async` | 有图时替代 `think`/`fast`（仅 DeepSeek，走 Vision 模式） |
 | `stop()` | | `async` | 仅 ChatGPT。**全仓无调用方，当前是死代码**——要么补 UI（如控制台「停止全部」），要么删 |
+| `sendSel` | | 字符串 | 发送键选择子，**仅 DeepSeek/Kimi/元宝 3 站声明**（发送键无 send/发送 标签且常驻），供 `content/diag.js` 巡检做只读存在性检查。**与本站 `submit` 的选择子同步维护**——`scripts/test-diag-runtime.js` 按字面量对账，脱钩会红。豆包**有意不声明**：其发送键空输入框时不在 DOM（非常驻，真机 2026-08-18），列进巡检会恒红 |
 
 **能力由钩子决定，不由清单决定**：`answer()` 决定该站能否进「汇总复制」（九站全实现）；`attach()` 决定能否收图（6 站实现：Claude / ChatGPT / DeepSeek / 豆包 / Kimi 走 `S.setInputFiles`，元宝走 `S.dropFiles`；Gemini / 千问 / 智谱**有意不实现**，真机实测三站都拒绝合成 drop/paste/change，报 `attachment_unsupported` 是正确行为）。这 6 站必须与 `console/sites.js` 里带 `image:true` 的 6 站完全一致。
+
+**巡检通用检查（`content/diag.js`）**：在全部适配器分卷之后注入，按已填充的注册表统一包装每站 `diagnose()`，前置两条只读检查——「输入框」（`findComposer()`，九站全部）与「发送键」（仅声明了 `sendSel` 的站）。新站/新分卷自动获得，无需自己写这两条；**有意不做全站发送键检查**：ChatGPT 等站空输入框时发送键被语音键替换，通用检查会在巡检（输入框常为空）时恒红误报。新开适配器分卷（如 `adapters-cn3.js`）挂 manifest 时**必须排在 `content/diag.js` 之前**，否则该卷站点拿不到通用检查（注册晚于包装，静默缺席不报错）。
 
 **什么时候才写 `submit`**：群发的发送/切档复用 `content/core.js` 的通用 `submitPrompt`/`runMode`，多数站点无需写 `submit`；**仅当发送键不带 `send`/`发送` 标签、且 Enter 提交不灵时**才加。当前实现分布：`submit` 4 站（DeepSeek / 豆包 / Kimi / 元宝）、`inject` 1 站（Kimi）、`submitted` 1 站（Kimi）、`stop` 1 站（ChatGPT）、`thinkImage`/`fastImage` 1 站（DeepSeek）。
 

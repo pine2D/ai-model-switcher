@@ -34,7 +34,7 @@
 | `sites.js` | 九站清单（console / compose / archive / scope / popup 五页共享） |
 | `console.css` / `archive.css` | 细条与归档页样式；`compose.html`/`scope.html` 共用 `console.css`（改细条外观改这里，`popup/popup.css`、`options/options.css` 各管自己那页） |
 | `theme.js` | 主题 auto/light/dark，`<head>` 内加载（console 系在 `../i18n.js` 之后、popup/options 在其之前） |
-| `scope.js` | 站点范围伴侣窗与分组管理 |
+| `scope.js` | 站点范围伴侣窗与分组管理；巡检触发/渲染与「复制诊断报告」（报障出口，配 `.github/ISSUE_TEMPLATE/site-breakage.yml`） |
 | `compose.js` | 提示词工作区：编辑、模板、历史与发送 |
 | `compose-context.js` | 提示词工作区的网页来源预览与载荷 |
 | `compose-synthesis.js` | 辅助综合配置、预览与单站发送（`MAX_PAYLOAD=60000`） |
@@ -42,13 +42,14 @@
 | `archive.js` | 归档页：管理「问题 + 各站回答」快照 |
 | `archive-detail.js` | 归档详情与人工评价控件 |
 | `archive-synthesis.js` | 归档内辅助综合、采集与保存 |
+| `archive-stats.js` | 站点健康统计：聚合归档 `results[].code`（bg 动作 `archiveFailStats`），只反映**收集层**失败——发送层失败不落盘 |
 | `workspace-i18n.js` | compose/archive 专属词条（`Object.assign(MSG, …)` 追加） |
 
 **加载顺序即依赖顺序**，写在各 html 里；新增细条功能先按这条链判断归属哪个已有文件：
 
 - `console.html`：head `../i18n.js → theme.js`；body 末 `sites(站点清单) → library(历史/模板读写) → images(选图与校验) → run-meta(一次性交接) → console(细条主逻辑) → status(圆点/翻译/播报)`。**`status.js` 共享 `console.js` 的全局**——`progress`/`lastSend` 声明在 status.js 而事件处理器在 console.js，顺序反了直接 ReferenceError。
 - `compose.html`：head 同上；body 末 `sites → workspace-i18n → compose-context → run-meta → synthesis-model → compose-synthesis → compose`。`compose.html?mode=synthesis` 是它的第二形态（辅助综合）。
-- `archive.html`：body 末 `sites → workspace-i18n → archive-detail → archive-synthesis → archive`。
+- `archive.html`：body 末 `sites → workspace-i18n → archive-detail → archive-synthesis → archive → archive-stats`。`archive-stats.js` 引用 `archive.js` 顶层的 `ARCH_ERR_KEYS`（classic script 全局词法作用域），顺序反了直接 ReferenceError。
 - `scope.html`：body 末 `sites → scope`。
 - `popup.html` / `options.html` 的 head 顺序与 console 系**相反**（先 `console/theme.js` 再 `../i18n.js`）；options 的 head 还多一条 `options-i18n.js`，body 末 `options.js → sync.js → data.js`。
 
@@ -79,7 +80,7 @@
 - **`submittedAfterRerender`**：Kimi 发送/切模会重挂页面并断开消息端口。只有新 content 明确回 `supported:true` 且连续 5 次确认「末条用户消息不存在」才判未发送、才允许重试一次；`supported:false` 或探测超时一律不重发。
 - **`isNewSessionUrl`**：按 origin + pathname 一致（忽略 query/hash 与尾斜杠）判断标签是否已停在新会话入口——这九站的会话 id 都落在 path（`/new→/chat/x`、`/→/c/x`、`/app→/app/x`）。已在入口的窗口跳过重载，省闪烁并保留用户未发送的输入。
 - 群发收尾：console 已最小化则整组保持最小化；否则按 `autoRaise` 设置置顶全部平铺窗再 `raiseConsole`。
-- 只读编排消息零副作用：`checkup`（逐站 `diagnose` 标芯片）、`collect`（逐站 `answer` → Markdown）。
+- 只读编排消息零副作用：`checkup`（逐站 `diagnose`，结果只渲染在 scope 伴侣窗行内，**不进主 console 芯片**——`status.js` 的 `applyResults` 按 `typeof r.ok === "boolean"` 分流，把巡检结果喂给它会被误画成群发圆点）、`collect`（逐站 `answer` → Markdown）。
 
 ## 消息与交接协议
 
@@ -93,7 +94,7 @@
 
 bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮询判定认 `r.code`，**绝不正则匹配文案**。
 
-**翻译表有三份，新增可见码要同时改**：`console/status.js` 的 `ERR_KEYS`（16 条）、`console/archive.js` 的 `ARCH_ERR_KEYS`（10 条）、`console/compose-synthesis.js` 的局部 `ERR_KEYS`（8 条）。只改 status.js，归档页或综合页会裸露英文 reason。
+**翻译表有四份，新增可见码要同时改**：`console/status.js` 的 `ERR_KEYS`（16 条）、`console/archive.js` 的 `ARCH_ERR_KEYS`（10 条）、`console/compose-synthesis.js` 的局部 `ERR_KEYS`（8 条）、`console/scope.js` 的 `CHECK_ERR_KEYS`（2 条，巡检失败码 no_window/not_ready，复用 con_err 词条）。漏一份，那个页面就裸露英文 reason。
 
 **16 个用户可见码**：`timeout`、`composer_not_found`、`inject_failed`、`submit_unconfirmed`、`tier_unconfirmed`、`image_invalid`、`attachment_unsupported`、`attachment_failed`、`attachment_timeout`、`attachment_action_required`、`no_window`、`not_ready`、`cancelled`、`checkup_ok`、`no_answer`、`error`。
 
@@ -179,6 +180,7 @@ bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮
 - **IndexedDB**：库名 `polyask`，`DB_VERSION = 2`，五个 store —— `history`（keyPath `id`，索引 `lastUsed=[lastUsedAt,id]`）、`archives`（keyPath `id`，索引 `created=[createdAt,id]`）、`outbox`（keyPath `key`，索引 `next=[nextAt,key]` 与 `entity=[kind,entityId]`）、`files`（keyPath `fileId`，索引 `logicalKey`）、`meta`（keyPath `key`，存 `deviceId`/`deviceState`）。
 - 历史与归档**不设条数上限**，但本地只缓存近期正文：`trimBodies(200, 50)` —— 历史保留最近 200 条正文、归档保留最近 50 条，更旧的按需从 Drive 拉回。**UI 必须处理「元数据在、正文异步加载中、加载失败」三态。**
 - 归档条目带搜索/收藏/标签/备注/最佳答案标记，这些字段参与 Drive 同步：改字段要同步 `bg/archive-model.js` 的规范化逻辑。
+- `archiveFailStats`（`bg/data.js`）只读扫描归档聚合 `results[].code`：归档的 code 只来自收集链（`no_window`/`not_ready`/`no_answer`），`no_answer` 集中出现 ≈ 该站 `answer()` 锚点漂移；发送层失败不落盘（要落盘就触发持久化键五处登记，有意不做）；已上云旧条目被 `trimBodies` 裁掉 `results` 后不参与统计。
 - 迁移包：`bg/transfer.js` 的 `KINDS` 五类（setting / template / group / history / archive），`format=polyask-transfer`，`VERSION=1`，JSONL。
 - 新增持久化键的多处登记清单见 `CLAUDE.md` 硬约束。三张 local 键表的分工：`bg/sync.js` 的 `LOCAL_KEYS`（7 键，触发/参与 Drive 同步投影）、`bg/data-admin.js` 的 `LOCAL_KEYS`（13 键，重置清理清单，比同步白名单多 `amsConsolePrompt`/`amsConsolePrefill`/`amsHistory`/`amsArchive`/`amsSyncConfig`/`amsSyncStatus`；其中 `amsHistory`/`amsArchive` 是**历史遗留 local 键，只用于重置清理**，现役数据在 IndexedDB，别照着重置清单去 `storage.local` 找）、`bg/data.js` 的 `SETTINGS`（4 键，跨设备设置投影）。前四键（`amsLang`/`amsTheme`/`displayMode`/`amsAutoRaise`）三表重合。
 
@@ -194,7 +196,7 @@ bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮
 | `contextMenus` | 两条右键菜单「用 PolyAsk 比较所选内容 / 当前网页」（id `ams-send-selection` / `ams-send-page`） |
 | `activeTab` + `scripting` | 右键菜单触发时读当前页正文，唯一使用点是 `bg/page-context.js` 的 `chrome.scripting.executeScript` |
 
-`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入 8 个文件，顺序 `i18n.js → content/core.js → upload.js → md.js → adapters-intl.js → adapters-cn.js → adapters-cn2.js → pill.js`，`run_at: document_idle`）。
+`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入 9 个文件，顺序 `i18n.js → content/core.js → upload.js → md.js → adapters-intl.js → adapters-cn.js → adapters-cn2.js → diag.js → pill.js`，`run_at: document_idle`；`diag.js` 必须在全部适配器分卷之后——它按已填充的注册表统一包装 `diagnose`）。
 
 右键读页细则：菜单只在 `documentUrlPatterns: http://*/*, https://*/*` 下注册，读取前还要 `canRead(tab)` 再校验一次协议；正文上限 30000 字符，超长保留首 24000 + 尾 6000 并打 `truncated` 标记；菜单标题按 `storage.local.amsLang` 三语手写在 `MENU_COPY`（不走 `i18n.js`），`installMenus` 用 `installQueue` 串行化防重复创建。
 

@@ -1,0 +1,32 @@
+name: Release watch
+
+# 模型发布情报哨兵：定时轮询五家官方 changelog/RSS，有新条目自动开 issue（脚本见 scripts/watch-releases.js）。
+# 注意：仓库 60 天无 push 时 GitHub 会自动停用 scheduled workflow（Actions 页会有启用横幅，重新点一下即可）。
+# 定时任务失败会触发 GitHub 的 workflow 失败邮件——情报源断链因此自暴露，不会静默失明。
+on:
+  schedule:
+    - cron: "23 2 * * 1,4" # 每周一/四 UTC 02:23（北京 10:23），避开整点高峰
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write # 开情报 issue 需要
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # 慢流式响应可绕过脚本内 30s abort，不给上限会挂满 GitHub 默认 6 小时
+    steps:
+      # 第三方 Action 固定到 commit SHA（同 ci.yml/release.yml 的供应链纪律）
+      - name: 检出源码
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: 轮询情报源并开 issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/watch-releases.js

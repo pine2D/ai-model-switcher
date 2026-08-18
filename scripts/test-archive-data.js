@@ -112,6 +112,26 @@ async function main() {
   const migrated = { kind: "archive", value: { ...remote, id: "00000000-0000-4000-8000-000000000006" } };
   assert.equal((await data.importRecords([migrated])).archives, 1, "迁移导入必须报告实际归档写入数");
   assert.equal((await data.importRecords([migrated])).archives, 0, "迁移重复版本不得报告归档变化");
+  // 站点健康统计：按站聚合 results[].code，tombstone 与无 results（被 trimBodies 裁过）的条目不计
+  await data.addArchive({ id: "00000000-0000-4000-8000-000000000011", ts: 1000, text: "s1",
+    results: [{ host: "stat-a", label: "A", text: "ok" }, { host: "stat-b", label: "B", text: null, code: "no_answer" }] });
+  await data.addArchive({ id: "00000000-0000-4000-8000-000000000012", ts: 2000, text: "s2",
+    results: [{ host: "stat-a", label: "A", text: null, code: "not_ready" }, { host: "stat-b", label: "B", text: null, code: "no_answer" }] });
+  const trimmed = await data.addArchive({ id: "00000000-0000-4000-8000-000000000013", ts: 3000, text: "s3", results: [] });
+  delete archives.get(trimmed.id).results; // 模拟 trimBodies 裁掉 results 的旧条目
+  const stats = await data.archiveFailStats();
+  const a = stats.find((row) => row.host === "stat-a"), b = stats.find((row) => row.host === "stat-b");
+  assert.equal(a.total, 2); assert.deepEqual(a.codes, { not_ready: 1 });
+  assert.equal(a.lastFailTs, 2000); assert.equal(a.lastFailCode, "not_ready");
+  assert.equal(b.total, 2); assert.deepEqual(b.codes, { no_answer: 2 });
+  const statsResponse = await new Promise((resolve) => dataMessageListener({ source: "AMS_DATA", action: "archiveFailStats" }, null, resolve));
+  assert.equal(statsResponse.ok, true);
+  assert.ok(Array.isArray(statsResponse.stats) && statsResponse.stats.length >= 2, "archiveFailStats 消息动作必须返回统计数组");
+  // tombstone 守卫：带 deletedAt 的条目即使还残留 results 也不得计入（用户删了结果，统计里不能还在）
+  archives.set("tomb-stat", { id: "tomb-stat", createdAt: 1, updatedAt: 2, deletedAt: 2, ts: 9000,
+    results: [{ host: "stat-a", label: "A", text: null, code: "no_answer" }] });
+  const afterTomb = await data.archiveFailStats();
+  assert.equal(afterTomb.find((row) => row.host === "stat-a").total, 2, "tombstone 条目不得计入站点健康统计");
   console.log("archive-data tests passed");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

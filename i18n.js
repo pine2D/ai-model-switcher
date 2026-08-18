@@ -121,6 +121,9 @@ const MSG = {
   con_checking: { en: "Checking…", zh_CN: "巡检中", zh_TW: "巡檢中" },
   con_checkupOk: { en: "Checkup passed", zh_CN: "自检通过", zh_TW: "自檢通過" },
   scope_checkDone: { en: "{0} passed · {1} need attention", zh_CN: "{0} 站正常 · {1} 站需处理", zh_TW: "{0} 站正常 · {1} 站需處理" },
+  scope_report: { en: "Copy diagnostic report", zh_CN: "复制诊断报告", zh_TW: "複製診斷報告" },
+  scope_reportCopied: { en: "Diagnostic report copied", zh_CN: "已复制诊断报告", zh_TW: "已複製診斷報告" },
+  scope_reportHint: { en: "When reporting, note: 1) does text appear in the composer 2) was it actually sent 3) any error message 4) which step broke. Submit: https://github.com/pine2D/polyask/issues/new/choose", zh_CN: "报障请说明：①输入框有没有出现文字 ②有没有真的发出去 ③有没有报错文案 ④坏在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose", zh_TW: "回報請說明：①輸入框有沒有出現文字 ②有沒有真的送出 ③有沒有錯誤文案 ④壞在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose" },
   con_errNoWindow: { en: "No window is open. Select Tile or Send first.", zh_CN: "尚未打开窗口，请先平铺或发送。", zh_TW: "尚未開啟視窗，請先平鋪或傳送。" },
   con_errNotReady: { en: "Not ready. Reload the site tab; this often happens after the extension reloads.", zh_CN: "页面未就绪，请刷新该站标签页。扩展刚重载时常会出现此情况。", zh_TW: "頁面尚未就緒，請重新整理該網站的分頁。擴充功能剛重新載入時常會出現此情況。" },
   con_collectTitle: { en: "Copy the selected sites' latest answers as Markdown · Alt+C", zh_CN: "将所选站点的最新回答汇总为 Markdown 并复制 · Alt+C", zh_TW: "將所選網站的最新回答彙整為 Markdown 並複製 · Alt+C" },
@@ -233,6 +236,8 @@ const MSG = {
   diag_thinkBtn:     { en: "Thinking toggle",                                   zh_CN: "思考开关",                        zh_TW: "思考開關" },
   diag_deepThinking: { en: "Deep Thinking toggle",                              zh_CN: "Deep Thinking 开关",              zh_TW: "Deep Thinking 開關" },
   diag_thinkButton:  { en: "Thinking button",                                   zh_CN: "思考按钮",                        zh_TW: "思考按鈕" },
+  diag_composer:     { en: "Composer",                                          zh_CN: "输入框",                          zh_TW: "輸入框" },
+  diag_sendKey:      { en: "Send button",                                       zh_CN: "发送键",                          zh_TW: "發送鍵" },
 };
 const I18N_LANGS = ["en", "zh_CN", "zh_TW"];
 function _resolveAuto() {
