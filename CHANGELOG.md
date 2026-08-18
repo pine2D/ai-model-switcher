@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.16.0] - 2026-08-18
+
 ### 新增
 
 - 巡检更全面：每站健康自检统一新增「输入框」检查；发送键无文字标签且常驻的三站（DeepSeek/Kimi/元宝）另检查发送键是否存在，站点改版可在群发前被巡检发现
@@ -374,7 +376,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.15.2...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/pine2D/polyask/compare/v0.15.2...v0.16.0
 [0.15.2]: https://github.com/pine2D/polyask/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/pine2D/polyask/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/pine2D/polyask/compare/v0.14.0...v0.15.0
