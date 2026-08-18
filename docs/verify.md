@@ -25,7 +25,7 @@
 - `__AMS` 在 content script 隔离世界，主世界 DevTools 控制台默认看不到（要切上下文）。
 - **开发机与用户机不等价**：开发机是 WSL2 + Linux chrome-dbg（启动别名带 `--force-device-scale-factor=1.5`，实测 `devicePixelRatio=1.5`——**不是无缩放**，缩放类量级问题本机可复现；扩展干净、界面英文），用户机是 Windows Chrome（缩放比例可能不同、装了多个同类 AI 扩展、界面可能非英文），layout 数值不同。本机跑通不构成「已修复」的证据；本机复现不出时先按 `CLAUDE.md` 的「先要现象再猜层次」定位到 composer / inject / submit / state 哪一层。
 
-## 工具（都在 `scratchpad/`，已 gitignore、克隆后没有）
+## 工具（本节的在 `scratchpad/`，已 gitignore、克隆后没有；**入库的 CDP 工具**见文末「哨兵与报障」：`scripts/probe-drift.js`、`scripts/capture-evidence.js`，共用 `scripts/lib/cdp-min.js`）
 
 - **`ams-eval.js <urlSub> <jsFile|-e expr>` 是首选**：只在 PolyAsk 自己的隔离世界执行表达式。
 - `iso-eval.js` 会在全部 ~37 个 world 重复执行，**对有副作用的代码不可用**（会重复点击/重复发送），只在「找不到 `__AMS`、需要排查它在哪个 world」时才用。多扩展环境有多个 isolated world，且同名 world 可能有多个（导航后旧 context 未回收）——要挑真正挂着 `__AMS` 的那个，别只看最后一个。
@@ -52,3 +52,5 @@
 
 - **模型发布哨兵**：`scripts/watch-releases.js` + `.github/workflows/release-watch.yml`，每周一/四轮询五家官方 changelog/RSS，有新条目自动开 issue（label `release-watch`）。定位是闹钟——公告名 ≠ 网页 UI 标签，**禁止直接抄进适配器正则**（先真机核对）。真机/联网脚本**不得用 `test-` 前缀命名**：verify.sh 会强制把 `test-*.js` 登记进无浏览器无网络的 CI。仓库 60 天无 push 时 GitHub 会停用 scheduled workflow，Actions 页点一下即可重新启用。**`release-watch` label 是去重依据**（脚本按它拉已见标题集），分流整理时不要从旧 issue 上摘掉，否则对应条目会被重复开单。
 - **用户报障出口**：scope 窗「复制诊断报告」（巡检结果 + 版本 + 语言，不含对话内容）+ `.github/ISSUE_TEMPLATE/site-breakage.yml`（按 `CLAUDE.md` 四层定位法预置问题）。
+- **漂移探针**：`node scripts/probe-drift.js`——只读 chrome-dbg 里**已经开着**的标签（关着即 skip，不导航不登录不等水合），采集 diagnose/state/标签原文串/composer 尺寸/dpr 快照，逐站即时追加进 `scratchpad/probe-log.jsonl`（gitignored，自动建目录，超 2000 行自动轮转留 1000）。与上次快照 diff 后**双轨输出**：`!` 警报 = 可操作漂移（检查转红、composer 消失/尺寸 ≥20% 突变、标签串→∅、登录墙出现）；`~` 参考 = 环境与使用痕迹（手动切档导致的 state/标签变化、dpr、界面语言切换、登录墙在场的锚点差异）。默认不激活标签，后台 eval 超时（逐请求 8s）时加 `--activate`；复核已看过的提醒用 `--dry`（不落盘——警报会被本轮快照消费，落盘后复跑即绿）。检查项按**下标**对齐而非名字（名字是 t() 界面语言串）。标签探针的登记与方法名由 `scripts/test-probe-drift.js` 静态对账（加站/改名 CI 会红）。
+- **取证脚本**：`node scripts/capture-evidence.js <hostSub> [tag]`——只读、人工监督下使用：composer 祖先链 + 全页可见交互控件清单（role/testid/aria/40 字截断文本/几何）。菜单展开前后各抓一份、diff 两份清单即得「展开后才存在」的锚点候选。隐私硬规则：侧栏/会话列表/消息容器整体排除，**产物外发给任何模型前先人工过目**。

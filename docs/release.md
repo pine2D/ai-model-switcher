@@ -27,6 +27,7 @@ bash scripts/release.sh --publish      # 推 v* tag；Release workflow 随后发
 - 在 English / 简体中文 / 繁體中文下逐页看 popup、console、scope、compose、archive、options：切换语言后无截断、异常换行或缺失的 `aria-label`。
 - 核对 `README.md`、`CHANGELOG.md`、扩展说明和设置页是否覆盖本版新增功能、限制、**权限**、隐私行为及最新模型映射；删除已失效的入口与描述。改过权限的版本必须同时看 options 的 `#privacy` 区。
 - **破坏性操作、明文存储、权限范围、不可撤销后果、数据保留规则不得弱化**；按钮、确认文案与实际动作必须一致。特别是「本机重置不删 Drive 数据」「删除是 tombstone」这两条承诺语义。
+- 发版前跑 `node scripts/probe-drift.js`（后台标签冻结时加 `--activate`），要求**覆盖 9/9 站**且 `!` 警报逐条处置；复核用 `--dry`（警报会被本轮落盘的快照消费，直接复跑只会看到绿）。
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
 - 更新 `CLAUDE.md` 顶部的「最后与代码核对」日期与版本。
 - **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。

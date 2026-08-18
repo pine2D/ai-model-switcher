@@ -207,9 +207,13 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 - 无 `submit`，靠通用链（先试标签按钮，实际靠 Enter，textarea 可发）。`answer()` 取末个 `.answer-content` 内、排除 `.text-advance-thinking-content` 后的最后一个 `.markdown-body`。**有意不实现 `attach`**（站点 input 忽略扩展派发的 input/change，且无可复用预览节点）。
 - **加载极重**：水合期（~30s）连扩展消息都无响应，安定后正常。真机验证要新开标签 + 长等待。
 
-## 站点改版应对剧本
+## 站点改版应对剧本（修复流水线）
 
-1. 真机复现，记下现象与 `code`，**先确认坏在哪一层**：未注入 / composer / inject / submit / state / answer。
-2. **只改锚点，不动错误码协议与编排契约**——协议稳定性是这个仓库最贵的资产。
-3. 九站回归（巡检 `diagnose` 就是现成的 canary）。
-4. 更新本文件对应站点卡 + `CHANGELOG.md` 未发布段；模型正则改了同时检查 `state()` 的判定分支。
+触发源按可信度排序：用户诊断报告（scope 窗「复制诊断报告」，自带 dpr/UA）＞ 巡检红 / `scripts/probe-drift.js` 变化提醒 ＞ 哨兵 issue（label `release-watch`——只代表官方发了公告，不代表 UI 已变）。
+
+1. **定层**：真机复现，记下现象与 `code`，先确认坏在哪一层——未注入 / composer / inject / submit / state / answer（用户报障按「四问」问齐）。probe-drift 的可操作信号（`!` 警报）：「检查转红」「composer 消失/尺寸突变」指向 composer/菜单层，「标签串 → ∅」指向 state 层或适配器方法改名；state/标签串的普通变化多是手动切档的使用痕迹（探针已归入 `~` 参考档，别当漂移追）。
+2. **取证**：`node scripts/capture-evidence.js <hostSub> base` 抓基线清单；人工在浏览器里展开目标菜单后换个 tag 再抓一份，两份 diff 即得「展开后才存在」的锚点候选（菜单/发送链路类根因必需）。产物在 `scratchpad/`，**外发给任何模型前先人工过目**（隐私规则见脚本头注释）。
+3. **提案**（可交给 LLM 生成，人审兜底）：按证据改锚点。硬性护栏逐条过——判定阈值留 ≥20% 余量；锚点优先级 data-testid ＞ aria/role ＞ 中英双写文本（见「通用编写原则」）；同 role 列表先校验语义；缺控件 throw 不静默（例外只有上文 4 处）；不碰 `submitted()`/自动重发铁律；**只改锚点，不动错误码协议与编排契约**——协议稳定性是这个仓库最贵的资产。
+4. **离线回归**：补/改对应 `scripts/test-*.js`（改模型正则按惯例配专项测试），`bash scripts/verify.sh` 全绿。
+5. **人审 diff → 真机回归**：重载扩展 + 刷新站点标签，生产 `__AMS` 复现，九站巡检（`diagnose` 就是现成的 canary）；再跑一次 probe-drift 确认标签串与检查项回到预期。
+6. **收尾**：更新本文件对应站点卡 + `CHANGELOG.md` 未发布段；模型正则改了同时检查 `state()` 的判定分支。
