@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
 import type { DesktopCopy } from "../shared/copy";
 import type { PendingSynthesis, SynthesisCandidate } from "../shared/synthesis";
+import { formatDateTime } from "../shared/format";
 import { ArchiveDetail } from "./archive-detail";
-import { deleteIntent, type ArmedArchiveDelete } from "./archive-delete";
+import { deleteConfirmationRemaining, deleteIntent, type ArmedArchiveDelete } from "./archive-delete";
 import {
   ArchiveIcon,
   CloseIcon,
@@ -48,6 +49,13 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
   const { copy, selected } = props;
   const [armed, setArmed] = useState<ArmedArchiveDelete | null>(null);
   useEffect(() => setArmed(null), [selected?.id]);
+  useEffect(() => {
+    if (!armed) return undefined;
+    const timer = window.setTimeout(() => {
+      setArmed((current) => current === armed ? null : current);
+    }, deleteConfirmationRemaining(armed, Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [armed]);
   const requestDelete = () => {
     if (!selected) return;
     const intent = deleteIntent(armed, selected.id, Date.now());
@@ -55,13 +63,13 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
     if (intent.action === "delete") props.onDelete(selected.id);
   };
   return (
-    <section className="archive-workspace" aria-label={copy.archiveTitle}>
+    <section className="archive-workspace" aria-label={copy.archiveTitle} aria-busy={props.busy}>
       <header className="archive-toolbar">
         <strong><ArchiveIcon />{copy.archiveTitle}</strong>
         <div className="archive-filters">
-          <input type="search" value={props.query} placeholder={copy.archiveSearch} aria-label={copy.archiveSearch} onChange={(event) => props.onQueryChange(event.target.value)} />
+          <input type="search" name="archive-search" autoComplete="off" value={props.query} placeholder={copy.archiveSearch} aria-label={copy.archiveSearch} onChange={(event) => props.onQueryChange(event.target.value)} />
           <button type="button" className={props.favoriteOnly ? "active" : ""} title={copy.favoriteArchives} aria-label={copy.favoriteArchives} aria-pressed={props.favoriteOnly} onClick={() => props.onFavoriteFilterChange(!props.favoriteOnly)}><StarIcon /></button>
-          <select value={props.selectedTag} aria-label={copy.archiveTags} onChange={(event) => props.onTagChange(event.target.value)}>
+          <select name="archive-tag-filter" value={props.selectedTag} aria-label={copy.archiveTags} onChange={(event) => props.onTagChange(event.target.value)}>
             <option value="">{copy.allArchiveTags}</option>
             {props.tags.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
           </select>
@@ -78,7 +86,7 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
         <aside className="archive-list" aria-label={copy.archiveTitle}>
           {props.items.map((record) => (
             <button type="button" key={record.id} aria-current={record.id === selected?.id ? "true" : undefined} onClick={() => props.onSelect(record.id)}>
-              <time>{new Date(record.ts).toLocaleString(props.locale)}</time>
+              <time dateTime={new Date(record.ts).toISOString()}>{formatDateTime(record.ts, props.locale)}</time>
               <span>{record.task || record.preview || "—"}</span>
               <small>{record.results.map((result) => result.label).join(" · ")}</small>
               {record.favorite || record.tags.length ? <span className="archive-badges">{record.favorite ? <StarIcon /> : null}{record.tags.map((tag) => <i key={tag}>{tag}</i>)}</span> : null}

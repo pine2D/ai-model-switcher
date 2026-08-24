@@ -6,6 +6,7 @@ import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
 import type { PendingSynthesis, SynthesisCandidate, SynthesisSendRequest } from "../shared/synthesis";
 import { ArchiveWorkspace } from "./archive-workspace";
+import { SerialActions, type ActionFailure } from "./serial-actions";
 import { SynthesisWorkspace } from "./synthesis-workspace";
 
 interface ArchiveSurfaceProps {
@@ -43,6 +44,8 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   const [status, setStatus] = useState("");
   const [synthesisId, setSynthesisId] = useState<string | null>(null);
   const requestEpoch = useRef(0);
+  const actionQueue = useRef<SerialActions | null>(null);
+  if (!actionQueue.current) actionQueue.current = new SerialActions(setBusy, setStatus);
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
 
   const load = useCallback(async (preferredId?: string): Promise<void> => {
@@ -67,12 +70,8 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [load, props.preferredId, query]);
 
-  const run = async (action: () => Promise<void>, failure: string | ((error: unknown) => string)): Promise<void> => {
-    if (busy) return;
-    setBusy(true);
-    try { await action(); } catch (error) { setStatus(typeof failure === "function" ? failure(error) : failure); }
-    finally { setBusy(false); }
-  };
+  const run = (action: () => Promise<void>, failure: ActionFailure): Promise<void> =>
+    actionQueue.current!.run(action, failure);
   const markdown = async (): Promise<string> => {
     if (!selected) throw new Error("no_archive");
     return window.polyask.archiveMarkdown(selected.id, props.locale);

@@ -100,8 +100,8 @@ export class SyncEngine {
   }
 
   disconnect(): Promise<SyncStatus> {
+    this.activeController?.abort();
     return this.serialize(async () => {
-      this.activeController?.abort();
       let failed = false;
       try { await this.options.auth.disconnect(); } catch { failed = true; }
       this.options.repository.clearDriveFiles();
@@ -111,6 +111,7 @@ export class SyncEngine {
   }
 
   clearRemote(): Promise<SyncStatus> {
+    this.activeController?.abort();
     return this.serialize(async () => {
       const config = this.options.repository.config();
       if (!config.connected) return this.setStatus("auth");

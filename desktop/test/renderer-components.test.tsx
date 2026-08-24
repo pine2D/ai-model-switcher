@@ -30,6 +30,7 @@ test("command bar renders one compact command surface with stateful controls", (
       imageControl={<span data-test="images" />}
       sendBlockedReason={null}
       synthesisPending={false}
+      syncStatus={{ state: "idle", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: false, secureTokenStorage: true }}
       isMac={false}
       expanded={false}
       onTextChange={noop}
@@ -68,6 +69,48 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.match(html, /aria-label="Collect and copy selected answers"/);
   assert.match(html, /aria-label="Open result library"/);
   assert.match(html, /data-test="images"/);
+  assert.doesNotMatch(html, /sync-attention/);
+});
+
+test("command bar surfaces actionable sync state without consuming toolbar width", () => {
+  const html = renderToStaticMarkup(
+    <CommandBar
+      copy={getCopy("en")}
+      promptRef={createRef<HTMLTextAreaElement>()}
+      text=""
+      tier={null}
+      runState="idle"
+      auxiliaryBusy={false}
+      layoutMode="overview"
+      selectedCount={9}
+      totalSites={9}
+      activeCount={0}
+      drawerOpen={false}
+      imageControl={null}
+      sendBlockedReason={null}
+      synthesisPending={false}
+      syncStatus={{ state: "auth", connected: false, pending: 2, errorCount: 1, readOnly: false, oauthConfigured: true, secureTokenStorage: true }}
+      isMac={false}
+      expanded={false}
+      onTextChange={noop}
+      onSubmit={noop}
+      onCancel={noop}
+      onTierChange={noop}
+      onLayoutChange={noop}
+      onExpandedChange={noop}
+      onToggleDrawer={noop}
+      onNewSession={noop}
+      onCollectAnswers={noop}
+      onOpenArchive={noop}
+      onCollectSynthesis={noop}
+      onOpenSettings={noop}
+      onPasteImages={noop}
+    />
+  );
+
+  assert.match(html, /class="sync-attention sync-auth"/);
+  assert.match(html, /aria-label="Settings: Sign in again to continue"/);
+  assert.match(html, /data-sync-state="auth"/);
 });
 
 test("image picker stays icon-first and exposes removable previews and scope warning", () => {
@@ -114,7 +157,7 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
       }]}
       onClose={noop}
       onSelectionChange={noop}
-      onSaveGroup={noop}
+      onSaveGroup={async () => true}
       onDeleteGroup={noop}
     />
   );
@@ -125,6 +168,9 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
   assert.match(html, /aria-label="Delete Research"/);
   assert.match(html, /data-group-id="research"/);
   assert.match(html, /Save current selection/);
+  assert.match(html, /name="group-name"/);
+  assert.doesNotMatch(html, /name="group-name"[^>]*disabled/);
+  assert.match(html, /group-save-hint/);
 });
 
 test("site frames keep all nine live placements and accessible actions", () => {

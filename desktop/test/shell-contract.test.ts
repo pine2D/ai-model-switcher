@@ -37,11 +37,14 @@ test("application menu offers a keyboard route back to the prompt", () => {
   assert.match(renderer, /onFocusPrompt/);
 });
 
-test("CI runs desktop tests and TypeScript checks", () => {
+test("CI tests and packages desktop on Linux, Windows and macOS", () => {
   const workflow = readFileSync("../.github/workflows/ci.yml", "utf8");
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run typecheck/);
+  assert.match(workflow, /windows-latest/);
+  assert.match(workflow, /macos-latest/);
+  assert.match(workflow, /npm run package/);
 });
 
 test("shell navigation and IPC trust both lock to the local top frame", () => {

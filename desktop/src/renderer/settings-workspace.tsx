@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DesktopCopy } from "../shared/copy";
 import { formatCopy } from "../shared/copy";
 import { CLEAR_REMOTE_CONFIRMATION, type SyncStatus } from "../shared/sync";
 import { CloseIcon } from "./icons";
+import { describeSync } from "./sync-status";
 
 interface SettingsWorkspaceProps {
   readonly copy: DesktopCopy;
@@ -21,6 +22,11 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
   const [confirmation, setConfirmation] = useState("");
   const [feedback, setFeedback] = useState("");
   const statusText = describeSync(props.copy, props.status);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape" && !busy) props.onClose(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [busy, props.onClose]);
   const lastSuccess = props.status.lastSuccessAt
     ? formatCopy(props.copy.syncLastSuccess, {
       time: new Intl.DateTimeFormat(props.locale, { dateStyle: "short", timeStyle: "short" })
@@ -45,7 +51,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
   };
 
   return (
-    <main className="settings-workspace">
+    <main className="settings-workspace" aria-busy={busy}>
       <header className="settings-toolbar">
         <strong>{props.copy.settings}</strong>
         <button type="button" title={props.copy.closeArchive} aria-label={props.copy.closeArchive} onClick={props.onClose}><CloseIcon /></button>
@@ -80,7 +86,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
           <p>{props.copy.syncClearDescription}</p>
           <label>
             <span>{props.copy.syncClearInstruction}</span>
-            <input value={confirmation} autoComplete="off" spellCheck={false} onChange={(event) => setConfirmation(event.target.value)} />
+            <input name="clear-cloud-confirmation" value={confirmation} autoComplete="off" spellCheck={false} onChange={(event) => setConfirmation(event.target.value)} />
           </label>
           <button
             type="button"
@@ -96,22 +102,4 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
       <footer className="archive-status" role="status" aria-live="polite">{feedback || statusText}</footer>
     </main>
   );
-}
-
-function describeSync(copy: DesktopCopy, status: SyncStatus): string {
-  const byState: Record<SyncStatus["state"], string> = {
-    idle: copy.syncStateIdle,
-    syncing: copy.syncStateSyncing,
-    offline: copy.syncStateOffline,
-    auth: copy.syncStateAuth,
-    blocked: copy.syncStateBlocked,
-    waiting: copy.syncStateWaiting,
-    schema: copy.syncStateSchema,
-    error: copy.syncStateError
-  };
-  if (status.reason === "drive_disabled") return copy.syncReasonDriveDisabled;
-  if (status.reason === "quota") return copy.syncReasonQuota;
-  if (status.reason === "policy") return copy.syncReasonPolicy;
-  if (status.reason === "oauth_not_configured") return copy.syncReasonOauthMissing;
-  return byState[status.state];
 }

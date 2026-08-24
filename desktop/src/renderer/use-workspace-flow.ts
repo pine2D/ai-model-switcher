@@ -42,8 +42,14 @@ export function useWorkspaceFlow(
       setWorkspace((current) => ({ ...current, tier }));
       void window.polyask.setTier(tier).then(accept).catch(recover);
     },
-    saveGroup: (name: string) => {
-      void window.polyask.saveGroup({ name, sites: [...selectionRef.current] }).then(accept).catch(recover);
+    saveGroup: async (name: string): Promise<boolean> => {
+      try {
+        accept(await window.polyask.saveGroup({ name, sites: [...selectionRef.current] }));
+        return true;
+      } catch {
+        recover();
+        return false;
+      }
     },
     deleteGroup: (id: string) => {
       void window.polyask.deleteGroup(id).then(accept).catch(recover);

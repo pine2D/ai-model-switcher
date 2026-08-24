@@ -24,6 +24,7 @@ import { useSynthesisFlow } from "./use-synthesis-flow";
 import { useWorkspaceFlow } from "./use-workspace-flow";
 import "./styles.css";
 import "./settings.css";
+import "./accessibility.css";
 
 const INITIAL_LAYOUT: LayoutState = {
   mode: "overview",
@@ -225,6 +226,7 @@ function App(): React.JSX.Element {
         )}
         sendBlockedReason={imageWarning}
         synthesisPending={!!synthesis.pending}
+        syncStatus={syncStatus}
         isMac={navigator.userAgent.includes("Mac")}
         expanded={composerExpanded}
         onTextChange={setText}

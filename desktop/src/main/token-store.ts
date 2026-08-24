@@ -8,6 +8,11 @@ export interface TokenCrypto {
   readonly decrypt: (value: Buffer) => Promise<string>;
 }
 
+export async function safeEncryptionAvailability(check: () => Promise<boolean>): Promise<boolean> {
+  try { return await check(); }
+  catch { return false; }
+}
+
 export class TokenStore {
   private memoryToken: string | null = null;
 

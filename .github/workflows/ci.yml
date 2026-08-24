@@ -24,6 +24,13 @@ jobs:
       - name: 校验源码并构建发布产物
         run: bash scripts/release.sh --build-only
 
+      - name: 固定桌面端 Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
       - name: 安装桌面端依赖
         working-directory: desktop
         run: npm ci
@@ -43,3 +50,39 @@ jobs:
       - name: 冒烟测试桌面端运行时
         working-directory: desktop
         run: xvfb-run -a npm run smoke -- --skip-package
+
+  desktop-cross-platform:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: 固定 Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: 安装依赖
+        working-directory: desktop
+        run: npm ci
+
+      - name: 测试
+        working-directory: desktop
+        run: npm test
+
+      - name: 检查类型
+        working-directory: desktop
+        run: npm run typecheck
+
+      - name: 构建当前平台应用目录
+        working-directory: desktop
+        run: npm run package

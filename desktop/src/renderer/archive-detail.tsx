@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { PendingSynthesis, SynthesisCandidate } from "../shared/synthesis";
+import { formatDateTime } from "../shared/format";
 import { describeCollectionCode } from "../shared/status-copy";
 import { ArchiveSynthesis } from "./archive-synthesis";
 import { SparklesIcon, StarIcon } from "./icons";
@@ -38,7 +39,7 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
         <div>
           <h1>{record.task || record.text}</h1>
           <time dateTime={new Date(record.ts).toISOString()}>
-            {formatCopy(copy.archiveCapturedAt, { time: new Date(record.ts).toLocaleString(props.locale) })}
+            {formatCopy(copy.archiveCapturedAt, { time: formatDateTime(record.ts, props.locale) })}
           </time>
           {record.source ? <button type="button" className="archive-source" title={record.source.url} onClick={() => props.onOpenSource(record.source!.url)}>{copy.archiveSource}: {record.source.title || record.source.url}</button> : null}
         </div>
@@ -48,8 +49,8 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
         </div>
       </header>
       <div className="archive-fields">
-        <label>{copy.archiveTags}<input value={tags} onChange={(event) => setTags(event.target.value)} onBlur={saveTags} onKeyDown={(event) => { if (event.key === "Enter") saveTags(); }} /></label>
-        <label>{copy.archiveNote}<textarea maxLength={4000} value={note} onChange={(event) => setNote(event.target.value)} onBlur={() => props.onPatch({ note })} /></label>
+        <label>{copy.archiveTags}<input name="archive-tags" autoComplete="off" value={tags} onChange={(event) => setTags(event.target.value)} onBlur={saveTags} onKeyDown={(event) => { if (event.key === "Enter") saveTags(); }} /></label>
+        <label>{copy.archiveNote}<textarea name="archive-note" autoComplete="off" maxLength={4000} value={note} onChange={(event) => setNote(event.target.value)} onBlur={() => props.onPatch({ note })} /></label>
       </div>
       <nav className="archive-answer-nav" aria-label={copy.siteViews}>
         {record.results.map((result, index) => <a key={`${result.host}:${index}`} href={`#archive-answer-${index}`}>{result.label}</a>)}

@@ -129,3 +129,34 @@ test("remote body identity must match Drive metadata before import", async () =>
     assert.equal(repository.config().errorCount, 1);
   } finally { database.close(); }
 });
+
+test("disconnect aborts the active pull before waiting for the serial queue", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  let started!: () => void;
+  let aborted = false;
+  const pullStarted = new Promise<void>((resolve) => { started = resolve; });
+  const drive: SyncDrive = {
+    getStartToken: (signal) => new Promise((resolve) => {
+      started();
+      signal?.addEventListener("abort", () => { aborted = true; resolve("aborted"); }, { once: true });
+      setTimeout(() => resolve("late"), 80);
+    }),
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => ({ id: "unused" }),
+    clearAll: async () => undefined
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: auth() });
+    const syncing = engine.syncNow();
+    await pullStarted;
+    const disconnecting = engine.disconnect();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(aborted, true);
+    await Promise.all([syncing, disconnecting]);
+  } finally { database.close(); }
+});

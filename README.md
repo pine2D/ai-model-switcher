@@ -75,7 +75,7 @@ npm start
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
-执行 `npm run package` 可生成当前平台的未签名应用目录。Gemini 已在 WSLg 中完成首次登录与群发；Google OAuth/Drive 仍需使用真实客户端完成联网回归，Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
+执行 `npm run package` 可生成当前平台的未签名应用目录。CI 会在 Linux、Windows 和 macOS 上分别测试、检查类型并构建当前平台目录，Linux 另执行运行时冒烟；这不能替代各平台真实账号登录与人工 UI 验收。Gemini 已在 WSLg 中完成首次登录与群发；Google OAuth/Drive 仍需使用真实客户端完成联网回归，Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

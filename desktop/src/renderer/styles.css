@@ -35,10 +35,6 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font-size: 13px; }
 button, textarea, input { font: inherit; }
 button { cursor: default; }
-button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
-  outline-offset: 1px;
-}
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -67,10 +63,11 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 }
 .command-bar textarea {
   width: 100%; height: var(--control-height); resize: none; padding: 5px 8px; border: 1px solid var(--border);
-  border-radius: 7px; color: inherit; background: #fafafd; outline: none; line-height: 20px;
+  border-radius: 7px; color: inherit; background: #fafafd; line-height: 20px;
 }
 .command-bar.is-expanded textarea { height: calc(var(--composer-expanded-height) - var(--space-2)); }
-.command-bar textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent); }
+.command-bar textarea:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent); }
+.mode-switch button:hover, .tier-switch button:hover { color: var(--accent); background: var(--panel); }
 .summary { max-width: 112px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-actions {
   height: var(--control-height); display: flex; align-items: center; gap: 2px;
@@ -84,12 +81,22 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 .workspace-actions > button.active, .workspace-actions > button:hover { color: var(--accent); background: var(--panel); }
 .workspace-actions > button:disabled { opacity: .4; }
 .workspace-actions .summary { margin: 0 5px 0 2px; }
+.workspace-actions > button.sync-attention { position: relative; }
+.workspace-actions > button.sync-attention::after {
+  position: absolute; top: 4px; right: 3px; width: 5px; height: 5px;
+  border: 1px solid var(--panel); border-radius: 50%; background: var(--danger); content: "";
+}
+.workspace-actions > button.sync-syncing::after { background: var(--accent); }
+.workspace-actions > button.sync-waiting::after,
+.workspace-actions > button.sync-schema::after,
+.workspace-actions > button.sync-offline::after { background: var(--warning); }
 .primary-action {
   min-width: 88px; height: var(--control-height); padding: 0 10px; display: inline-flex; align-items: center;
   justify-content: center; gap: 6px; border: 0; border-radius: 7px; color: white; font-weight: 650;
 }
 .send { background: var(--accent); }
 .cancel { background: var(--danger); }
+.primary-action:hover:not(:disabled) { filter: brightness(.92); }
 .send:disabled { opacity: .45; }
 .cancel:disabled { opacity: .68; }
 kbd { opacity: .7; font: 10px system-ui; }
@@ -101,6 +108,7 @@ kbd { opacity: .7; font: 10px system-ui; }
   color: var(--muted); background: #f0f1f5;
 }
 .image-trigger.active { color: var(--accent); background: var(--accent-soft); }
+.image-trigger:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .image-trigger:disabled { opacity: .4; }
 .image-count, .image-warning span { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .image-warning button, .image-error button { min-width: var(--target-size); width: var(--target-size); border-color: var(--warning); color: var(--warning); background: transparent; }
@@ -160,12 +168,12 @@ kbd { opacity: .7; font: 10px system-ui; }
 .group-confirm span { overflow: hidden; color: var(--danger); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .group-confirm button { height: 26px; padding: 0 6px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: transparent; }
 .group-confirm button.danger { border-color: var(--danger); color: var(--danger); }
-.group-save { height: 30px; margin-top: 5px; display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 3px; }
+.group-save { margin-top: 5px; display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 3px; }
 .group-save input { min-width: 0; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: #fafafd; }
-.group-save input:focus { border-color: var(--accent); outline: none; }
-.group-save input:disabled { opacity: .5; }
+.group-save input:focus-visible { border-color: var(--accent); }
 .group-save button { border: 1px solid var(--border); }
 .group-save button:disabled { opacity: .4; }
+.group-save-hint { grid-column: 1 / -1; min-height: 12px; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
 .archive-workspace { position: fixed; z-index: 10; inset: 0; display: grid; grid-template-rows: 44px minmax(0, 1fr) 22px; background: #f4f5f8; }
 .archive-toolbar { padding: 4px 6px; display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); background: var(--panel); }
@@ -182,6 +190,7 @@ kbd { opacity: .7; font: 10px system-ui; }
 .archive-body { min-height: 0; display: grid; grid-template-columns: minmax(240px, 286px) minmax(0, 1fr); }
 .archive-list { min-height: 0; padding: 4px; overflow: auto; border-right: 1px solid var(--border); background: var(--panel); }
 .archive-list > button { width: 100%; min-height: 68px; padding: 6px; display: grid; gap: 2px; overflow: hidden; text-align: left; border: 0; border-radius: 6px; color: inherit; background: transparent; }
+.archive-list > button { content-visibility: auto; contain-intrinsic-size: 68px; }
 .archive-list > button:hover, .archive-list > button[aria-current="true"] { background: var(--accent-soft); }
 .archive-list time, .archive-list small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .archive-list > button > span:not(.archive-badges) { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -207,6 +216,7 @@ kbd { opacity: .7; font: 10px system-ui; }
 .archive-answer h2 { margin: 0; font-size: 14px; }
 .archive-answer > header button { height: 26px; padding: 0 6px; display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: transparent; }
 .archive-answer > header button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.archive-answer > header button:hover { color: var(--accent); border-color: var(--accent); }
 .archive-synthesis { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .synthesis-card { margin-top: 6px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
 .synthesis-card.pending { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--accent-soft); }
@@ -215,6 +225,7 @@ kbd { opacity: .7; font: 10px system-ui; }
 .synthesis-card header span { color: var(--muted); font-size: 10px; }
 .synthesis-card > p { margin: 0 0 6px; color: var(--muted); }
 .synthesis-card > button, .synthesis-confirm button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: var(--panel); }
+.synthesis-card > button:hover, .synthesis-confirm button:hover { color: var(--accent); border-color: var(--accent); }
 .synthesis-confirm { padding-top: 7px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; border-top: 1px solid var(--border); }
 .synthesis-confirm span { flex: 1; color: var(--danger); font-size: 11px; }
 .synthesis-confirm button.danger { border-color: var(--danger); color: var(--danger); }

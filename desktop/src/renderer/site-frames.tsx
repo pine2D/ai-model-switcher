@@ -41,7 +41,7 @@ export function SiteFrames(props: SiteFramesProps): React.JSX.Element {
           >
             <div className="tile-header">
               <label className="site-select priority-p0" title={formatCopy(copy.selectSite, { site: site.label })}>
-                <input type="checkbox" checked={selected.has(site.key)} onChange={() => onToggle(site.key)} />
+                <input type="checkbox" name="sites" value={site.key} checked={selected.has(site.key)} onChange={() => onToggle(site.key)} />
                 <span>{site.label}</span>
               </label>
               <span className="answer-rail priority-p0" title={statusText} aria-hidden="true" />

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import {
@@ -57,6 +57,12 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const count = props.images.length;
   const manageLabel = formatCopy(props.copy.manageImages, { count });
+  useEffect(() => {
+    if (!props.open) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") props.onOpenChange(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [props.onOpenChange, props.open]);
   const choose = () => {
     if (!inputRef.current) return;
     inputRef.current.value = "";
@@ -68,6 +74,7 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
         ref={inputRef}
         className="sr-only"
         type="file"
+        name="images"
         accept="image/png,image/jpeg"
         multiple
         tabIndex={-1}
@@ -82,6 +89,8 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
         title={count ? manageLabel : props.copy.addImages}
         aria-label={count ? manageLabel : props.copy.addImages}
         aria-pressed={count > 0}
+        aria-expanded={count ? props.open : undefined}
+        aria-controls={count ? "image-tray" : undefined}
         data-image-count={count}
         disabled={props.disabled}
         onClick={() => count ? props.onOpenChange(!props.open) : choose()}
@@ -103,7 +112,7 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
         </div>
       ) : null}
       {props.open && count ? (
-        <div className="image-tray" role="group" aria-label={manageLabel}>
+        <div id="image-tray" className="image-tray" role="group" aria-label={manageLabel}>
           <div className="image-tray-heading">
             <span>{manageLabel}</span>
             <button type="button" title={props.copy.replaceImages} aria-label={props.copy.replaceImages} onClick={choose}><ImagePlusIcon /></button>
@@ -112,7 +121,7 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
           <div className="image-previews">
             {props.images.map((image, index) => (
               <div className="image-preview" key={`${image.name}:${index}`}>
-                <img src={image.dataUrl} alt={image.name} />
+                <img src={image.dataUrl} alt={image.name} width={52} height={40} />
                 <button type="button" title={formatCopy(props.copy.removeImage, { name: image.name })} aria-label={formatCopy(props.copy.removeImage, { name: image.name })} onClick={() => props.onRemove(index)}><CloseIcon /></button>
               </div>
             ))}

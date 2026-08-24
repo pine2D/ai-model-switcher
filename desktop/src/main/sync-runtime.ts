@@ -10,7 +10,7 @@ import { loadOAuthClientId } from "./oauth-pkce";
 import { OAuthSession } from "./oauth-session";
 import { SyncEngine } from "./sync-engine";
 import { SyncRepository } from "./sync-repository";
-import { TokenStore } from "./token-store";
+import { safeEncryptionAvailability, TokenStore } from "./token-store";
 
 interface SyncRuntimeOptions {
   readonly database: DesktopDatabase;
@@ -26,7 +26,9 @@ export async function createSyncRuntime(options: SyncRuntimeOptions): Promise<Sy
       ? join(process.resourcesPath, "oauth.json")
       : join(app.getAppPath(), "resources", "oauth.json")
   });
-  const encryptionAvailable = clientId ? await safeStorage.isAsyncEncryptionAvailable() : false;
+  const encryptionAvailable = clientId
+    ? await safeEncryptionAvailability(() => safeStorage.isAsyncEncryptionAvailable())
+    : false;
   const tokenStore = new TokenStore(join(app.getPath("userData"), "oauth-token.bin"), {
     backend: () => encryptionAvailable
       ? process.platform === "linux" ? safeStorage.getSelectedStorageBackend() : "os_crypt"

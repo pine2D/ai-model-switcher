@@ -41,6 +41,8 @@
   color: inherit; background: transparent;
 }
 .settings-actions button.primary { border-color: var(--accent); color: white; background: var(--accent); }
+.settings-actions button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.settings-actions button.primary:hover:not(:disabled) { color: white; filter: brightness(.92); }
 .settings-actions button:disabled, .danger-zone button:disabled { opacity: .42; }
 .sync-overview .sync-privacy { grid-column: 1 / -1; margin: 0; font-size: 10px; }
 .danger-zone { border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
@@ -48,6 +50,7 @@
 .danger-zone label { display: grid; gap: 4px; color: var(--muted); font-size: 10px; }
 .danger-zone input { height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: #fafafd; }
 .danger-zone button { margin-top: 7px; border-color: var(--danger); color: var(--danger); }
+.danger-zone button:hover:not(:disabled) { color: white; background: var(--danger); }
 @media (max-width: 860px) {
   .settings-body { grid-template-columns: 1fr; }
   .sync-overview { grid-template-columns: 1fr; }

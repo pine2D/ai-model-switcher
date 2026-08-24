@@ -16,12 +16,13 @@ interface WorkspaceDrawerProps {
   readonly groups: readonly ActiveWorkspaceGroup[];
   readonly onClose: () => void;
   readonly onSelectionChange: (sites: readonly SiteKey[]) => void;
-  readonly onSaveGroup: (name: string) => void;
+  readonly onSaveGroup: (name: string) => Promise<boolean>;
   readonly onDeleteGroup: (id: string) => void;
 }
 
 export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element {
   const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   useEffect(() => setPendingDeleteId(null), [props.groups, props.selected]);
   const choices = workspacePresets(props.sites);
@@ -30,9 +31,13 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
   const reservedSignatures = new Set(
     [choices.all, choices.image, choices.intl, choices.domestic].map(groupSignature)
   );
-  const canSave = selectedSites.length > 0 &&
-    !reservedSignatures.has(selectedSignature) &&
-    !props.groups.some((group) => groupSignature(group.sites) === selectedSignature);
+  const duplicate = props.groups.some((group) => groupSignature(group.sites) === selectedSignature);
+  const saveHint = selectedSites.length === 0
+    ? props.copy.groupSelectionRequired
+    : reservedSignatures.has(selectedSignature)
+      ? props.copy.groupPresetReserved
+      : duplicate ? props.copy.groupAlreadySaved : "";
+  const canSave = !saveHint;
   const presets = [
     [props.copy.allSites, choices.all],
     [props.copy.clearSites, choices.clear],
@@ -46,6 +51,11 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
     else next.add(site);
     props.onSelectionChange(props.sites.map((item) => item.key).filter((key) => next.has(key)));
   };
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [props.onClose]);
 
   return (
     <aside id="workspace-drawer" className="workspace-drawer" aria-label={props.copy.scope}>
@@ -63,7 +73,7 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
         <div className="site-checklist">
           {props.sites.map((site) => (
             <label key={site.key}>
-              <input type="checkbox" checked={props.selected.has(site.key)} onChange={() => toggleSite(site.key)} />
+              <input type="checkbox" name="scope-sites" value={site.key} checked={props.selected.has(site.key)} onChange={() => toggleSite(site.key)} />
               <span>{site.label}</span>
             </label>
           ))}
@@ -92,15 +102,16 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
             ))}
           </div>
         )}
-        <form className="group-save" onSubmit={(event) => {
+        <form className="group-save" aria-busy={saving} onSubmit={(event) => {
           event.preventDefault();
           const trimmed = name.trim();
-          if (!trimmed || !canSave) return;
-          props.onSaveGroup(trimmed);
-          setName("");
+          if (!trimmed || !canSave || saving) return;
+          setSaving(true);
+          void props.onSaveGroup(trimmed).then((saved) => { if (saved) setName(""); }).finally(() => setSaving(false));
         }}>
-          <input value={name} maxLength={80} disabled={!canSave} aria-label={props.copy.groupNamePlaceholder} placeholder={props.copy.groupNamePlaceholder} onChange={(event) => setName(event.target.value)} />
-          <button type="submit" title={props.copy.saveGroup} aria-label={props.copy.saveGroup} disabled={!name.trim() || !canSave}><SaveIcon /></button>
+          <input name="group-name" autoComplete="off" value={name} maxLength={80} aria-describedby="group-save-hint" aria-label={props.copy.groupNamePlaceholder} placeholder={props.copy.groupNamePlaceholder} onChange={(event) => setName(event.target.value)} />
+          <button type="submit" title={saveHint || props.copy.saveGroup} aria-label={props.copy.saveGroup} disabled={!name.trim() || !canSave || saving}><SaveIcon /></button>
+          <span id="group-save-hint" className="group-save-hint" role="status">{saving ? props.copy.groupSaving : saveHint}</span>
         </form>
       </section>
     </aside>

@@ -46,15 +46,15 @@ export function SynthesisWorkspace(props: SynthesisWorkspaceProps): React.JSX.El
           <legend>{props.copy.synthesisAnswers}</legend>
           {successful.map((result) => {
             const state = result.state === "think" ? props.copy.think : result.state === "fast" ? props.copy.fast : props.copy.synthesisUnknownTier;
-            return <label key={result.host}><input type="checkbox" checked={selectedHosts.includes(result.host)} onChange={() => toggle(result.host)} /><span>{result.label} · {state}</span></label>;
+            return <label key={result.host}><input type="checkbox" name="synthesis-answer" value={result.host} checked={selectedHosts.includes(result.host)} onChange={() => toggle(result.host)} /><span>{result.label} · {state}</span></label>;
           })}
         </fieldset>
         <small>{props.copy.synthesisCount.replace("{count}", String(selected.length))}</small>
-        <label>{props.copy.synthesisTarget}<select aria-label={props.copy.synthesisTarget} value={targetSite} onChange={(event) => setTargetSite(event.target.value)}><option value="">{props.copy.synthesisTargetMissing}</option>{props.sites.map((site) => <option value={site.key} key={site.key}>{site.label}</option>)}</select></label>
-        <label>{props.copy.synthesisTier}<select aria-label={props.copy.synthesisTier} value={tier ?? ""} onChange={(event) => setTier(event.target.value === "think" || event.target.value === "fast" ? event.target.value : null)}><option value="">{props.copy.followSite}</option><option value="fast">{props.copy.fast}</option><option value="think">{props.copy.think}</option></select></label>
-        <label>{props.copy.synthesisInstruction}<textarea maxLength={4000} value={instruction} onChange={(event) => setInstruction(event.target.value)} /></label>
+        <label>{props.copy.synthesisTarget}<select name="synthesis-target" aria-label={props.copy.synthesisTarget} value={targetSite} onChange={(event) => setTargetSite(event.target.value)}><option value="">{props.copy.synthesisTargetMissing}</option>{props.sites.map((site) => <option value={site.key} key={site.key}>{site.label}</option>)}</select></label>
+        <label>{props.copy.synthesisTier}<select name="synthesis-tier" aria-label={props.copy.synthesisTier} value={tier ?? ""} onChange={(event) => setTier(event.target.value === "think" || event.target.value === "fast" ? event.target.value : null)}><option value="">{props.copy.followSite}</option><option value="fast">{props.copy.fast}</option><option value="think">{props.copy.think}</option></select></label>
+        <label>{props.copy.synthesisInstruction}<textarea name="synthesis-instruction" autoComplete="off" maxLength={4000} value={instruction} onChange={(event) => setInstruction(event.target.value)} /></label>
       </div>
-      <label className="synthesis-preview">{props.copy.synthesisPreview}<textarea readOnly value={preview} /></label>
+      <label className="synthesis-preview">{props.copy.synthesisPreview}<textarea name="synthesis-preview" readOnly value={preview} /></label>
       <footer>
         <span role="status" aria-live="polite">{tooLong ? props.copy.synthesisTooLong : selected.length < 2 ? props.copy.synthesisNotEnough : props.busy ? props.copy.synthesisSending : ""}</span>
         <button type="button" disabled={props.busy || invalid} onClick={() => props.onSend({ archiveId: props.record.id, targetSite: targetSite as SynthesisSendRequest["targetSite"], tier, selectedHosts, instruction })}><SendIcon />{props.copy.synthesisSend}</button>

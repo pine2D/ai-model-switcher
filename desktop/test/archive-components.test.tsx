@@ -3,7 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 
-import { deleteIntent } from "../src/renderer/archive-delete";
+import { deleteConfirmationRemaining, deleteIntent } from "../src/renderer/archive-delete";
 import { ArchiveWorkspace } from "../src/renderer/archive-workspace";
 import { getCopy } from "../src/shared/copy";
 import { archiveFixture } from "./archive.test";
@@ -81,4 +81,6 @@ test("archive deletion confirmation remains bound to one record id", () => {
   assert.equal(deleteIntent({ id: "archive-a", until: 4_000 }, "archive-a", 3_000).action, "delete");
   assert.equal(deleteIntent({ id: "archive-a", until: 4_000 }, "archive-b", 3_000).action, "arm");
   assert.equal(deleteIntent({ id: "archive-a", until: 2_000 }, "archive-a", 3_000).action, "arm");
+  assert.equal(deleteConfirmationRemaining({ id: "archive-a", until: 4_000 }, 3_250), 750);
+  assert.equal(deleteConfirmationRemaining({ id: "archive-a", until: 4_000 }, 4_500), 0);
 });

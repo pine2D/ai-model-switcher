@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from "react";
 
 import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
+import type { SyncStatus } from "../shared/sync";
 import { DeepThinkIcon, FastIcon, FocusIcon, GridIcon, SendIcon, SiteSettingIcon, StopIcon } from "./icons";
 import { commandKeyAction } from "./keyboard";
 import { WorkspaceActions } from "./workspace-actions";
@@ -23,6 +24,7 @@ interface CommandBarProps {
   readonly imageControl: ReactNode;
   readonly sendBlockedReason: string | null;
   readonly synthesisPending: boolean;
+  readonly syncStatus: SyncStatus;
   readonly isMac: boolean;
   readonly expanded: boolean;
   readonly onTextChange: (value: string) => void;
@@ -90,6 +92,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
       </div>
       <textarea
         className="priority-p0"
+        name="prompt"
+        autoComplete="off"
         ref={promptRef}
         rows={1}
         value={text}
@@ -131,6 +135,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         drawerOpen={drawerOpen}
         disabled={runState !== "idle" || auxiliaryBusy}
         synthesisPending={synthesisPending}
+        syncStatus={props.syncStatus}
         onToggleDrawer={onToggleDrawer}
         onNewSession={onNewSession}
         onCollectAnswers={onCollectAnswers}

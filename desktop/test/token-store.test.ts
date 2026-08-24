@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { TokenStore } from "../src/main/token-store";
+import { safeEncryptionAvailability, TokenStore } from "../src/main/token-store";
 
 test("refresh tokens are persisted only through asynchronous safe storage", async () => {
   const directory = await mkdtemp(join(tmpdir(), "polyask-token-"));
@@ -55,4 +55,9 @@ test("an unknown safe storage backend is not treated as secure persistence", asy
     decrypt: async () => "unused"
   });
   assert.equal(store.securePersistence(), false);
+});
+
+test("optional safe storage initialization failures degrade instead of blocking app startup", async () => {
+  assert.equal(await safeEncryptionAvailability(async () => { throw new Error("keyring unavailable"); }), false);
+  assert.equal(await safeEncryptionAvailability(async () => true), true);
 });
