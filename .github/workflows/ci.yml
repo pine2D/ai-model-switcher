@@ -23,3 +23,19 @@ jobs:
 
       - name: 校验源码并构建发布产物
         run: bash scripts/release.sh --build-only
+
+      - name: 安装桌面端依赖
+        working-directory: desktop
+        run: npm ci
+
+      - name: 测试桌面端
+        working-directory: desktop
+        run: npm test
+
+      - name: 检查桌面端类型
+        working-directory: desktop
+        run: npm run typecheck
+
+      - name: 构建桌面端目录
+        working-directory: desktop
+        run: npm run package

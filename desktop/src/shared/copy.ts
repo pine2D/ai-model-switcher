@@ -1,0 +1,165 @@
+export const COPY = {
+  en: {
+    appTitle: "PolyAsk · AI Answers",
+    brandSub: "AI Answers",
+    overview: "Grid",
+    focus: "Focus",
+    layoutLabel: "View layout",
+    selectedSummary: "{selected} / {total} selected",
+    sendingSummary: "Sending to {count} sites",
+    broadcastLabel: "Broadcast prompt",
+    promptPlaceholder: "Ask one question across the selected AI sites…",
+    promptLabel: "Prompt",
+    tierLabel: "Response mode",
+    followSite: "Use site setting",
+    fast: "Fast",
+    think: "Deep thinking",
+    cancel: "Cancel",
+    cancelling: "Cancelling…",
+    send: "Send",
+    siteViews: "AI site views",
+    selectSite: "Send to {site}",
+    focusSite: "Focus {site}",
+    reloadSite: "Reload {site}",
+    loading: "Loading",
+    ready: "Ready",
+    sending: "Sending",
+    submitted: "Sent",
+    submittedWithWarning: "Sent with warning",
+    tierUnconfirmed: "Sent; response mode not confirmed",
+    composerNotFound: "Prompt box not found",
+    siteNotReady: "Site not ready",
+    submitUnconfirmed: "Whether it was sent is unconfirmed",
+    timedOut: "Timed out",
+    cancelledStatus: "Cancelled",
+    injectFailed: "Could not fill prompt",
+    siteUnavailable: "Site view unavailable",
+    loadFailed: "Page failed to load",
+    failed: "Failed",
+    crashed: "Stopped",
+    fileMenu: "File",
+    editMenu: "Edit",
+    viewMenu: "View",
+    windowMenu: "Window",
+    focusPromptMenu: "Focus prompt input",
+    nextSiteMenu: "Focus next site",
+    previousSiteMenu: "Focus previous site"
+  },
+  zhCN: {
+    appTitle: "PolyAsk · AI 众答",
+    brandSub: "AI 众答",
+    overview: "九宫格",
+    focus: "聚焦",
+    layoutLabel: "视图布局",
+    selectedSummary: "已选择 {selected} / {total}",
+    sendingSummary: "正在向 {count} 个站点发送",
+    broadcastLabel: "群发提问",
+    promptPlaceholder: "输入一个问题，同时发送到选中的 AI…",
+    promptLabel: "提问内容",
+    tierLabel: "回答档位",
+    followSite: "跟随站点",
+    fast: "快速",
+    think: "深度思考",
+    cancel: "取消",
+    cancelling: "正在取消…",
+    send: "发送",
+    siteViews: "AI 站点视图",
+    selectSite: "群发到 {site}",
+    focusSite: "聚焦 {site}",
+    reloadSite: "重新加载 {site}",
+    loading: "加载中",
+    ready: "就绪",
+    sending: "发送中",
+    submitted: "已发送",
+    submittedWithWarning: "已发送（有警示）",
+    tierUnconfirmed: "已发送，回答档位未确认",
+    composerNotFound: "未找到输入框",
+    siteNotReady: "站点尚未就绪",
+    submitUnconfirmed: "是否发送成功尚未确认",
+    timedOut: "发送超时",
+    cancelledStatus: "已取消",
+    injectFailed: "未能填写提问",
+    siteUnavailable: "站点视图不可用",
+    loadFailed: "页面加载失败",
+    failed: "失败",
+    crashed: "已停止",
+    fileMenu: "文件",
+    editMenu: "编辑",
+    viewMenu: "视图",
+    windowMenu: "窗口",
+    focusPromptMenu: "聚焦提问框",
+    nextSiteMenu: "聚焦下一个站点",
+    previousSiteMenu: "聚焦上一个站点"
+  },
+  zhTW: {
+    appTitle: "PolyAsk · AI 眾答",
+    brandSub: "AI 眾答",
+    overview: "九宮格",
+    focus: "聚焦",
+    layoutLabel: "檢視版面",
+    selectedSummary: "已選取 {selected} / {total}",
+    sendingSummary: "正在傳送到 {count} 個網站",
+    broadcastLabel: "群發提問",
+    promptPlaceholder: "輸入一個問題，同時傳送到選取的 AI…",
+    promptLabel: "提問內容",
+    tierLabel: "回答模式",
+    followSite: "依網站設定",
+    fast: "快速",
+    think: "深度思考",
+    cancel: "取消",
+    cancelling: "正在取消…",
+    send: "傳送",
+    siteViews: "AI 網站檢視",
+    selectSite: "傳送到 {site}",
+    focusSite: "聚焦 {site}",
+    reloadSite: "重新載入 {site}",
+    loading: "載入中",
+    ready: "就緒",
+    sending: "傳送中",
+    submitted: "已傳送",
+    submittedWithWarning: "已傳送（有警示）",
+    tierUnconfirmed: "已傳送，回答模式未確認",
+    composerNotFound: "找不到輸入框",
+    siteNotReady: "網站尚未就緒",
+    submitUnconfirmed: "是否送出尚未確認",
+    timedOut: "傳送逾時",
+    cancelledStatus: "已取消",
+    injectFailed: "無法填入提問",
+    siteUnavailable: "網站檢視無法使用",
+    loadFailed: "頁面載入失敗",
+    failed: "失敗",
+    crashed: "已停止",
+    fileMenu: "檔案",
+    editMenu: "編輯",
+    viewMenu: "檢視",
+    windowMenu: "視窗",
+    focusPromptMenu: "聚焦提問框",
+    nextSiteMenu: "聚焦下一個網站",
+    previousSiteMenu: "聚焦上一個網站"
+  }
+} as const;
+
+export type DesktopCopy = { readonly [Key in keyof typeof COPY.en]: string };
+export type DesktopLocale = keyof typeof COPY;
+
+export function resolveLocale(rawLocale: string): DesktopLocale {
+  const locale = rawLocale.toLowerCase();
+  if (locale === "zh" || locale.startsWith("zh-cn") || locale.startsWith("zh-hans")) return "zhCN";
+  if (
+    locale.startsWith("zh-tw") ||
+    locale.startsWith("zh-hk") ||
+    locale.startsWith("zh-mo") ||
+    locale.startsWith("zh-hant")
+  ) return "zhTW";
+  return "en";
+}
+
+export function getCopy(rawLocale: string): DesktopCopy {
+  return COPY[resolveLocale(rawLocale)];
+}
+
+export function formatCopy(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{([a-z]+)\}/g, (token, key: string) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : token
+  );
+}

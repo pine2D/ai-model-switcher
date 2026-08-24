@@ -4,6 +4,8 @@ PolyAsk 是一款 Chrome 扩展，可将同一问题发送到 9 个 AI 站点，
 
 每个站点都在真实浏览器窗口中运行，沿用现有登录状态，不使用 iframe。
 
+仓库同时包含跨平台桌面端 M0。它用一个 Electron 窗口承载 9 个真实站点页面，当前用于验证集中管理、实时可见群发和站点登录兼容性，尚不是正式发布版本。
+
 ## 核心功能
 
 - 群发对比：选择多个 AI 站点，统一设置模型档位后发送问题。支持最多 4 张 PNG 或 JPEG 图片，总大小不超过 10 MiB。
@@ -42,6 +44,22 @@ PolyAsk 是一款 Chrome 扩展，可将同一问题发送到 9 个 AI 站点，
 
 1. 打开 `chrome://extensions`，启用「开发者模式」。
 2. 点击「加载已解压的扩展程序」，选择本仓库目录。
+
+### 运行桌面端 M0
+
+桌面端使用独立登录会话，不会读取或复制 Chrome 的 Cookie。首次运行后，需要分别登录各个 AI 站点。
+
+```bash
+cd desktop
+npm install
+npm test
+npm run typecheck
+npm start
+```
+
+桌面端可用 `Cmd/Ctrl+Shift+P` 将焦点从站点页面送回提问框，`Cmd/Ctrl+PageUp` / `Cmd/Ctrl+PageDown` 在九个站点间切换聚焦。
+
+执行 `npm run package` 可生成当前平台的未签名应用目录。Windows、macOS 和 Linux 的登录与安装包验证仍属于 M0 验收范围；Gemini 首次登录是继续产品化的硬门槛。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

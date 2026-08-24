@@ -1,0 +1,27 @@
+import type { DesktopCopy } from "./copy";
+import type { SiteStatus } from "./protocol";
+
+export function describeStatus(copy: DesktopCopy, status: SiteStatus): string {
+  switch (status.code) {
+    case "tier_unconfirmed": return copy.tierUnconfirmed;
+    case "composer_not_found": return copy.composerNotFound;
+    case "not_ready": return copy.siteNotReady;
+    case "submit_unconfirmed": return copy.submitUnconfirmed;
+    case "timeout": return copy.timedOut;
+    case "cancelled": return copy.cancelledStatus;
+    case "inject_failed": return copy.injectFailed;
+    case "no_view": return copy.siteUnavailable;
+    case "load_failed": return copy.loadFailed;
+    case "renderer_crashed": return copy.crashed;
+  }
+  switch (status.phase) {
+    case "loading": return copy.loading;
+    case "ready": return copy.ready;
+    case "sending": return copy.sending;
+    case "submitted": return copy.submitted;
+    case "warning": return copy.submittedWithWarning;
+    case "cancelled": return copy.cancelledStatus;
+    case "failed": return copy.failed;
+    case "crashed": return copy.crashed;
+  }
+}

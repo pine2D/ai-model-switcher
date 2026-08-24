@@ -1,6 +1,6 @@
 # 发版与用户可见文案
 
-**发版流程、打包白名单、脚本查不出的人工核查项、三语文案规范与 i18n 落点表、Git/CHANGELOG 惯例都在这里**；`CLAUDE.md` 只留 `prepare-release.sh` / `release.sh` 两条命令和「已发布 tag 不覆盖、新增顶层文件要进 `RUNTIME` 数组」一句硬约束。冲突以 `CLAUDE.md` 为准。
+**Chrome 扩展的发版流程、打包白名单、脚本查不出的人工核查项、三语文案规范与 i18n 落点表、Git/CHANGELOG 惯例都在这里**；桌面端 M0 边界见 `docs/desktop-m0.md`。冲突以 `CLAUDE.md` 为准。
 
 ## 流程
 
@@ -18,7 +18,7 @@ bash scripts/release.sh --publish      # 推 v* tag；Release workflow 随后发
 
 ## 打包白名单（`scripts/package.sh`）
 
-新增顶层文件或目录必须加进 `RUNTIME` 数组（当前：`manifest.json _locales i18n.js background.js bg icons content console popup options`）。
+新增扩展运行时顶层文件或目录必须加进 `RUNTIME` 数组（当前：`manifest.json _locales i18n.js background.js bg icons content console popup options`）。`desktop/` 有独立工具链和产物，禁止加入扩展 `RUNTIME` 或 ZIP。
 
 `package.sh` 的产物对账把 manifest、各 HTML 的 `src`/`href`、`background.js` 的 `importScripts` 引用到的每个文件与 zip 条目逐一比对，缺一即打包失败并删掉半成品 zip。**v0.5.0 / v0.6.0 坏包事故根因**：白名单漏了 `i18n.js` 与 `_locales`，本地 unpacked 一切正常，只有在干净机器装 zip 才炸。对账只能校验能从 manifest/HTML/importScripts 推导出的引用——运行时动态拼路径的资源仍会漏。
 

@@ -57,7 +57,7 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 
 - 远程页面永不获得 `ipcRenderer`、`contextBridge`、文件系统、Shell 或任意 main-process 方法。
 - IPC 采用固定 channel 和数据白名单；main process 同时校验 sender、站点 key、当前 host 和请求结构。
-- 顶层导航限制为站点及其明确登录域；新窗口默认阻止，外部 HTTPS 链接由用户操作后交给系统浏览器。
+- 顶层导航限制为站点精确 host 及明确登录域；新窗口默认阻止，M0 不自动向系统浏览器转交外部链接。
 - 每个远程 Session 设置权限请求处理器，M0 默认拒绝通知、摄像头、麦克风、地理位置和 MIDI。
 - 不关闭 Chromium sandbox，不忽略证书错误，不允许 HTTP 内容。
 - 打包时启用 Cookie Encryption、ASAR Integrity、OnlyLoadAppFromAsar，并关闭 RunAsNode 和生产环境调试入口。
@@ -71,7 +71,8 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 - 每个视图预留独立标题条，包含站点名、发送状态、聚焦和重载；标题条不覆盖远程网页。
 - 品牌沿用扩展的靛蓝色系：亮色 `#4f46e5`、暗色 `#a5a0ff`，成功 `#16a34a`、失败 `#dc2626`，其余使用系统中性色。
 - 字体使用 `system-ui`，不捆绑字体；窗口框架、菜单、对话框和快捷键遵循各平台约定。
-- 特色元素是每块视图顶部的“回答轨道”：一条克制的状态线表达排队、发送、回答和失败，不使用持续装饰动画；降低动态效果时取消位移动画。
+- 特色元素是每块视图顶部的“提交状态轨道”：一条克制的状态线表达加载、发送、警示、取消和失败；回答与思考进度直接看站点原生页面。轨道不使用持续装饰动画，降低动态效果时取消位移动画。
+- 应用菜单提供聚焦提问框、上一个站点和下一个站点命令，分别使用 `CmdOrCtrl+Shift+P`、`CmdOrCtrl+PageUp` 和 `CmdOrCtrl+PageDown`，避免焦点进入独立站点视图后无法返回 Shell。
 
 ## 测试策略
 
@@ -86,3 +87,24 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 - 九站登录、群发、实时可见和 60 分钟稳定性全部通过：进入产品化阶段。
 - 仅个别非 Google 站点因 DOM 漂移失败：按现有适配器流程修复后复测。
 - Gemini 因嵌入式浏览器政策无法安全完成首次登录：停止全量桌面产品化，由产品层选择排除 Gemini、外置浏览器或 API 方案，不以技术绕过继续。
+
+## 当前实现状态
+
+已完成首个纵向切片：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、九宫格/聚焦布局、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
+
+2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。`npm test`、`npm run typecheck`、`npm run package` 和扩展全量 `scripts/verify.sh` 均为 M0 的本地门禁；CI 同样执行桌面依赖锁定安装、测试、类型检查与 Linux 打包。
+
+尚未完成 M0 退出验收：Electron 运行时集成自动化、Windows/macOS/原生 Ubuntu 真机、九站实际登录和群发、Gemini 首次登录硬门槛、60 分钟稳定性、读屏/高对比度/缩放检查，以及各平台签名安装包。
+
+运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞。完整 `npm audit` 仍报告 Electron Forge 构建链的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包不进入应用运行依赖，但正式发布前必须重新评估并清零或形成明确处置记录。
+
+## 开发命令
+
+```bash
+cd desktop
+npm install
+npm test
+npm run typecheck
+npm start
+npm run package
+```

@@ -1,9 +1,9 @@
 # PolyAsk · AI 众答
 
-Chrome MV3 扩展。**群发对比是核心**：一个问题群发到 9 个 AI 站点，真实窗口平铺对比，回答一键汇总复制为 Markdown；各站独立访问时一键切「深度思考/快速」档是附带能力（切档失败可以诚实报错，群发链路断了不行）。另有图片群发、右键带入网页内容、辅助综合、Drive 同步与迁移包。纯原生 JS，无构建、无框架、classic script。
+发布产品是 Chrome MV3 扩展，`desktop/` 是 Electron M0。**核心是群发到 9 个真实 AI 页面并排比较**；切深度/快速档可报错，群发链路不能断。扩展另有图片、网页内容、辅助综合、Drive 同步与迁移包；扩展代码保持原生 JS、无构建、classic script。
 
 <!-- 最后与代码核对：2026-08-18 · manifest v0.16.0。发版前重跑核对并更新这行。
-     本文件常驻上下文，控制在 11 KB 内：要加一条硬约束，先挤掉一条或把查表内容外迁到 docs/。 -->
+     本文件控制在 11 KB 内；新增硬约束先挤旧项或外迁 docs/。 -->
 
 ## 先读哪份（下面几份不常驻上下文，动到对应部分再读）
 
@@ -13,6 +13,7 @@ Chrome MV3 扩展。**群发对比是核心**：一个问题群发到 9 个 AI �
 | 动 `background.js`/`bg/`/`console/`/`popup/`/`options/`/`manifest.json`：开窗平铺、群发编排、联动最小化、进度圆点、96px 细条 UI、存储与 Drive 同步、迁移包、权限与快捷键 | `docs/console-windows.md`（错误码全表、超时预算表、epoch 与交接协议、逐文件职责） |
 | 写回归测试、真机复现、chrome-dbg/CDP 探锚点 | `docs/verify.md` |
 | 发版打 tag、改任何用户可见文案或三语词条（`i18n.js`/`_locales`/各 `*-i18n.js`）、动 `scripts/` 打包白名单 | `docs/release.md`（含 i18n 落点表） |
+| 动 `desktop/`：窗口/视图、preload、React shell、IPC、安全、打包 | `docs/desktop-m0.md` |
 
 专题文档比这里细，**但只要与本文「硬约束」冲突，一律以 CLAUDE.md 为准**——然后立刻回去把那份专题文档改对，不要留两套说法。
 专题之间的分工：站点特有的 DOM/时序坑写进 `docs/adapters.md` 的站点卡，只在 CDP/工具层才咬人的坑写进 `docs/verify.md`，同一条别两边各写一遍。
@@ -33,12 +34,12 @@ Chrome MV3 扩展。**群发对比是核心**：一个问题群发到 9 个 AI �
 - **新增持久化键要同时登记多处**——同步白名单 / 跨设备设置投影 / 重置清单 /（要进迁移包）迁移类型 /（设置页可见开关）`PREFS`，五处文件与常量名见 `docs/console-windows.md` 数据位置。范例 `displayMode` 同时在同步白名单与重置清单里；漏一处，同步/迁移/重置/回填静默失效。
 - **不申请任何 AI 站点 host 权限**（站点访问只靠 `content_scripts.matches` 那 9 条），`host_permissions` 仅 `https://www.googleapis.com/*`。动权限必须同步 options 设置页 `#privacy` 区的隐私文案 + README + CHANGELOG。
 - **图片限额（张数 / 类型 / 单批大小，数值见 `docs/adapters.md`）改任何一个数**，就要同改 `content/upload.js` + `console/images.js` + README + 三语文案。
-- **加站点要同时改三处**：`manifest.json` 的 `content_scripts.matches` + 对应适配器 + `console/sites.js` 的 `SITES`，漏一处该站静默缺席（不报错）——但 `scripts/test-site-selection.js` 会红并指出该补哪份文件。步骤见 `docs/adapters.md`。
+- **加站点**：扩展同改 manifest matches + 适配器 + `console/sites.js`；desktop 另改 `desktop/src/main/sites.ts`。漏项会静默缺席，`test-site-selection.js` 会红。步骤见 `docs/adapters.md`。
 - **单文件 ≤300 行（JS）**：`scripts/verify.sh` 直接 `exit 1`。`bg/sync.js`、`bg/windows.js`、`content/core.js` 正好 300 行，加一行就红——动这三个必须同时想好拆分方案：按站点或职责分卷（`adapters-cn` → `adapters-cn2` 即此例），不要靠压行/删注释续命。`scripts/` 同样受限。
 - **MV3 扩展页 CSP 是 `script-src 'self'`**：内联 `<script>` 与 `on*=` 被拦，连「防首帧闪烁的主题预应用」也必须外链（`console/theme.js` 放 `<head>` 内，外链脚本仍先于首帧执行；各页 head 顺序见 docs）。
 - **真机验证不可省，且本机全绿 ≠ 用户环境可用**：改适配器、切档、发送相关的 bug，必须先重载扩展 + 刷新站点标签，再用生产 `__AMS` 复现和回归，不得只凭静态代码或官方文案推断。**用户报的 bug 在本机复现不出时，先要现象再猜层次**——问「输入框里有没有出现文字 / 有没有发出去 / 有没有报错文案」，据此定位坏在 composer / inject / submit / state 哪一层再动手。两机差异见 `docs/verify.md`——本机跑通不构成「已修复」的证据。
 - **`console.html` 的 `#live` 播报区不可删**：群发进度、失败汇总、收集结果都要写进去。96px 细条上的圆点变色对读屏用户不可见，这是唯一进度通道——「精简 UI」类重构最容易顺手删掉它，且删了不报错。
-- **已发布 tag 不覆盖**，改内容必须升新版本；新增顶层文件或目录必须加进 `scripts/package.sh` 的 `RUNTIME` 数组（漏了本地 unpacked 一切正常，只有在干净机器装 zip 才炸）。
+- **已发布 tag 不覆盖**，改内容必须升版；新增扩展运行时顶层项必须登记 `RUNTIME`，否则会产出坏包。`desktop/` 独立，禁止打进扩展 ZIP。
 
 ## 命令
 
@@ -55,6 +56,7 @@ bash scripts/release.sh --publish    # 推 tag（--build-only 只验包；前置
 - **站点适配**：`content/core.js`（`__AMS` 注册表、`runMode`/`switchTier`、`submitPrompt`、`onMessage`）+ `content/{md,upload,pill,diag,adapters-intl,adapters-cn,adapters-cn2}.js`。
 - **数据与同步**：`bg/` 的 8 个数据模块（`store` 是 IndexedDB `polyask`，另有 data / sync-model / sync / drive / archive-model / transfer / data-admin）。
 - **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
+- **桌面 M0**：`desktop/src/{main,preload,renderer}/`；复用 content 适配器，独立打包、独立会话。
 
 逐文件职责、各 html 的 script 加载顺序（即依赖顺序）、存储键位置见 `docs/console-windows.md`——新增细条功能先按那份判断归属。
 

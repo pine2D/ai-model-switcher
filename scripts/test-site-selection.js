@@ -19,9 +19,13 @@ assert.notEqual(context.result, saved, "返回值不得复用调用方对象");
 
 for (const file of ["console/console.js", "console/compose.js"])
   assert.match(fs.readFileSync(file, "utf8"), /resolveSiteSelection\(/, `${file} 必须复用共享选择逻辑`);
-// 站点登记三处一致性：manifest.matches × 适配器注册键 × SITES（漏一处该站静默缺席，不报错）
-const HINT = "（加站点必须同改 manifest.json / content/adapters-*.js / console/sites.js 三处，漏一处该站静默缺席）";
+// 站点登记一致性：扩展三处 + desktop M0（漏一处该端静默缺席，不报错）
+const HINT = "（加站点必须同改 manifest.json / content/adapters-*.js / console/sites.js，desktop 另改 desktop/src/main/sites.ts）";
 const sites = JSON.parse(vm.runInContext("JSON.stringify(SITES)", context));
+const desktopSource = fs.readFileSync("desktop/src/main/sites.ts", "utf8");
+const desktopHosts = [...desktopSource.matchAll(/\bhost:\s*"([^"]+)"/g)].map((match) => match[1]);
+assert.deepEqual(new Set(desktopHosts), new Set(sites.map((site) => site.host)),
+  `desktop 站点清单必须与扩展 SITES 完全一致${HINT}`);
 // 清单一律从 manifest 派生：硬编码文件名会让「manifest 漏挂某卷适配器」这种真事故照样绿
 const blocks = JSON.parse(fs.readFileSync("manifest.json", "utf8")).content_scripts;
 const matches = blocks.flatMap((b) => b.matches || []);

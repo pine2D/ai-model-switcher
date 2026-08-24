@@ -1,0 +1,89 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #18181b;
+  background: #f4f5f8;
+  --accent: #4f46e5;
+  --accent-soft: #eeedff;
+  --border: #d8dae2;
+  --panel: #ffffff;
+  --muted: #71717a;
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --danger: #dc2626;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button, textarea { font: inherit; }
+button { cursor: default; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.app-shell { width: 100%; height: 100%; background: #f4f5f8; }
+.topbar {
+  height: 48px; padding: 8px 12px; display: flex; align-items: center; gap: 18px;
+  border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 94%, transparent);
+}
+.brand { display: flex; align-items: baseline; gap: 7px; font-weight: 680; letter-spacing: -.02em; }
+.brand small { color: var(--muted); font-size: 12px; font-weight: 520; letter-spacing: 0; }
+.brand-mark {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+  color: white; background: var(--accent); font-size: 15px;
+}
+.mode-switch, .tier-switch { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: #f0f1f5; }
+.mode-switch button, .tier-switch button {
+  min-height: 27px; padding: 3px 10px; border: 0; border-radius: 6px; color: var(--muted); background: transparent;
+}
+.mode-switch button.active, .tier-switch button.active { color: #242036; background: var(--panel); box-shadow: 0 1px 3px #11182718; }
+.summary { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+.composer {
+  height: 100px; margin: 0; padding: 10px 12px; display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto; gap: 10px; align-items: center;
+  border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.composer textarea {
+  width: 100%; height: 76px; resize: none; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px;
+  color: inherit; background: #fafafd; outline: none; line-height: 1.45;
+}
+.composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.send, .cancel {
+  min-width: 106px; min-height: 42px; border: 0; border-radius: 9px; padding: 0 15px; color: white; font-weight: 650;
+}
+.send { background: var(--accent); }
+.send:disabled { opacity: .45; }
+.cancel { background: var(--danger); }
+.cancel:disabled { opacity: .68; }
+kbd { margin-left: 5px; opacity: .72; font: 11px system-ui; }
+
+.tile-layer { position: fixed; inset: 0; pointer-events: none; }
+.tile-frame {
+  position: absolute; pointer-events: none; border: 1px solid var(--border); border-radius: 7px 7px 3px 3px;
+  background: var(--panel); overflow: hidden;
+}
+.tile-header { height: 31px; padding: 0 5px 0 8px; display: flex; align-items: center; gap: 7px; pointer-events: auto; }
+.site-select { display: flex; align-items: center; gap: 6px; min-width: 96px; font-size: 12px; font-weight: 640; white-space: nowrap; }
+.site-select input { accent-color: var(--accent); }
+.answer-rail { height: 2px; flex: 1; border-radius: 1px; background: var(--border); }
+.site-state { min-width: 42px; text-align: right; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.tile-header button { width: 25px; height: 24px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
+.tile-header button:hover { color: var(--accent); background: var(--accent-soft); }
+.phase-sending .answer-rail { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.phase-submitted .answer-rail { background: var(--success); }
+.phase-warning .answer-rail { background: var(--warning); }
+.phase-warning .site-state { color: var(--warning); }
+.phase-cancelled .answer-rail { background: var(--muted); }
+.phase-failed .answer-rail, .phase-crashed .answer-rail { background: var(--danger); }
+
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .phase-sending .answer-rail { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #f4f4f5; background: #17171a; --accent: #a5a0ff; --accent-soft: #2d2a50;
+    --border: #38383f; --panel: #222226; --muted: #a1a1aa;
+  }
+  .app-shell { background: #17171a; }
+  .mode-switch, .tier-switch { background: #19191d; }
+  .mode-switch button.active, .tier-switch button.active { color: #f4f4f5; }
+  .composer textarea { background: #19191d; }
+}
