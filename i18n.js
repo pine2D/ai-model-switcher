@@ -267,6 +267,8 @@ function applyI18n(root) {
   root.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.getAttribute("data-i18n-ph")); });
   root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria"))); });
 }
+// Desktop preload 会把 classic scripts 分别打包成模块；显式命名空间避免依赖跨脚本词法作用域。
+globalThis.__AMS_I18N__ = Object.freeze({ t, applyI18n });
 // 权威值取 storage.local；变更实时重应用 + 通知各 surface 重渲动态串
 chrome.storage.local.get({ amsLang: "auto" }, (v) => { _setLangFrom(v.amsLang); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); });
 chrome.storage.onChanged.addListener((c, area) => {

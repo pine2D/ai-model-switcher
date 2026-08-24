@@ -3,6 +3,7 @@
 // 切换前对有状态控件先读状态、仅在需要时点击(幂等)；单站失败由 runMode 兜底为 toast。
 (function () {
   "use strict";
+  const t = globalThis.__AMS_I18N__ ? globalThis.__AMS_I18N__.t : globalThis.t;
   const S = window.__AMS;
   if (!S) return;
   const { waitFor, findByText, openMenu, clickEl, sleep, escMenus } = S;

@@ -73,6 +73,7 @@ node scripts/test-console-polish.js
 node scripts/test-icon-system.js
 
 echo "[test] 站点模型适配"
+node scripts/test-desktop-shared-runtime.js
 node scripts/test-intl-runtime.js
 node scripts/test-claude-model.js
 node scripts/test-qwen-adapter.js

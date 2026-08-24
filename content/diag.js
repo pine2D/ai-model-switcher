@@ -3,6 +3,7 @@
 // 契约同 adapter.diagnose（CLAUDE.md / docs/adapters.md）：只读同步、不得开菜单、只列常驻控件。
 (function () {
   "use strict";
+  const t = globalThis.__AMS_I18N__ ? globalThis.__AMS_I18N__.t : globalThis.t;
   const S = window.__AMS;
   if (!S || !S.adapters) return;
   // 通用检查两条：

@@ -2,6 +2,7 @@
 // adapters-cn.js 触及 300 行上限后按站拆分；契约与注意事项同 adapters-cn.js / CLAUDE.md。
 (function () {
   "use strict";
+  const t = globalThis.__AMS_I18N__ ? globalThis.__AMS_I18N__.t : globalThis.t;
   const S = window.__AMS;
   if (!S) return;
   const { waitFor, findByText, openMenu, clickEl, sleep, escMenus } = S;

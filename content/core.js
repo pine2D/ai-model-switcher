@@ -3,6 +3,7 @@
 (function () {
   "use strict";
 
+  const t = globalThis.__AMS_I18N__ ? globalThis.__AMS_I18N__.t : globalThis.t;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // 轮询等待：fn 返回真值则返回之，超时返回 null
