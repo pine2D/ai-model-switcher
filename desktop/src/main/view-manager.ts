@@ -15,7 +15,12 @@ import type {
   SiteResult,
   SiteStatus
 } from "../shared/protocol";
-import { computeViewLayout, resolveLayoutMode, scaleBounds } from "./layout";
+import {
+  computeViewLayout,
+  resolveLayoutMode,
+  scaleBounds,
+  swapFocusedSite
+} from "./layout";
 import { navigationDisposition } from "./navigation";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
@@ -40,6 +45,7 @@ export class ViewManager {
   private mode: "overview" | "focus" = "overview";
   private renderedMode: "overview" | "focus" = "overview";
   private focused: SiteKey = "claude";
+  private focusOrder: SiteKey[] = SITES.map((site) => site.key);
   private placements: readonly ViewPlacement[] = [];
 
   constructor(
@@ -67,6 +73,9 @@ export class ViewManager {
   }
 
   setLayout(mode: "overview" | "focus", focused: SiteKey = this.focused): void {
+    if (mode === "focus") {
+      this.focusOrder = swapFocusedSite(this.focusOrder, this.focused, focused);
+    }
     this.mode = mode;
     this.focused = focused;
     this.layout();
@@ -214,14 +223,16 @@ export class ViewManager {
     const zoom = Math.max(0.25, this.window.webContents.getZoomFactor());
     const cssWidth = Math.floor(width / zoom);
     const cssHeight = Math.floor(height / zoom);
-    this.renderedMode = resolveLayoutMode(this.mode, cssWidth);
     const area = {
       x: EDGE_GAP,
       y: SHELL_HEIGHT,
       width: Math.max(1, cssWidth - EDGE_GAP * 2),
       height: Math.max(1, cssHeight - SHELL_HEIGHT - EDGE_GAP)
     };
-    const keys = SITES.map((site) => site.key);
+    this.renderedMode = resolveLayoutMode(this.mode, area, 8);
+    const keys = this.renderedMode === "focus"
+      ? this.focusOrder
+      : SITES.map((site) => site.key);
     this.placements = computeViewLayout(
       keys,
       area,
