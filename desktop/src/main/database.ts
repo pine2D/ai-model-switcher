@@ -1,0 +1,102 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+
+import { ArchiveRepository } from "./archive-repository";
+import { HistoryRepository } from "./history-repository";
+import { MetaRepository } from "./meta-repository";
+import { OutboxRepository } from "./outbox-repository";
+import { StateRepository } from "./state-repository";
+
+const SCHEMA_VERSION = 1;
+
+function migrate(database: DatabaseSync): void {
+  database.exec("PRAGMA foreign_keys = ON");
+  database.exec("PRAGMA journal_mode = WAL");
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS history (
+      id TEXT PRIMARY KEY,
+      body TEXT NOT NULL,
+      sort_time INTEGER NOT NULL,
+      deleted_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS history_sort ON history(sort_time DESC, id);
+    CREATE INDEX IF NOT EXISTS history_deleted ON history(deleted_at);
+    CREATE TABLE IF NOT EXISTS archives (
+      id TEXT PRIMARY KEY,
+      body TEXT NOT NULL,
+      sort_time INTEGER NOT NULL,
+      deleted_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS archives_sort ON archives(sort_time DESC, id);
+    CREATE INDEX IF NOT EXISTS archives_deleted ON archives(deleted_at);
+    CREATE TABLE IF NOT EXISTS state_items (
+      key TEXT PRIMARY KEY,
+      body TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS state_updated ON state_items(updated_at, key);
+    CREATE INDEX IF NOT EXISTS state_deleted ON state_items(deleted_at);
+    CREATE TABLE IF NOT EXISTS outbox (
+      key TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      entity_id TEXT,
+      body TEXT NOT NULL,
+      next_at INTEGER NOT NULL,
+      revision INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS outbox_next ON outbox(next_at, key);
+    CREATE INDEX IF NOT EXISTS outbox_entity ON outbox(kind, entity_id);
+    CREATE TABLE IF NOT EXISTS drive_files (
+      file_id TEXT PRIMARY KEY,
+      logical_key TEXT NOT NULL,
+      body TEXT NOT NULL,
+      seen_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS drive_logical_key ON drive_files(logical_key);
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, body TEXT NOT NULL);
+    PRAGMA user_version = ${SCHEMA_VERSION};
+  `);
+}
+
+export class DesktopDatabase {
+  readonly outbox: OutboxRepository;
+  readonly history: HistoryRepository;
+  readonly archives: ArchiveRepository;
+  readonly state: StateRepository;
+  readonly meta: MetaRepository;
+  private closed = false;
+
+  private constructor(private readonly database: DatabaseSync) {
+    this.outbox = new OutboxRepository(database);
+    this.history = new HistoryRepository(database, this.outbox);
+    this.archives = new ArchiveRepository(database, this.outbox);
+    this.state = new StateRepository(database, this.outbox);
+    this.meta = new MetaRepository(database);
+  }
+
+  static open(path: string): DesktopDatabase {
+    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+    const database = new DatabaseSync(path);
+    migrate(database);
+    return new DesktopDatabase(database);
+  }
+
+  configuration(): { journalMode: string; foreignKeys: boolean; userVersion: number } {
+    const journal = this.database.prepare("PRAGMA journal_mode").get() as { journal_mode?: unknown } | undefined;
+    const foreign = this.database.prepare("PRAGMA foreign_keys").get() as { foreign_keys?: unknown } | undefined;
+    const version = this.database.prepare("PRAGMA user_version").get() as { user_version?: unknown } | undefined;
+    return {
+      journalMode: String(journal?.journal_mode ?? ""),
+      foreignKeys: Number(foreign?.foreign_keys) === 1,
+      userVersion: Number(version?.user_version) || 0
+    };
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.database.close();
+  }
+}

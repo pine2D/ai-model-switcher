@@ -215,7 +215,7 @@ git commit -m "test(desktop): add runtime smoke and stability gates"
 - Produces: `DesktopDatabase.open(path)`, `HistoryRepository`, `ArchiveRepository`, `StateRepository`。
 - Database tables: `history`、`archives`、`state_items`、`outbox`、`drive_files`、`meta`；正文以 JSON 保存，排序时间与 tombstone 单列建索引。
 
-- [ ] **Step 1: 写失败领域测试**
+- [x] **Step 1: 写失败领域测试**
 
 ```ts
 test("deleting an archive keeps a tombstone", () => {
@@ -230,13 +230,13 @@ test("workspace selection accepts known sites only and keeps product order", () 
 });
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run: `cd desktop && npx tsx --test test/workspace.test.ts test/archive.test.ts`
 
 Expected: 新模块缺失而失败。
 
-- [ ] **Step 3: 写失败持久化测试**
+- [x] **Step 3: 写失败持久化测试**
 
 ```ts
 test("archive updates and tombstones survive reopen", () => {
@@ -251,7 +251,7 @@ test("archive updates and tombstones survive reopen", () => {
 });
 ```
 
-- [ ] **Step 4: 运行 RED 并实现 SQLite schema**
+- [x] **Step 4: 运行 RED 并实现 SQLite schema**
 
 Run: `cd desktop && npx tsx --test test/database.test.ts`
 
@@ -259,18 +259,20 @@ Expected: `DesktopDatabase` 不存在而失败。
 
 实现 `DatabaseSync`、`PRAGMA journal_mode=WAL`、`foreign_keys=ON`、参数化语句和事务。测试数据库只写 `os.tmpdir()` 下的独立目录。
 
-- [ ] **Step 5: GREEN 与打包验证**
+- [x] **Step 5: GREEN 与打包验证**
 
 Run: `cd desktop && npm test && npm run typecheck && npm run package`
 
 Expected: Node 测试、Webpack 和 Electron 43 的 `node:sqlite` 打包全部通过。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add desktop/src desktop/test desktop/forge.config.ts
 git commit -m "feat(desktop): add durable workspace data store"
 ```
+
+验证记录（2026-08-25）：schema 1 领域契约、WAL/外键/schema version、参数化仓储、事务内 outbox、历史与归档 tombstone、workspace 与 deviceId 重开持久化均通过测试；Electron 43 Linux x64 打包与发行产物 smoke 证明内置 `node:sqlite` 可在主进程正常加载。
 
 ### Task 4: 站点范围、分组与新会话
 

@@ -1,3 +1,5 @@
+import { join } from "node:path";
+
 import {
   app,
   BrowserWindow,
@@ -22,6 +24,7 @@ import {
   type SiteStatus
 } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
+import { DesktopDatabase } from "./database";
 import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { SITES } from "./sites";
@@ -31,6 +34,7 @@ import { ViewManager } from "./view-manager";
 const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
 let viewManager: ViewManager | null = null;
+let desktopDatabase: DesktopDatabase | null = null;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
 
@@ -272,11 +276,16 @@ else {
     contents.on("will-attach-webview", (event) => event.preventDefault());
   });
   void app.whenReady().then(async () => {
+    desktopDatabase = DesktopDatabase.open(join(app.getPath("userData"), "polyask.sqlite"));
     createMenu();
     await createWindow();
     app.on("activate", () => { if (!mainWindow) void createWindow(); });
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
+  });
+  app.on("before-quit", () => {
+    desktopDatabase?.close();
+    desktopDatabase = null;
   });
 }
