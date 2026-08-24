@@ -23,14 +23,20 @@ import type {
   SiteStatus
 } from "../shared/protocol";
 import {
+  SITE_PARTITION,
+  type DiagnosticSiteInput
+} from "./diagnostics";
+import {
   computeViewLayout,
   resolveLayoutMode,
   scaleBounds,
   swapFocusedSite
 } from "./layout";
 import { navigationDisposition } from "./navigation";
+import { createSiteView, diagnosticSitesForViews } from "./site-view";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
+import type { StabilityEventInput } from "./stability-monitor";
 
 interface PendingCommand {
   readonly contentsId: number;
@@ -52,15 +58,16 @@ export class ViewManager {
   private placements: readonly ViewPlacement[] = [];
   private display = DEFAULT_DISPLAY_PREFERENCES;
   private composerExpanded = false;
+  private readonly siteSession = session.fromPartition(SITE_PARTITION);
 
   constructor(
     private readonly window: BrowserWindow,
     private readonly onStatus: (status: SiteStatus) => void,
-    private readonly onLayout: (layout: LayoutState) => void
+    private readonly onLayout: (layout: LayoutState) => void,
+    private readonly onRuntimeEvent: (event: StabilityEventInput) => void = () => undefined
   ) {
-    const siteSession = session.fromPartition("persist:polyask-sites");
-    siteSession.setPermissionCheckHandler(() => false);
-    siteSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    this.siteSession.setPermissionCheckHandler(() => false);
+    this.siteSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 
     for (const site of SITES) this.createView(site);
     this.layout();
@@ -79,6 +86,10 @@ export class ViewManager {
 
   getDisplayPreferences(): DisplayPreferences {
     return this.display;
+  }
+
+  getDiagnosticSites(): DiagnosticSiteInput[] {
+    return diagnosticSitesForViews(SITES, this.views, this.siteSession);
   }
 
   setDisplayPreferences(value: DisplayPreferences): void {
@@ -196,45 +207,22 @@ export class ViewManager {
   }
 
   private createView(site: SiteDefinition, url: string = site.url): void {
-    const view = new WebContentsView({
-      webPreferences: {
-        preload: SITE_WINDOW_PRELOAD_WEBPACK_ENTRY,
-        partition: "persist:polyask-sites",
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        webSecurity: true,
-        backgroundThrottling: false,
-        spellcheck: true
+    const view = createSiteView(site, {
+      onLoading: () => this.updatePageStatus({ site: site.key, phase: "loading" }),
+      onReady: () => this.updatePageStatus({ site: site.key, phase: "ready" }),
+      onFailure: (code) => {
+        this.updatePageStatus({ site: site.key, phase: "failed", code: "load_failed" });
+        this.onRuntimeEvent({ type: "did-fail-load", site: site.key, code: String(code) });
+      },
+      onCrash: (reason) => {
+        this.updatePageStatus({ site: site.key, phase: "crashed", code: "renderer_crashed" });
+        this.onRuntimeEvent({ type: "render-process-gone", site: site.key, code: reason });
       }
     });
     this.views.set(site.key, view);
     this.window.contentView.addChildView(view);
     this.updatePageStatus({ site: site.key, phase: "loading" });
-
-    const contents = view.webContents;
-    contents.on("did-start-loading", () => this.updatePageStatus({ site: site.key, phase: "loading" }));
-    contents.on("did-finish-load", () => this.updatePageStatus({ site: site.key, phase: "ready" }));
-    contents.on("did-fail-load", (_event, code) => {
-      if (code !== -3) this.updatePageStatus({ site: site.key, phase: "failed", code: "load_failed" });
-    });
-    contents.on("render-process-gone", () => {
-      this.updatePageStatus({ site: site.key, phase: "crashed", code: "renderer_crashed" });
-    });
-    const guardNavigation = (event: Electron.Event, url: string) => {
-      const disposition = navigationDisposition(site, url);
-      if (disposition === "external" || disposition === "block") event.preventDefault();
-    };
-    contents.on("will-navigate", guardNavigation);
-    contents.on("will-redirect", guardNavigation);
-    contents.setWindowOpenHandler(({ url }) => {
-      const disposition = navigationDisposition(site, url);
-      if (disposition === "site" || disposition === "auth") {
-        void contents.loadURL(url);
-      }
-      return { action: "deny" };
-    });
-    void contents.loadURL(url);
+    void view.webContents.loadURL(url);
   }
 
   private layout(): void {

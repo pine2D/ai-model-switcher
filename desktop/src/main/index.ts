@@ -23,6 +23,7 @@ import {
 } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
 import { isTrustedShellUrl } from "./security";
+import { startRuntimeGates } from "./runtime-gates";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
 import { ViewManager } from "./view-manager";
@@ -231,17 +232,21 @@ async function createWindow(): Promise<void> {
   window.webContents.on("will-navigate", guardShellNavigation);
   window.webContents.on("will-redirect", guardShellNavigation);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  const runtimeGates = startRuntimeGates(window);
   const manager = new ViewManager(
     window,
     (status) => sendToShell("polyask:site-status", status),
-    (layout) => sendToShell("polyask:layout", layout)
+    (layout) => sendToShell("polyask:layout", layout),
+    runtimeGates.record
   );
   viewManager = manager;
   createMenu();
   registerIpc(window, manager);
   window.once("ready-to-show", () => window.show());
   await window.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  runtimeGates.writeDiagnostic(manager);
   window.on("closed", () => {
+    runtimeGates.dispose();
     ipcMain.removeHandler("polyask:bootstrap");
     ipcMain.removeHandler("polyask:set-display");
     ipcMain.removeHandler("polyask:broadcast");

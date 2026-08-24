@@ -39,3 +39,7 @@ jobs:
       - name: 构建桌面端目录
         working-directory: desktop
         run: npm run package
+
+      - name: 冒烟测试桌面端运行时
+        working-directory: desktop
+        run: xvfb-run -a npm run smoke -- --skip-package

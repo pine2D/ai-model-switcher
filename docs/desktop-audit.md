@@ -27,11 +27,11 @@
 
 2026-08-24 的桌面 M0 已具备一个 Shell 和 9 个持久 `WebContentsView`、共享站点登录 session、绝对 deadline/epoch 群发、Grid/Focus、密度与页面缩放、三语状态、单站重载和安全 IPC。WSLg 真机确认九站可登录，除 Kimi 当时的付费业务限制外其余 8 站可提交并实时显示回答。
 
-当前自动化基线为 41 项桌面 Node 测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh` 全绿。该证据早于产品化迁移，不能证明本计划新增能力。
+当前自动化基线为 47 项桌面 TypeScript/React 测试、1 项运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh` 全绿。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。
 
 ## 已知未完成证据
 
-- Electron package 启动后的自动化 smoke 与 60 分钟稳定性报告尚未建立。
+- 正式 60 分钟稳定性报告尚未执行；3 分钟短测不能替代。
 - Windows、macOS、原生 Ubuntu 尚未完成同版本原生验收。
 - 图片、范围/分组、新会话、汇总、归档、辅助综合和 Drive 尚未迁移到桌面端。
 - Windows Narrator、macOS VoiceOver、Ubuntu Orca、高对比度和完整缩放矩阵尚无证据。

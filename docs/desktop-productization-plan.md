@@ -130,7 +130,7 @@ git commit -m "feat(desktop): converge compact command controls"
 - Produces: `StabilityMonitor.sample(metrics, events)` 和 JSONL 报告，包含 timestamp、PID、type、CPU、workingSet、peakWorkingSet、crash/load/unresponsive 事件。
 - 环境变量只在测试启动时生效：`POLYASK_DIAGNOSTICS_FILE`、`POLYASK_SOAK_REPORT`、`POLYASK_SOAK_MINUTES`；`app.isPackaged` 不开放远程调试端口。
 
-- [ ] **Step 1: 写失败诊断测试**
+- [x] **Step 1: 写失败诊断测试**
 
 ```ts
 test("diagnostic snapshot proves one shell and nine secure site views", () => {
@@ -154,13 +154,13 @@ test("diagnostic snapshot proves one shell and nine secure site views", () => {
 });
 ```
 
-- [ ] **Step 2: RED → 最小诊断实现 → GREEN**
+- [x] **Step 2: RED → 最小诊断实现 → GREEN**
 
 Run: `cd desktop && npx tsx --test test/diagnostics.test.ts`
 
 Expected RED: 模块缺失。实现只读快照后重跑，Expected GREEN: PASS。
 
-- [ ] **Step 3: 写失败稳定性聚合测试**
+- [x] **Step 3: 写失败稳定性聚合测试**
 
 ```ts
 test("soak summary reports growth and renderer failures", () => {
@@ -170,11 +170,11 @@ test("soak summary reports growth and renderer failures", () => {
 });
 ```
 
-- [ ] **Step 4: 实现 smoke/soak runner**
+- [x] **Step 4: 实现 smoke/soak runner**
 
 `npm run smoke` 先打包当前平台，启动产物，等待诊断 JSON，断言九站与安全偏好后退出。`npm run soak -- --minutes=60` 启动同一产物，每分钟采样，60 分钟后输出摘要并优雅退出；任何 renderer crash、unresponsive 或诊断缺站返回非零。
 
-- [ ] **Step 5: 验证**
+- [x] **Step 5: 验证**
 
 Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 
@@ -182,7 +182,7 @@ Run: `cd desktop && npm run soak -- --minutes=3`
 
 Expected: 短时门禁用于开发验证；正式 M0 记录另跑 60 分钟，不以 3 分钟代替。
 
-- [ ] **Step 6: CI 与提交**
+- [x] **Step 6: CI 与提交**
 
 CI Linux 执行 `npm run smoke`，60 分钟 soak 保留为人工/定时门禁。
 
@@ -191,6 +191,8 @@ CI Linux 执行 `npm run smoke`，60 分钟 soak 保留为人工/定时门禁。
 git add desktop .github/workflows/ci.yml docs/desktop-m0.md
 git commit -m "test(desktop): add runtime smoke and stability gates"
 ```
+
+验证记录（2026-08-24）：47 项 TypeScript/React 测试与 1 项运行器测试、类型检查、运行依赖审计、Linux x64 打包和根仓库门禁全绿。打包产物 smoke 证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 取得 4 次采样，0 次 renderer crash、0 次 unresponsive。正式 60 分钟报告仍在最终审计阶段执行，不能由本次短测替代。
 
 ### Task 3: SQLite 数据与桌面领域契约
 

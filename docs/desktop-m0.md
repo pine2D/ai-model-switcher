@@ -154,9 +154,11 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 
 2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。人工验证进一步确认九站均可登录，Gemini 首次登录与群发成功；除 Kimi 因站点当时要求付费订阅而拒绝对话外，其余 8 站均成功提交并实时显示回答。该 Kimi 结果属于站点业务限制，不是容器、登录或群发链路故障。
 
-同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。桌面端现有 43 项 Node 测试通过，`npm run typecheck`、`npm run package`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行桌面依赖锁定安装、测试、类型检查与 Linux 打包。
+同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-尚未完成 M0 退出验收：Electron 运行时集成自动化、Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。桌面端现有 47 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行 Linux 打包产物 smoke。
+
+尚未完成 M0 退出验收：Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
 
 运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞。完整 `npm audit` 仍报告 Electron Forge 构建链的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包不进入应用运行依赖，但正式发布前必须重新评估并清零或形成明确处置记录。
 
@@ -169,4 +171,6 @@ npm test
 npm run typecheck
 npm start
 npm run package
+npm run smoke
+npm run soak -- --minutes=60
 ```
