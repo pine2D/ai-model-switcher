@@ -1,14 +1,14 @@
 import type { SiteKey } from "../shared/contracts";
 import type {
   BroadcastRequest,
-  SiteCommand,
+  SubmitSiteCommand,
   SiteResult,
   SiteRunResult
 } from "../shared/protocol";
 
 export type SiteDispatch = (
   site: SiteKey,
-  command: SiteCommand,
+  command: SubmitSiteCommand,
   signal: AbortSignal
 ) => Promise<SiteResult>;
 
@@ -44,7 +44,7 @@ export class BroadcastCoordinator {
 
     const results = await Promise.all(
       request.sites.map(async (site): Promise<SiteRunResult> => {
-        const command: SiteCommand = {
+        const command: SubmitSiteCommand = {
           source: "AMS",
           cmd: "submitPrompt",
           text: request.text,
@@ -76,7 +76,7 @@ export class BroadcastCoordinator {
 
   private async dispatchUntilTerminal(
     site: SiteKey,
-    command: SiteCommand,
+    command: SubmitSiteCommand,
     dispatch: SiteDispatch,
     epoch: number,
     signal: AbortSignal

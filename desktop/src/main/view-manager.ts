@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import {
   BrowserWindow,
   WebContentsView,
@@ -14,10 +12,13 @@ import {
 } from "../shared/display";
 import type {
   LayoutState,
-  SiteCommand,
+  CollectSiteCommand,
+  DesktopSurface,
+  SiteCollectionResult,
   SiteResponseEnvelope,
   SiteResult,
-  SiteStatus
+  SiteStatus,
+  SubmitSiteCommand
 } from "../shared/protocol";
 import {
   SITE_PARTITION,
@@ -27,25 +28,18 @@ import {
   swapFocusedSite
 } from "./layout";
 import { navigationDisposition } from "./navigation";
+import { SiteCommandChannel } from "./site-command-channel";
 import { createSiteView, diagnosticSitesForViews } from "./site-view";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
 import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 
-interface PendingCommand {
-  readonly contentsId: number;
-  readonly resolve: (result: SiteResult) => void;
-  readonly timer: NodeJS.Timeout;
-  readonly signal: AbortSignal;
-  readonly onAbort: () => void;
-}
-
 export class ViewManager {
   private readonly views = new Map<SiteKey, WebContentsView>();
   private readonly pageStatus = new Map<SiteKey, SiteStatus>();
   private readonly runStatus = new Map<SiteKey, SiteStatus>();
-  private readonly pending = new Map<string, PendingCommand>();
+  private readonly commands = new SiteCommandChannel();
   private mode: "overview" | "focus" = "overview";
   private renderedMode: "overview" | "focus" = "overview";
   private focused: SiteKey = "claude";
@@ -54,6 +48,7 @@ export class ViewManager {
   private display = DEFAULT_DISPLAY_PREFERENCES;
   private composerExpanded = false;
   private drawerOpen = false;
+  private surface: DesktopSurface = "sites";
   private readonly siteSession = session.fromPartition(SITE_PARTITION);
 
   constructor(
@@ -118,6 +113,18 @@ export class ViewManager {
     }
   }
 
+  setSurface(value: DesktopSurface): void {
+    if (this.surface === value || this.window.isDestroyed()) return;
+    if (this.surface === "sites") {
+      for (const view of this.views.values()) this.window.contentView.removeChildView(view);
+    }
+    this.surface = value;
+    if (value === "sites") {
+      for (const view of this.views.values()) this.window.contentView.addChildView(view);
+      this.layout();
+    }
+  }
+
   focusRelative(offset: -1 | 1): void {
     const keys = SITES.map((site) => site.key);
     const current = keys.indexOf(this.focused);
@@ -156,7 +163,7 @@ export class ViewManager {
     return null;
   }
 
-  sendCommand(site: SiteKey, command: SiteCommand, signal: AbortSignal): Promise<SiteResult> {
+  sendCommand(site: SiteKey, command: SubmitSiteCommand, signal: AbortSignal): Promise<SiteResult> {
     const view = this.views.get(site);
     if (!view || view.webContents.isDestroyed()) {
       return Promise.resolve({ ok: false, code: "no_view" });
@@ -165,54 +172,36 @@ export class ViewManager {
     if (!definition || navigationDisposition(definition, view.webContents.getURL()) !== "site") {
       return Promise.resolve({ ok: false, code: "not_ready" });
     }
-    const remaining = Math.max(0, command.deadline - Date.now());
-    if (remaining === 0) return Promise.resolve({ ok: false, code: "timeout" });
-    if (signal.aborted) return Promise.resolve({ ok: false, code: "cancelled" });
+    return this.commands.send(view.webContents, command, {
+      signal,
+      timeoutResult: { ok: false, code: "submit_unconfirmed" },
+      onAbort: () => {
+        if (view.webContents.isDestroyed()) return;
+        this.replaceView(definition, view, view.webContents.getURL() || definition.url);
+      }
+    }).then((result) => "ok" in result ? result : { ok: false, code: "invalid_response" });
+  }
 
-    const requestId = randomUUID();
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        const pending = this.pending.get(requestId);
-        if (pending) pending.signal.removeEventListener("abort", pending.onAbort);
-        this.pending.delete(requestId);
-        resolve({ ok: false, code: "submit_unconfirmed" });
-      }, remaining);
-      const onAbort = () => {
-        if (!this.pending.delete(requestId)) return;
-        clearTimeout(timer);
-        const contents = view.webContents;
-        if (!contents.isDestroyed()) {
-          const currentUrl = contents.getURL() || definition.url;
-          this.replaceView(definition, view, currentUrl);
-        }
-        resolve({ ok: false, code: "cancelled" });
-      };
-      this.pending.set(requestId, {
-        contentsId: view.webContents.id,
-        resolve,
-        timer,
-        signal,
-        onAbort
-      });
-      signal.addEventListener("abort", onAbort, { once: true });
-      if (signal.aborted) { onAbort(); return; }
-      view.webContents.send("polyask:site-command", { requestId, command });
-    });
+  collect(site: SiteKey, deadline: number): Promise<SiteCollectionResult> {
+    const view = this.views.get(site);
+    if (!view || view.webContents.isDestroyed()) return Promise.resolve({ code: "no_view" });
+    const definition = SITES.find((candidate) => candidate.key === site);
+    if (!definition || navigationDisposition(definition, view.webContents.getURL()) !== "site") {
+      return Promise.resolve({ code: "not_ready" });
+    }
+    const command: CollectSiteCommand = { source: "AMS", cmd: "collect", deadline };
+    return this.commands.send(view.webContents, command, {
+      timeoutResult: { code: "not_ready" }
+    }).then((result) => "ok" in result ? { code: "not_ready" } : result);
   }
 
   receiveResponse(sender: WebContents, envelope: SiteResponseEnvelope): void {
-    if (!envelope || typeof envelope.requestId !== "string") return;
-    const pending = this.pending.get(envelope.requestId);
-    if (!pending || pending.contentsId !== sender.id) return;
-    clearTimeout(pending.timer);
-    pending.signal.removeEventListener("abort", pending.onAbort);
-    this.pending.delete(envelope.requestId);
-    pending.resolve(envelope.result);
+    this.commands.receive(sender, envelope);
   }
 
   private replaceView(site: SiteDefinition, view: WebContentsView, url: string): void {
     if (this.views.get(site.key) !== view || this.window.isDestroyed()) return;
-    this.window.contentView.removeChildView(view);
+    if (this.surface === "sites") this.window.contentView.removeChildView(view);
     this.views.delete(site.key);
     if (!view.webContents.isDestroyed()) view.webContents.close();
     this.createView(site, url);
@@ -233,13 +222,13 @@ export class ViewManager {
       }
     });
     this.views.set(site.key, view);
-    this.window.contentView.addChildView(view);
+    if (this.surface === "sites") this.window.contentView.addChildView(view);
     this.updatePageStatus({ site: site.key, phase: "loading" });
     void view.webContents.loadURL(url);
   }
 
   private layout(): void {
-    if (this.window.isDestroyed()) return;
+    if (this.window.isDestroyed() || this.surface !== "sites") return;
     const [width, height] = this.window.getContentSize();
     const zoom = Math.max(0.25, this.window.webContents.getZoomFactor());
     const cssWidth = Math.floor(width / zoom);
@@ -282,12 +271,7 @@ export class ViewManager {
   }
 
   private dispose(): void {
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.signal.removeEventListener("abort", pending.onAbort);
-      pending.resolve({ ok: false, code: "cancelled" });
-    }
-    this.pending.clear();
+    this.commands.dispose();
     for (const view of this.views.values()) {
       if (!view.webContents.isDestroyed()) view.webContents.close();
     }

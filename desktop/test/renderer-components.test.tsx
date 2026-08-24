@@ -21,6 +21,7 @@ test("command bar renders one compact command surface with stateful controls", (
       text="Question"
       tier={null}
       runState="idle"
+      auxiliaryBusy={false}
       layoutMode="overview"
       selectedCount={9}
       totalSites={9}
@@ -38,6 +39,8 @@ test("command bar renders one compact command surface with stateful controls", (
       onExpandedChange={noop}
       onToggleDrawer={noop}
       onNewSession={noop}
+      onCollectAnswers={noop}
+      onOpenArchive={noop}
       onPasteImages={noop}
     />
   );
@@ -59,6 +62,8 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
   assert.match(html, /aria-controls="workspace-drawer"/);
   assert.match(html, /aria-label="New session for selected sites"/);
+  assert.match(html, /aria-label="Collect and copy selected answers"/);
+  assert.match(html, /aria-label="Open result library"/);
   assert.match(html, /data-test="images"/);
 });
 

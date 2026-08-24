@@ -2,14 +2,16 @@ import { ipcRenderer } from "electron";
 
 import type {
   SiteCommand,
+  SiteCommandResponse,
   SiteCommandEnvelope,
+  SiteCollectionResult,
   SiteResponseEnvelope,
   SiteResult
 } from "../shared/protocol";
 
 type SendResponse = (response: unknown) => void;
 type RuntimeListener = (
-  message: SiteCommand,
+  message: unknown,
   sender: Record<string, never>,
   sendResponse: SendResponse
 ) => unknown;
@@ -57,7 +59,20 @@ function normalizeResult(value: unknown): SiteResult {
   return result;
 }
 
-function dispatch(command: SiteCommand): Promise<SiteResult> {
+function normalizeCollection(value: unknown): SiteCollectionResult {
+  if (!value || typeof value !== "object") return { code: "no_answer" };
+  const candidate = value as Record<string, unknown>;
+  const text = typeof candidate.text === "string" && candidate.text.trim() ? candidate.text : undefined;
+  const state = typeof candidate.state === "string" ? candidate.state.slice(0, 64) : undefined;
+  const code = typeof candidate.code === "string" ? candidate.code.slice(0, 64) : undefined;
+  return {
+    ...(text ? { text } : {}),
+    ...(state ? { state } : {}),
+    ...(!text ? { code: code || "no_answer" } : code ? { code } : {})
+  };
+}
+
+function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
   const listener = listeners[0];
   if (!listener) return Promise.resolve({ ok: false, code: "adapter_unavailable" });
   const remaining = Math.max(0, command.deadline - Date.now());
@@ -69,14 +84,17 @@ function dispatch(command: SiteCommand): Promise<SiteResult> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(normalizeResult(value));
+      resolve(command.cmd === "collect" ? normalizeCollection(value) : normalizeResult(value));
     };
     const timer = setTimeout(
-      () => finish({ ok: false, code: "submit_unconfirmed" }),
+      () => finish(command.cmd === "collect" ? { code: "not_ready" } : { ok: false, code: "submit_unconfirmed" }),
       remaining
     );
     try {
-      const asyncResponse = listener(command, {}, finish) === true;
+      const message = command.cmd === "collect"
+        ? { source: "AMS", cmd: "collectAnswer" }
+        : command;
+      const asyncResponse = listener(message, {}, finish) === true;
       if (!asyncResponse && !settled) finish({ ok: false, code: "invalid_response" });
     } catch {
       finish({ ok: false, code: "error" });

@@ -430,7 +430,7 @@ git commit -m "feat(desktop): support multi-image broadcasts"
 - Produces: `ArchiveService.search/get/add/update/delete/exportMarkdown`。
 - `ViewManager.setSurface("sites" | "archive" | "settings")` 临时 detach/reattach site views，保持 webContents 与页面状态不变。
 
-- [ ] **Step 1: 写失败收集测试**
+- [x] **Step 1: 写失败收集测试**
 
 ```ts
 test("collection preserves product order and reports missing answers", async () => {
@@ -440,11 +440,11 @@ test("collection preserves product order and reports missing answers", async () 
 });
 ```
 
-- [ ] **Step 2: RED → 收集 IPC GREEN**
+- [x] **Step 2: RED → 收集 IPC GREEN**
 
 Run: `cd desktop && npx tsx --test test/collection-service.test.ts test/protocol.test.ts`
 
-- [ ] **Step 3: 写失败归档测试**
+- [x] **Step 3: 写失败归档测试**
 
 ```ts
 test("archive search filters task, answer preview, tag and favorite", () => {
@@ -458,15 +458,15 @@ test("archive delete never physically removes the row", () => {
 });
 ```
 
-- [ ] **Step 4: 实现单窗口归档表面**
+- [x] **Step 4: 实现单窗口归档表面**
 
 归档工作区覆盖 Shell 并 detach 九个 views，不新开窗口；关闭归档后原 webContents id 和滚动/回答状态保持不变。功能包括列表、搜索、标签、收藏、笔记、最佳答案、Markdown 预览/复制/导出和二段删除确认。
 
-- [ ] **Step 5: 自动保存语义**
+- [x] **Step 5: 自动保存语义**
 
 每次成功群发写历史；用户点击汇总时定格问题、档位、站点选择、来源、各站结果和时间，写入归档后再复制 Markdown。没有答案的站点保留错误码占位，不伪装成功。
 
-- [ ] **Step 6: 验证与提交**
+- [x] **Step 6: 验证与提交**
 
 Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 
@@ -474,6 +474,8 @@ Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 git add desktop/src desktop/test CHANGELOG.md README.md
 git commit -m "feat(desktop): add collection and archive workspace"
 ```
+
+验证记录（2026-08-25）：回答采集复用现有只读 `adapter.answer()`，九站并行、共用 8 秒绝对 deadline，并按产品顺序保存 `no_answer`/`not_ready`/`no_view` 占位；成功群发以 SHA-256 文本键写入历史。结果库使用可信 IPC 与 SQLite schema 1，搜索、收藏、标签、备注、最佳答案、来源、Markdown 预览/复制/导出和绑定 id 的二段 tombstone 删除均有测试。打开结果库只 detach 九个 `WebContentsView`，关闭后 reattach，不关闭 `webContents`。81 项桌面测试、TypeScript 和 Linux x64 发行产物 smoke 通过；九站真实采集及页面状态保持仍列入最终人工回归。
 
 ### Task 7: 辅助综合工作流
 

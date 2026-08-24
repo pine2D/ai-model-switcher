@@ -1,10 +1,20 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import type {
+  ArchiveFilters,
+  ArchiveInput,
+  ArchivePatch,
+  ArchiveRecord,
+  ArchiveSearchResult
+} from "../shared/archive";
 import type { SiteKey } from "../shared/contracts";
 import type { DisplayPreferences } from "../shared/display";
 import type {
   BootstrapState,
   BroadcastRequest,
+  CollectedAnswer,
+  CollectionRequest,
+  DesktopSurface,
   LayoutState,
   SiteRunResult,
   SiteStatus
@@ -14,11 +24,20 @@ import type { WorkspaceState } from "../shared/workspace";
 export interface PolyAskDesktopApi {
   bootstrap(): Promise<BootstrapState>;
   broadcast(request: BroadcastRequest): Promise<SiteRunResult[]>;
+  collectAnswers(request: CollectionRequest): Promise<CollectedAnswer[]>;
+  searchArchives(filters: ArchiveFilters): Promise<ArchiveSearchResult>;
+  getArchive(id: string): Promise<ArchiveRecord | null>;
+  addArchive(input: ArchiveInput): Promise<ArchiveRecord>;
+  updateArchive(id: string, patch: ArchivePatch): Promise<ArchiveRecord>;
+  deleteArchive(id: string): Promise<void>;
+  archiveMarkdown(id: string, locale: string): Promise<string>;
+  openExternal(url: string): Promise<void>;
   cancel(): void;
   setLayout(mode: "overview" | "focus", focused: SiteKey): void;
   setDisplayPreferences(value: DisplayPreferences): Promise<DisplayPreferences>;
   setComposerExpanded(value: boolean): void;
   setDrawerOpen(value: boolean): void;
+  setSurface(value: DesktopSurface): void;
   setSelection(sites: readonly SiteKey[]): Promise<WorkspaceState>;
   setTier(value: BroadcastRequest["tier"]): Promise<WorkspaceState>;
   saveGroup(input: { readonly name: string; readonly sites: readonly SiteKey[] }): Promise<WorkspaceState>;
@@ -41,11 +60,20 @@ function subscribe<T>(channel: string, listener: (value: T) => void): () => void
 const api: PolyAskDesktopApi = Object.freeze({
   bootstrap: () => ipcRenderer.invoke("polyask:bootstrap"),
   broadcast: (request: BroadcastRequest) => ipcRenderer.invoke("polyask:broadcast", request),
+  collectAnswers: (request: CollectionRequest) => ipcRenderer.invoke("polyask:collect", request),
+  searchArchives: (filters: ArchiveFilters) => ipcRenderer.invoke("polyask:archive-search", filters),
+  getArchive: (id: string) => ipcRenderer.invoke("polyask:archive-get", id),
+  addArchive: (input: ArchiveInput) => ipcRenderer.invoke("polyask:archive-add", input),
+  updateArchive: (id: string, patch: ArchivePatch) => ipcRenderer.invoke("polyask:archive-update", { id, patch }),
+  deleteArchive: (id: string) => ipcRenderer.invoke("polyask:archive-delete", id),
+  archiveMarkdown: (id: string, locale: string) => ipcRenderer.invoke("polyask:archive-markdown", { id, locale }),
+  openExternal: (url: string) => ipcRenderer.invoke("polyask:open-external", url),
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),
   setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
   setComposerExpanded: (value: boolean) => ipcRenderer.send("polyask:set-composer-expanded", value),
   setDrawerOpen: (value: boolean) => ipcRenderer.send("polyask:set-drawer-open", value),
+  setSurface: (value: DesktopSurface) => ipcRenderer.send("polyask:set-surface", value),
   setSelection: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:set-selection", sites),
   setTier: (value: BroadcastRequest["tier"]) => ipcRenderer.invoke("polyask:set-tier", value),
   saveGroup: (input: { readonly name: string; readonly sites: readonly SiteKey[] }) =>

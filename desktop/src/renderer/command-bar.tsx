@@ -14,6 +14,7 @@ interface CommandBarProps {
   readonly text: string;
   readonly tier: Tier;
   readonly runState: RunState;
+  readonly auxiliaryBusy: boolean;
   readonly layoutMode: "overview" | "focus";
   readonly selectedCount: number;
   readonly totalSites: number;
@@ -31,6 +32,8 @@ interface CommandBarProps {
   readonly onExpandedChange: (value: boolean) => void;
   readonly onToggleDrawer: () => void;
   readonly onNewSession: () => void;
+  readonly onCollectAnswers: () => void;
+  readonly onOpenArchive: () => void;
   readonly onPasteImages: (files: readonly File[]) => void;
 }
 
@@ -41,6 +44,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     text,
     tier,
     runState,
+    auxiliaryBusy,
     layoutMode,
     selectedCount,
     totalSites,
@@ -58,6 +62,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onExpandedChange,
     onToggleDrawer,
     onNewSession,
+    onCollectAnswers,
+    onOpenArchive,
     onPasteImages
   } = props;
   const tierOptions = [
@@ -117,16 +123,18 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         totalSites={totalSites}
         activeCount={activeCount}
         drawerOpen={drawerOpen}
-        disabled={runState !== "idle"}
+        disabled={runState !== "idle" || auxiliaryBusy}
         onToggleDrawer={onToggleDrawer}
         onNewSession={onNewSession}
+        onCollectAnswers={onCollectAnswers}
+        onOpenArchive={onOpenArchive}
       />
       {runState !== "idle" ? (
         <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>
           <StopIcon /><span>{runState === "cancelling" ? copy.cancelling : copy.cancel}</span>
         </button>
       ) : (
-        <button type="button" className="send primary-action priority-p0" title={sendBlockedReason ?? undefined} disabled={!text.trim() || selectedCount === 0 || !!sendBlockedReason} onClick={onSubmit}>
+        <button type="button" className="send primary-action priority-p0" title={sendBlockedReason ?? undefined} disabled={auxiliaryBusy || !text.trim() || selectedCount === 0 || !!sendBlockedReason} onClick={onSubmit}>
           <SendIcon /><span>{copy.send}</span><kbd>{isMac ? "⌘↵" : "Ctrl+↵"}</kbd>
         </button>
       )}

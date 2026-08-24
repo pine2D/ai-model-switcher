@@ -1,5 +1,5 @@
 import { formatCopy, type DesktopCopy } from "../shared/copy";
-import { NewSessionIcon, ScopeIcon } from "./icons";
+import { ArchiveIcon, CopyIcon, NewSessionIcon, ScopeIcon } from "./icons";
 
 interface WorkspaceActionsProps {
   readonly copy: DesktopCopy;
@@ -10,6 +10,8 @@ interface WorkspaceActionsProps {
   readonly disabled: boolean;
   readonly onToggleDrawer: () => void;
   readonly onNewSession: () => void;
+  readonly onCollectAnswers: () => void;
+  readonly onOpenArchive: () => void;
 }
 
 export function WorkspaceActions(props: WorkspaceActionsProps): React.JSX.Element {
@@ -37,6 +39,8 @@ export function WorkspaceActions(props: WorkspaceActionsProps): React.JSX.Elemen
         disabled={props.disabled || props.selectedCount === 0}
         onClick={props.onNewSession}
       ><NewSessionIcon /></button>
+      <button type="button" title={props.copy.collectAnswers} aria-label={props.copy.collectAnswers} disabled={props.disabled || props.selectedCount === 0} onClick={props.onCollectAnswers}><CopyIcon /></button>
+      <button type="button" title={props.copy.openArchive} aria-label={props.copy.openArchive} disabled={props.disabled} onClick={props.onOpenArchive}><ArchiveIcon /></button>
       <span className="summary priority-p1" role="status" aria-live="polite">{summary}</span>
     </div>
   );

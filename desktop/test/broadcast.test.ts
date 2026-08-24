@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { BroadcastCoordinator } from "../src/main/broadcast";
-import type { SiteCommand, SiteResult } from "../src/shared/protocol";
+import type { SiteResult, SubmitSiteCommand } from "../src/shared/protocol";
 
 test("broadcast uses one absolute deadline and dispatches every site concurrently", async () => {
   const coordinator = new BroadcastCoordinator(() => 1_000);
-  const commands: SiteCommand[] = [];
+  const commands: SubmitSiteCommand[] = [];
   const result = await coordinator.send(
     { text: "question", tier: "fast", sites: ["claude", "gemini"], images: [] },
     async (_site, command) => {
@@ -25,7 +25,7 @@ test("broadcast uses one absolute deadline and dispatches every site concurrentl
 
 test("image broadcast uses the long deadline and forwards one validated payload", async () => {
   const coordinator = new BroadcastCoordinator(() => 1_000);
-  const commands: SiteCommand[] = [];
+  const commands: SubmitSiteCommand[] = [];
   const images = [{
     name: "x.png",
     type: "image/png" as const,

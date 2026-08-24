@@ -1,16 +1,25 @@
 import {
   ipcMain,
+  shell as electronShell,
   type BrowserWindow,
   type WebContents,
   type WebFrameMain
 } from "electron";
 
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
+import type { ArchiveFilters, ArchiveInput, ArchivePatch } from "../shared/archive";
 import { parseDisplayPreferences, type DisplayPreferences } from "../shared/display";
 import { unsupportedImageSites } from "../shared/images";
-import { parseBroadcastRequest, type SiteResponseEnvelope } from "../shared/protocol";
+import {
+  parseBroadcastRequest,
+  parseCollectionRequest,
+  type SiteResponseEnvelope
+} from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
-import { isTrustedShellUrl } from "./security";
+import { ArchiveService } from "./archive-service";
+import { CollectionService } from "./collection-service";
+import { HistoryService } from "./history-service";
+import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
 import { ViewManager } from "./view-manager";
@@ -26,6 +35,9 @@ interface ShellIpcOptions {
   readonly manager: ViewManager;
   readonly workspace: WorkspaceService;
   readonly coordinator: BroadcastCoordinator;
+  readonly collection: CollectionService;
+  readonly archives: ArchiveService;
+  readonly history: HistoryService;
   readonly shellEntry: string;
   readonly applyDisplay: (value: DisplayPreferences) => DisplayPreferences;
 }
@@ -34,6 +46,14 @@ const HANDLERS = [
   "polyask:bootstrap",
   "polyask:set-display",
   "polyask:broadcast",
+  "polyask:collect",
+  "polyask:archive-search",
+  "polyask:archive-get",
+  "polyask:archive-add",
+  "polyask:archive-update",
+  "polyask:archive-delete",
+  "polyask:archive-markdown",
+  "polyask:open-external",
   "polyask:set-selection",
   "polyask:set-tier",
   "polyask:save-group",
@@ -45,13 +65,19 @@ const LISTENERS = [
   "polyask:cancel",
   "polyask:set-composer-expanded",
   "polyask:set-drawer-open",
+  "polyask:set-surface",
   "polyask:set-layout",
   "polyask:reload-site",
   "polyask:site-response"
 ] as const;
 
+function strictId(value: unknown): string {
+  if (typeof value !== "string" || !value.trim() || value.length > 128) throw new Error("invalid_id");
+  return value;
+}
+
 export function registerShellIpc(options: ShellIpcOptions): () => void {
-  const { window, manager, workspace, coordinator } = options;
+  const { window, manager, workspace, coordinator, collection, archives, history } = options;
   const trustedShell = (event: ShellIpcEvent) =>
     event.sender.id === window.webContents.id &&
     event.senderFrame?.parent === null &&
@@ -86,12 +112,60 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       throw new Error("image_sites_unsupported");
     }
     for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
-    return coordinator.send(
+    let historyRecorded = false;
+    const results = await coordinator.send(
       request,
       (site, command, signal) => manager.sendCommand(site, command, signal),
       request.images.length ? 90_000 : 44_000,
-      (result) => manager.markStatus(statusForResult(result.site, result))
+      (result) => {
+        manager.markStatus(statusForResult(result.site, result));
+        if (result.ok && !historyRecorded) {
+          history.record(request.text);
+          historyRecorded = true;
+        }
+      }
     );
+    return results;
+  });
+  ipcMain.handle("polyask:collect", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    const request = parseCollectionRequest(value);
+    if (!request) throw new Error("invalid_collection_request");
+    return collection.collect(request.sites, request.runId);
+  });
+  ipcMain.handle("polyask:archive-search", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    return archives.search(value && typeof value === "object" ? value as ArchiveFilters : {});
+  });
+  ipcMain.handle("polyask:archive-get", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    return archives.get(strictId(value));
+  });
+  ipcMain.handle("polyask:archive-add", (event, value: unknown) => {
+    if (!trustedShell(event) || !value || typeof value !== "object") throw new Error("invalid_archive");
+    return archives.add(value as ArchiveInput);
+  });
+  ipcMain.handle("polyask:archive-update", (event, value: unknown) => {
+    if (!trustedShell(event) || !value || typeof value !== "object") throw new Error("invalid_archive_update");
+    const input = value as { id?: unknown; patch?: unknown };
+    if (!input.patch || typeof input.patch !== "object") throw new Error("invalid_archive_update");
+    return archives.update(strictId(input.id), input.patch as ArchivePatch);
+  });
+  ipcMain.handle("polyask:archive-delete", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    archives.delete(strictId(value));
+  });
+  ipcMain.handle("polyask:archive-markdown", (event, value: unknown) => {
+    if (!trustedShell(event) || !value || typeof value !== "object") throw new Error("invalid_archive_export");
+    const input = value as { id?: unknown; locale?: unknown };
+    const locale = typeof input.locale === "string" && input.locale.length <= 32 ? input.locale : "en";
+    return archives.exportMarkdown(strictId(input.id), locale);
+  });
+  ipcMain.handle("polyask:open-external", async (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    const url = safeExternalUrl(value);
+    if (!url) throw new Error("invalid_external_url");
+    await electronShell.openExternal(url);
   });
   ipcMain.handle("polyask:set-selection", (event, value: unknown) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
@@ -127,6 +201,10 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   ipcMain.on("polyask:set-drawer-open", (event, value: unknown) => {
     if (!trustedShell(event) || typeof value !== "boolean") return;
     manager.setDrawerOpen(value);
+  });
+  ipcMain.on("polyask:set-surface", (event, value: unknown) => {
+    if (!trustedShell(event) || !["sites", "archive", "settings"].includes(String(value))) return;
+    manager.setSurface(value as "sites" | "archive" | "settings");
   });
   ipcMain.on("polyask:set-layout", (event, value: unknown) => {
     if (!trustedShell(event) || !value || typeof value !== "object") return;

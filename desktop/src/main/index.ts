@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 import {
@@ -13,11 +14,15 @@ import {
   type DisplayPreferences
 } from "../shared/display";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
+import { ArchiveService } from "./archive-service";
 import { BroadcastCoordinator } from "./broadcast";
+import { CollectionService } from "./collection-service";
 import { DesktopDatabase } from "./database";
+import { HistoryService } from "./history-service";
 import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
+import { SITES } from "./sites";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
 
@@ -179,12 +184,27 @@ async function createWindow(): Promise<void> {
     desktopDatabase.meta,
     (site, url) => manager.navigate(site, url)
   );
+  const collection = new CollectionService(
+    SITES,
+    (site, deadline) => manager.collect(site, deadline)
+  );
+  const deviceId = () => {
+    const stored = desktopDatabase?.meta.get<unknown>("deviceId");
+    if (typeof stored === "string" && stored) return stored;
+    if (!desktopDatabase) throw new Error("database_not_ready");
+    return desktopDatabase.meta.put("deviceId", randomUUID());
+  };
+  const archives = new ArchiveService(desktopDatabase.archives, { deviceId });
+  const history = new HistoryService(desktopDatabase.history, { deviceId });
   createMenu();
   const disposeIpc = registerShellIpc({
     window,
     manager,
     workspace,
     coordinator,
+    collection,
+    archives,
+    history,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
     applyDisplay: (value) => applyDisplayPreferences(manager, value)
   });

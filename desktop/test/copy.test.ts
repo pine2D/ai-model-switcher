@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { COPY, getCopy } from "../src/shared/copy";
-import { describeStatus, visibleStatus } from "../src/shared/status-copy";
+import { describeCollectionCode, describeStatus, visibleStatus } from "../src/shared/status-copy";
 
 test("desktop shell keeps complete English, Simplified Chinese and Traditional Chinese copy", () => {
   const sourceKeys = Object.keys(COPY.en).sort();
@@ -96,4 +96,11 @@ test("dense tiles show short text only for statuses that need attention", () => 
     "Failed"
   );
   assert.equal(visibleStatus(copy, { site: "claude", phase: "crashed" }), "Stopped");
+});
+
+test("archive collection placeholders use localized stable codes", () => {
+  const copy = getCopy("zh-CN");
+  assert.equal(describeCollectionCode(copy, "no_answer"), "暂无回答");
+  assert.equal(describeCollectionCode(copy, "not_ready"), "站点尚未就绪");
+  assert.equal(describeCollectionCode(copy, "private_reason"), "失败");
 });

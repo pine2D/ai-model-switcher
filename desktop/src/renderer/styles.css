@@ -35,7 +35,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font-size: 13px; }
 button, textarea, input { font: inherit; }
 button { cursor: default; }
-button:focus-visible, textarea:focus-visible {
+button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
   outline-offset: 1px;
 }
@@ -167,6 +167,54 @@ kbd { opacity: .7; font: 10px system-ui; }
 .group-save button { border: 1px solid var(--border); }
 .group-save button:disabled { opacity: .4; }
 
+.archive-workspace { position: fixed; z-index: 10; inset: 0; display: grid; grid-template-rows: 44px minmax(0, 1fr) 22px; background: #f4f5f8; }
+.archive-toolbar { padding: 4px 6px; display: grid; grid-template-columns: auto minmax(220px, 1fr) auto; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.archive-toolbar strong { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.archive-filters { min-width: 0; display: grid; grid-template-columns: minmax(140px, 1fr) 32px minmax(92px, 140px); gap: 4px; }
+.archive-filters input, .archive-filters select, .archive-fields input, .archive-fields textarea { min-width: 0; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: #fafafd; }
+.archive-filters input { height: 32px; padding: 0 8px; }
+.archive-filters select { height: 32px; padding: 0 5px; }
+.archive-actions { display: flex; gap: 2px; }
+.archive-actions button, .archive-filters button, .archive-detail-heading > button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: transparent; }
+.archive-actions button:hover, .archive-actions button:focus-visible, .archive-filters button.active, .archive-detail-heading > button.active { color: var(--accent); background: var(--accent-soft); }
+.archive-actions button.danger { border-color: var(--danger); color: var(--danger); }
+.archive-actions button:disabled { opacity: .4; }
+.archive-body { min-height: 0; display: grid; grid-template-columns: minmax(240px, 286px) minmax(0, 1fr); }
+.archive-list { min-height: 0; padding: 4px; overflow: auto; border-right: 1px solid var(--border); background: var(--panel); }
+.archive-list > button { width: 100%; min-height: 68px; padding: 6px; display: grid; gap: 2px; overflow: hidden; text-align: left; border: 0; border-radius: 6px; color: inherit; background: transparent; }
+.archive-list > button:hover, .archive-list > button[aria-current="true"] { background: var(--accent-soft); }
+.archive-list time, .archive-list small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.archive-list > button > span:not(.archive-badges) { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.archive-list > p, .archive-detail-pane > p { color: var(--muted); text-align: center; }
+.archive-badges { display: flex; align-items: center; gap: 3px; overflow: hidden; color: var(--accent); }
+.archive-badges svg { width: 12px; height: 12px; flex: 0 0 auto; }
+.archive-badges i { padding: 1px 4px; border-radius: 999px; background: var(--panel); font-size: 9px; font-style: normal; }
+.archive-detail-pane { min-width: 0; min-height: 0; overflow: auto; }
+.archive-detail { max-width: 980px; margin: 0 auto; padding: 12px 16px 40px; }
+.archive-detail-heading { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: start; gap: 8px; }
+.archive-detail h1 { margin: 0; font-size: 20px; line-height: 1.25; }
+.archive-detail-heading time { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.archive-source { max-width: 100%; margin: 3px 0 0; padding: 0; display: block; overflow: hidden; text-align: left; border: 0; color: var(--accent); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
+.archive-fields { margin: 10px 0 6px; display: grid; grid-template-columns: minmax(160px, .45fr) minmax(260px, 1fr); gap: 6px; }
+.archive-fields label { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.archive-fields input { height: 30px; padding: 0 7px; color: inherit; }
+.archive-fields textarea { height: 52px; padding: 5px 7px; resize: vertical; color: inherit; }
+.archive-answer-nav { position: sticky; top: 0; z-index: 1; padding: 4px 0; display: flex; gap: 3px; overflow-x: auto; background: #f4f5f8ee; }
+.archive-answer-nav a { padding: 3px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 10px; text-decoration: none; white-space: nowrap; }
+.archive-answer { margin-top: 8px; padding: 10px 12px; scroll-margin-top: 34px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.archive-answer > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.archive-answer h2 { margin: 0; font-size: 14px; }
+.archive-answer > header button { height: 26px; padding: 0 6px; display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: transparent; }
+.archive-answer > header button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.markdown-preview { overflow-wrap: anywhere; line-height: 1.55; }
+.markdown-preview p { margin: 7px 0; white-space: pre-wrap; }
+.markdown-preview h3, .markdown-preview h4 { margin: 10px 0 4px; }
+.markdown-preview blockquote { margin: 7px 0; padding-left: 9px; border-left: 3px solid var(--border); color: var(--muted); }
+.markdown-preview pre { padding: 8px; overflow: auto; border-radius: 6px; background: #18181b; color: #f4f4f5; }
+.markdown-preview code { font-family: ui-monospace, "Cascadia Code", monospace; }
+.md-list-item { margin: 2px 0; }
+.archive-status { padding: 2px 8px; overflow: hidden; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; background: var(--panel); }
+
 .tile-layer { position: fixed; inset: 0; pointer-events: none; }
 .tile-frame {
   position: absolute; pointer-events: none; border: 1px solid var(--border); border-radius: 4px 4px 2px 2px;
@@ -233,4 +281,6 @@ kbd { opacity: .7; font: 10px system-ui; }
   .mode-switch button.active, .tier-switch button.active { color: #f4f4f5; }
   .command-bar textarea { background: #19191d; }
   .scope-preset, .group-save input { background: #19191d; }
+  .archive-workspace, .archive-answer-nav { background: #17171a; }
+  .archive-filters input, .archive-filters select, .archive-fields input, .archive-fields textarea { background: #19191d; }
 }

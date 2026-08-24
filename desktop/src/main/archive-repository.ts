@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   isArchiveRecord,
   tombstoneArchive,
+  type ArchiveRecord,
   type StoredArchive
 } from "../shared/archive";
 import { SYNC_SCHEMA, validSyncTime } from "../shared/sync";
@@ -24,6 +25,13 @@ export class ArchiveRepository {
   get(id: string): StoredArchive | null {
     const row = this.database.prepare("SELECT body FROM archives WHERE id = ?").get(id);
     return readJson<StoredArchive>(row);
+  }
+
+  list(): ArchiveRecord[] {
+    const rows = this.database.prepare(
+      "SELECT body FROM archives WHERE deleted_at IS NULL ORDER BY sort_time DESC, id DESC"
+    ).all();
+    return rows.map((row) => readJson<StoredArchive>(row)).filter(isArchiveRecord);
   }
 
   put(record: StoredArchive, enqueue = true): StoredArchive {

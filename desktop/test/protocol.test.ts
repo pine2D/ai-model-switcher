@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseBroadcastRequest } from "../src/shared/protocol";
+import { parseBroadcastRequest, parseCollectionRequest } from "../src/shared/protocol";
 
 const png = {
   name: "x.png",
@@ -25,4 +25,19 @@ test("broadcast IPC accepts only a bounded request for known sites", () => {
   assert.equal(parseBroadcastRequest({ text: "x", sites: ["claude", "claude"] }), null);
   assert.equal(parseBroadcastRequest({ text: "x", tier: "turbo", sites: ["claude"] }), null);
   assert.equal(parseBroadcastRequest({ text: "x", sites: ["claude"], images: [{ ...png, size: 7 }] }), null);
+});
+
+test("collection IPC accepts product sites and a bounded optional run id", () => {
+  assert.deepEqual(
+    parseCollectionRequest({ sites: ["kimi", "claude"], runId: "run-1" }),
+    { sites: ["kimi", "claude"], runId: "run-1" }
+  );
+  assert.deepEqual(parseCollectionRequest({ sites: ["claude"], runId: null }), {
+    sites: ["claude"],
+    runId: null
+  });
+  assert.equal(parseCollectionRequest({ sites: [] }), null);
+  assert.equal(parseCollectionRequest({ sites: ["unknown"] }), null);
+  assert.equal(parseCollectionRequest({ sites: ["claude", "claude"] }), null);
+  assert.equal(parseCollectionRequest({ sites: ["claude"], runId: "x".repeat(129) }), null);
 });

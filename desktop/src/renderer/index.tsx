@@ -4,22 +4,21 @@ import { createRoot } from "react-dom/client";
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
-import {
-  unsupportedImageSites,
-  type DesktopImage,
-  type ImageInputError
-} from "../shared/images";
+import { unsupportedImageSites } from "../shared/images";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
 import type { WorkspaceState } from "../shared/workspace";
+import { ArchiveSurface } from "./archive-surface";
 import { CommandBar, type RunState } from "./command-bar";
 import {
   loadDisplayPreferences,
   saveDisplayPreferences
 } from "./display-preferences";
-import { ImagePicker, readDesktopImages } from "./image-picker";
+import { ImagePicker } from "./image-picker";
 import { SiteFrames } from "./site-frames";
 import { WorkspaceDrawer } from "./workspace-drawer";
+import { useArchiveCapture } from "./use-archive-capture";
+import { useImageSelection } from "./use-image-selection";
 import "./styles.css";
 
 const INITIAL_LAYOUT: LayoutState = {
@@ -45,18 +44,16 @@ function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const selectionRef = useRef<readonly SiteKey[]>([]);
-  const imageReadEpoch = useRef(0);
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
   const [workspace, setWorkspace] = useState<WorkspaceState>(INITIAL_WORKSPACE);
   const [text, setText] = useState("");
   const [runState, setRunState] = useState<RunState>("idle");
+  const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
-  const [imageTrayOpen, setImageTrayOpen] = useState(false);
-  const [images, setImages] = useState<readonly DesktopImage[]>([]);
-  const [imageError, setImageError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [surface, setSurface] = useState<"sites" | "archive">("sites");
   const [announcement, setAnnouncement] = useState("");
   const acceptWorkspace = (value: WorkspaceState): void => {
     selectionRef.current = value.selectedSites;
@@ -78,28 +75,8 @@ function App(): React.JSX.Element {
     setDrawerOpen(value);
     window.polyask.setDrawerOpen(value);
   };
-  const imageErrorText = (code: ImageInputError): string => ({
-    image_count: copy.imageCountError,
-    image_type: copy.imageTypeError,
-    image_size: copy.imageSizeError,
-    image_invalid: copy.imageInvalid
-  })[code];
-  const chooseImages = async (files: readonly File[]): Promise<void> => {
-    if (runState !== "idle") return;
-    const epoch = ++imageReadEpoch.current;
-    const result = await readDesktopImages(files);
-    if (epoch !== imageReadEpoch.current) return;
-    if (!result.ok) {
-      const message = imageErrorText(result.code);
-      setImageError(message);
-      setAnnouncement(message);
-      return;
-    }
-    setImages(result.images);
-    setImageError(null);
-    setImageTrayOpen(true);
-    setAnnouncement(formatCopy(copy.imagesReady, { count: result.images.length }));
-  };
+  const imageSelection = useImageSelection(copy, runState === "idle", setAnnouncement);
+  const { images, open: imageTrayOpen } = imageSelection;
 
   useEffect(() => {
     let active = true;
@@ -137,6 +114,7 @@ function App(): React.JSX.Element {
     [statuses]
   );
   const selected = useMemo(() => new Set(workspace.selectedSites), [workspace.selectedSites]);
+  const archiveCapture = useArchiveCapture({ sites, selected, prompt: text });
   const unsupportedSites = useMemo(() => {
     if (!images.length) return [];
     const unsupported = new Set(unsupportedImageSites([...selected], sites));
@@ -154,20 +132,21 @@ function App(): React.JSX.Element {
     if (!prompt || selected.size === 0 || runState !== "idle") return;
     if (imageWarning) {
       setAnnouncement(imageWarning);
-      setImageTrayOpen(false);
+      imageSelection.setOpen(false);
       changeDrawerOpen(true);
       return;
     }
-    imageReadEpoch.current += 1;
-    setImageTrayOpen(false);
+    imageSelection.invalidateAndClose();
     setRunState("sending");
     try {
-      await window.polyask.broadcast({
+      const request = {
         text: prompt,
         tier: workspace.tier,
         sites: [...selected],
         images
-      });
+      };
+      const results = await window.polyask.broadcast(request);
+      archiveCapture.remember(request, results);
     } catch {
       setAnnouncement(copy.failed);
     } finally {
@@ -186,6 +165,34 @@ function App(): React.JSX.Element {
     changeSelection(sites.map((item) => item.key).filter((key) => next.has(key)));
   };
 
+  const changeSurface = (value: "sites" | "archive"): void => {
+    if (value === "archive") {
+      imageSelection.invalidateAndClose();
+      setPromptExpanded(false);
+      if (drawerOpen) changeDrawerOpen(false);
+    }
+    setSurface(value);
+    window.polyask.setSurface(value);
+  };
+  const collectAndCopy = async (): Promise<void> => {
+    if (auxiliaryBusy || runState !== "idle") return;
+    setAuxiliaryBusy(true);
+    try {
+      const record = await archiveCapture.capture();
+      const markdown = await window.polyask.archiveMarkdown(record.id, navigator.language);
+      await navigator.clipboard.writeText(markdown);
+      setAnnouncement(copy.archiveCollected);
+    } catch {
+      setAnnouncement(copy.archiveCollectFailed);
+    } finally {
+      setAuxiliaryBusy(false);
+    }
+  };
+
+  if (surface === "archive") {
+    return <ArchiveSurface copy={copy} locale={navigator.language} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} />;
+  }
+
   return (
     <main className={`app-shell${composerExpanded ? " is-composer-expanded" : ""}${drawerOpen ? " has-drawer" : ""}`}>
       <CommandBar
@@ -194,6 +201,7 @@ function App(): React.JSX.Element {
         text={text}
         tier={workspace.tier}
         runState={runState}
+        auxiliaryBusy={auxiliaryBusy}
         layoutMode={layout.mode}
         selectedCount={selected.size}
         totalSites={sites.length || 9}
@@ -207,18 +215,11 @@ function App(): React.JSX.Element {
             disabled={runState !== "idle"}
             warning={imageWarning}
             warningCount={unsupportedSites.length}
-            error={imageError}
-            onOpenChange={setImageTrayOpen}
-            onFiles={(files) => { void chooseImages(files); }}
-            onRemove={(index) => {
-              imageReadEpoch.current += 1;
-              const next = images.filter((_image, current) => current !== index);
-              setImages(next);
-              setImageError(null);
-              if (!next.length) setImageTrayOpen(false);
-              setAnnouncement(formatCopy(copy.imagesReady, { count: next.length }));
-            }}
-            onAdjustScope={() => { setImageTrayOpen(false); changeDrawerOpen(true); }}
+            error={imageSelection.error}
+            onOpenChange={imageSelection.setOpen}
+            onFiles={(files) => { void imageSelection.choose(files); }}
+            onRemove={imageSelection.remove}
+            onAdjustScope={() => { imageSelection.setOpen(false); changeDrawerOpen(true); }}
           />
         )}
         sendBlockedReason={imageWarning}
@@ -237,7 +238,9 @@ function App(): React.JSX.Element {
           changeDrawerOpen(!drawerOpen);
         }}
         onNewSession={() => { void window.polyask.newSession([...selected]).catch(recoverWorkspace); }}
-        onPasteImages={(files) => { void chooseImages(files); }}
+        onCollectAnswers={() => { void collectAndCopy(); }}
+        onOpenArchive={() => changeSurface("archive")}
+        onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>
       {drawerOpen ? (

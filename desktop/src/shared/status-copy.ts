@@ -39,3 +39,12 @@ export function visibleStatus(copy: DesktopCopy, status: SiteStatus): string | n
     default: return null;
   }
 }
+
+export function describeCollectionCode(copy: DesktopCopy, code?: string): string {
+  switch (code) {
+    case "no_answer": return copy.noAnswer;
+    case "no_view": return copy.siteUnavailable;
+    case "not_ready": return copy.siteNotReady;
+    default: return copy.failed;
+  }
+}

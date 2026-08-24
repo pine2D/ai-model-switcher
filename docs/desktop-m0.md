@@ -150,13 +150,13 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 
 ## 当前实现状态
 
-已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
+已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁九个站点视图，支持搜索、收藏、标签、备注、最佳答案和 Markdown 预览/导出。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
 
 2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。人工验证进一步确认九站均可登录，Gemini 首次登录与群发成功；除 Kimi 因站点当时要求付费订阅而拒绝对话外，其余 8 站均成功提交并实时显示回答。该 Kimi 结果属于站点业务限制，不是容器、登录或群发链路故障。
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 69 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行 Linux 打包产物 smoke。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 81 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行 Linux 打包产物 smoke。
 
 尚未完成 M0 退出验收：Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
 

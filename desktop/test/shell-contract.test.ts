@@ -98,6 +98,43 @@ test("image IPC rejects unsupported sites before native view dispatch", () => {
   assert.match(ipc, /image_sites_unsupported/);
 });
 
+test("answer collection uses the trusted shell and the existing read-only adapter hook", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const sitePreload = readFileSync("src/preload/site.ts", "utf8");
+  assert.match(ipc, /polyask:collect/);
+  assert.match(ipc, /trustedShell\(event\)/);
+  assert.match(preload, /collectAnswers/);
+  assert.match(sitePreload, /collectAnswer/);
+});
+
+test("archive surface detaches site views without destroying their web contents", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const start = manager.indexOf("setSurface(");
+  const end = manager.indexOf("\n  focusRelative", start);
+  const implementation = manager.slice(start, end);
+  assert.match(implementation, /removeChildView/);
+  assert.match(implementation, /addChildView/);
+  assert.doesNotMatch(implementation, /webContents\.close/);
+});
+
+test("archive mutations and history persistence stay behind trusted main-process IPC", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  for (const channel of [
+    "polyask:archive-search",
+    "polyask:archive-add",
+    "polyask:archive-update",
+    "polyask:archive-delete",
+    "polyask:archive-markdown"
+  ]) assert.match(ipc, new RegExp(channel));
+  assert.match(ipc, /result\.ok && !historyRecorded/);
+  assert.match(ipc, /history\.record\(request\.text\)/);
+  assert.match(preload, /searchArchives/);
+  assert.match(preload, /updateArchive/);
+  assert.match(preload, /archiveMarkdown/);
+});
+
 test("windows and linux auto-hide the native menu bar", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   assert.match(main, /setAutoHideMenuBar\(true\)/);
