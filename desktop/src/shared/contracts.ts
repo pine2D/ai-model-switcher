@@ -18,6 +18,8 @@ export interface SiteDefinition {
   readonly label: string;
   readonly url: string;
   readonly authHosts: readonly string[];
+  readonly image: boolean;
+  readonly intl: boolean;
 }
 
 export interface ViewBounds {

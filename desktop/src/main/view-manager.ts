@@ -10,9 +10,6 @@ import {
 import type { SiteDefinition, SiteKey, ViewPlacement } from "../shared/contracts";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
-  metricsForDensity,
-  shellHeightForComposer,
-  zoomForSite,
   type DisplayPreferences
 } from "../shared/display";
 import type {
@@ -27,9 +24,6 @@ import {
   type DiagnosticSiteInput
 } from "./diagnostics";
 import {
-  computeViewLayout,
-  resolveLayoutMode,
-  scaleBounds,
   swapFocusedSite
 } from "./layout";
 import { navigationDisposition } from "./navigation";
@@ -37,6 +31,7 @@ import { createSiteView, diagnosticSitesForViews } from "./site-view";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
 import type { StabilityEventInput } from "./stability-monitor";
+import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 
 interface PendingCommand {
   readonly contentsId: number;
@@ -58,6 +53,7 @@ export class ViewManager {
   private placements: readonly ViewPlacement[] = [];
   private display = DEFAULT_DISPLAY_PREFERENCES;
   private composerExpanded = false;
+  private drawerOpen = false;
   private readonly siteSession = session.fromPartition(SITE_PARTITION);
 
   constructor(
@@ -103,6 +99,12 @@ export class ViewManager {
     this.layout();
   }
 
+  setDrawerOpen(value: boolean): void {
+    if (this.drawerOpen === value) return;
+    this.drawerOpen = value;
+    this.layout();
+  }
+
   setLayout(mode: "overview" | "focus", focused: SiteKey = this.focused): void {
     if (mode === "focus") {
       this.focusOrder = swapFocusedSite(this.focusOrder, this.focused, focused);
@@ -129,6 +131,17 @@ export class ViewManager {
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
     view.webContents.reload();
+  }
+
+  navigate(site: SiteKey, url: string): void {
+    const definition = SITES.find((candidate) => candidate.key === site);
+    const view = this.views.get(site);
+    if (!definition || definition.url !== url || !view || view.webContents.isDestroyed()) {
+      throw new Error("invalid_navigation");
+    }
+    this.runStatus.delete(site);
+    this.updatePageStatus({ site, phase: "loading" });
+    void view.webContents.loadURL(url);
   }
 
   markStatus(status: SiteStatus): void {
@@ -231,43 +244,29 @@ export class ViewManager {
     const zoom = Math.max(0.25, this.window.webContents.getZoomFactor());
     const cssWidth = Math.floor(width / zoom);
     const cssHeight = Math.floor(height / zoom);
-    const metrics = metricsForDensity(this.display.density);
-    const shellHeight = shellHeightForComposer(this.display.density, this.composerExpanded);
-    const area = {
-      x: metrics.edgeGap,
-      y: shellHeight,
-      width: Math.max(1, cssWidth - metrics.edgeGap * 2),
-      height: Math.max(1, cssHeight - shellHeight - metrics.edgeGap)
-    };
-    this.renderedMode = resolveLayoutMode(this.mode, area, metrics.viewGap);
-    const keys = this.renderedMode === "focus"
-      ? this.focusOrder
-      : SITES.map((site) => site.key);
-    this.placements = computeViewLayout(
-      keys,
-      area,
-      this.renderedMode === "overview"
-        ? { mode: "overview", gap: metrics.viewGap }
-        : { mode: "focus", focused: this.focused, gap: metrics.viewGap }
-    );
-    for (const placement of this.placements) {
-      const view = this.views.get(placement.key);
-      if (!view) continue;
-      view.setBounds(scaleBounds({
-        x: placement.bounds.x + 1,
-        y: placement.bounds.y + metrics.tileHeaderHeight,
-        width: Math.max(1, placement.bounds.width - 2),
-        height: Math.max(1, placement.bounds.height - metrics.tileHeaderHeight - 1)
-      }, zoom));
-      const siteZoom = zoomForSite(
-        this.display,
-        this.renderedMode,
-        placement.key === this.focused
-      );
-      if (Math.abs(view.webContents.getZoomFactor() - siteZoom) > 0.001) {
-        view.webContents.setZoomFactor(siteZoom);
-      }
-    }
+    const next = computeWorkspaceLayout({
+      width: cssWidth,
+      height: cssHeight,
+      density: this.display.density,
+      composerExpanded: this.composerExpanded,
+      drawerOpen: this.drawerOpen,
+      requestedMode: this.mode,
+      focused: this.focused,
+      overviewOrder: SITES.map((site) => site.key),
+      focusOrder: this.focusOrder
+    });
+    this.renderedMode = next.mode;
+    this.placements = next.placements;
+    const metrics = next.metrics;
+    applyWorkspaceLayout({
+      views: this.views,
+      placements: this.placements,
+      metrics,
+      zoom,
+      display: this.display,
+      mode: this.renderedMode,
+      focused: this.focused
+    });
     const layout = this.getLayout();
     this.onLayout(layout);
   }

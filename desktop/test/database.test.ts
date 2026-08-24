@@ -71,3 +71,17 @@ test("state items and history survive reopen without physical deletion", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("state repository lists a prefix without folding distinct outbox operations", () => {
+  const database = DesktopDatabase.open(":memory:");
+  try {
+    database.state.put("group:a", { id: "a" }, 1_000);
+    database.state.put("group:b", { id: "b" }, 2_000);
+    database.state.put("workspace", { selectedSites: [] }, 3_000);
+
+    assert.deepEqual(database.state.list<{ id: string }>("group:"), [{ id: "b" }, { id: "a" }]);
+    assert.equal(database.outbox.count(), 3);
+  } finally {
+    database.close();
+  }
+});

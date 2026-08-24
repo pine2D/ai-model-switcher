@@ -1,6 +1,6 @@
 # PolyAsk Desktop 产品化审计
 
-最后核对：2026-08-24。本文是桌面端产品化的持续审计台账，记录可复现现象、根因、修复和验证证据。架构与验收边界见 `docs/desktop-m0.md`，执行顺序见 `docs/desktop-productization-plan.md`。
+最后核对：2026-08-25。本文是桌面端产品化的持续审计台账，记录可复现现象、根因、修复和验证证据。架构与验收边界见 `docs/desktop-m0.md`，执行顺序见 `docs/desktop-productization-plan.md`。
 
 ## 审计口径
 
@@ -27,13 +27,13 @@
 
 2026-08-24 的桌面 M0 已具备一个 Shell 和 9 个持久 `WebContentsView`、共享站点登录 session、绝对 deadline/epoch 群发、Grid/Focus、密度与页面缩放、三语状态、单站重载和安全 IPC。WSLg 真机确认九站可登录，除 Kimi 当时的付费业务限制外其余 8 站可提交并实时显示回答。
 
-当前自动化基线为 54 项桌面 TypeScript/React 测试、1 项运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh` 全绿。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。SQLite schema 1、WAL、事务 outbox、历史/归档 tombstone 与重开持久化已有自动化证据。
+当前自动化基线为 62 项桌面 TypeScript/React 测试、1 项运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh` 全绿。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。SQLite schema 1、WAL、事务 outbox、历史/归档 tombstone 与重开持久化已有自动化证据。站点范围、快捷范围、用户分组和已选站点新会话已迁移；抽屉占位同时覆盖 Grid 与 Focus。
 
 ## 已知未完成证据
 
 - 正式 60 分钟稳定性报告尚未执行；3 分钟短测不能替代。
 - Windows、macOS、原生 Ubuntu 尚未完成同版本原生验收。
-- 图片、范围/分组、新会话、汇总、归档、辅助综合和 Drive 尚未迁移到桌面端。
+- 图片、汇总、归档、辅助综合和 Drive 尚未迁移到桌面端。
 - Windows Narrator、macOS VoiceOver、Ubuntu Orca、高对比度和完整缩放矩阵尚无证据。
 - Google Desktop OAuth client 尚未配置；Chrome Extension 类型 client 不可替代。
 

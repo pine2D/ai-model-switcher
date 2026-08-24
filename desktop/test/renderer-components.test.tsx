@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { CommandBar } from "../src/renderer/command-bar";
 import { SiteFrames } from "../src/renderer/site-frames";
+import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { getCopy } from "../src/shared/copy";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
@@ -23,6 +24,7 @@ test("command bar renders one compact command surface with stateful controls", (
       selectedCount={9}
       totalSites={9}
       activeCount={0}
+      drawerOpen={false}
       isMac={false}
       expanded={false}
       onTextChange={noop}
@@ -31,6 +33,8 @@ test("command bar renders one compact command surface with stateful controls", (
       onTierChange={noop}
       onLayoutChange={noop}
       onExpandedChange={noop}
+      onToggleDrawer={noop}
+      onNewSession={noop}
     />
   );
 
@@ -49,6 +53,37 @@ test("command bar renders one compact command surface with stateful controls", (
     assert.equal([...html.matchAll(new RegExp(label, "g"))].length, 2);
   }
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
+  assert.match(html, /aria-controls="workspace-drawer"/);
+  assert.match(html, /aria-label="New session for selected sites"/);
+});
+
+test("workspace drawer exposes compact presets, continuous selection and bound group deletion", () => {
+  const copy = getCopy("en");
+  const html = renderToStaticMarkup(
+    <WorkspaceDrawer
+      copy={copy}
+      sites={SITES}
+      selected={new Set(["claude", "kimi"])}
+      groups={[{
+        id: "research",
+        name: "Research",
+        sites: ["claude", "kimi"],
+        updatedAt: 1_000,
+        deviceId: "device-a"
+      }]}
+      onClose={noop}
+      onSelectionChange={noop}
+      onSaveGroup={noop}
+      onDeleteGroup={noop}
+    />
+  );
+
+  assert.match(html, /^<aside id="workspace-drawer"/);
+  assert.equal([...html.matchAll(/class="scope-preset"/g)].length, 5);
+  assert.equal([...html.matchAll(/type="checkbox"/g)].length, 9);
+  assert.match(html, /aria-label="Delete Research"/);
+  assert.match(html, /data-group-id="research"/);
+  assert.match(html, /Save current selection/);
 });
 
 test("site frames keep all nine live placements and accessible actions", () => {

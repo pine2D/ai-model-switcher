@@ -1,9 +1,10 @@
 import type { RefObject } from "react";
 
-import { formatCopy, type DesktopCopy } from "../shared/copy";
+import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
 import { DeepThinkIcon, FastIcon, FocusIcon, GridIcon, SendIcon, SiteSettingIcon, StopIcon } from "./icons";
 import { commandKeyAction } from "./keyboard";
+import { WorkspaceActions } from "./workspace-actions";
 
 export type RunState = "idle" | "sending" | "cancelling";
 
@@ -17,6 +18,7 @@ interface CommandBarProps {
   readonly selectedCount: number;
   readonly totalSites: number;
   readonly activeCount: number;
+  readonly drawerOpen: boolean;
   readonly isMac: boolean;
   readonly expanded: boolean;
   readonly onTextChange: (value: string) => void;
@@ -25,6 +27,8 @@ interface CommandBarProps {
   readonly onTierChange: (value: Tier) => void;
   readonly onLayoutChange: (value: "overview" | "focus") => void;
   readonly onExpandedChange: (value: boolean) => void;
+  readonly onToggleDrawer: () => void;
+  readonly onNewSession: () => void;
 }
 
 export function CommandBar(props: CommandBarProps): React.JSX.Element {
@@ -38,6 +42,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     selectedCount,
     totalSites,
     activeCount,
+    drawerOpen,
     isMac,
     expanded,
     onTextChange,
@@ -45,13 +50,10 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onCancel,
     onTierChange,
     onLayoutChange,
-    onExpandedChange
+    onExpandedChange,
+    onToggleDrawer,
+    onNewSession
   } = props;
-  const summary = formatCopy(activeCount > 0 ? copy.sendingSummary : copy.selectedSummary, {
-    count: activeCount,
-    selected: selectedCount,
-    total: totalSites || 9
-  });
   const tierOptions = [
     { value: null, label: copy.followSite, icon: "site-setting", glyph: <SiteSettingIcon /> },
     { value: "fast", label: copy.fast, icon: "fast", glyph: <FastIcon /> },
@@ -98,7 +100,16 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
           <button type="button" key={icon} title={label} aria-label={label} aria-pressed={tier === value} data-tier-icon={icon} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{glyph}</button>
         ))}
       </div>
-      <span className="summary priority-p1" role="status" aria-live="polite">{summary}</span>
+      <WorkspaceActions
+        copy={copy}
+        selectedCount={selectedCount}
+        totalSites={totalSites}
+        activeCount={activeCount}
+        drawerOpen={drawerOpen}
+        disabled={runState !== "idle"}
+        onToggleDrawer={onToggleDrawer}
+        onNewSession={onNewSession}
+      />
       {runState !== "idle" ? (
         <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>
           <StopIcon /><span>{runState === "cancelling" ? copy.cancelling : copy.cancel}</span>

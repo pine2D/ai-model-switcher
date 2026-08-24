@@ -8,6 +8,7 @@ import {
   swapFocusedSite
 } from "../src/main/layout";
 import { SITES } from "../src/main/sites";
+import { reserveWorkspaceArea } from "../src/main/workspace-layout";
 
 const area = { x: 0, y: 0, width: 1440, height: 900 };
 const keys = SITES.map((site) => site.key);
@@ -122,4 +123,14 @@ test("shell zoom converts CSS layout coordinates back to native DIP bounds", () 
     scaleBounds({ x: 10, y: 20, width: 101, height: 51 }, 1.25),
     { x: 13, y: 25, width: 126, height: 64 }
   );
+});
+
+test("opening the scope drawer reserves width instead of covering site views", () => {
+  const reserved = reserveWorkspaceArea(area, 280);
+  const placements = computeViewLayout(keys, reserved, { mode: "overview", gap: 4 });
+
+  assert.deepEqual(reserved, { x: 280, y: 0, width: 1160, height: 900 });
+  assert.ok(placements.every((item) => item.bounds.x >= 280));
+  assert.ok(placements.every((item) => item.bounds.width > 0));
+  assert.deepEqual(reserveWorkspaceArea(area, 0), area);
 });

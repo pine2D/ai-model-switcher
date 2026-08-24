@@ -3,33 +3,23 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
-  ipcMain,
   Menu,
-  type MenuItemConstructorOptions,
-  type WebContents,
-  type WebFrameMain
+  type MenuItemConstructorOptions
 } from "electron";
 
-import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import { getCopy } from "../shared/copy";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
-  parseDisplayPreferences,
   type DisplayPreferences
 } from "../shared/display";
-import {
-  parseBroadcastRequest,
-  type LayoutState,
-  type SiteResponseEnvelope,
-  type SiteStatus
-} from "../shared/protocol";
+import type { LayoutState, SiteStatus } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
 import { DesktopDatabase } from "./database";
 import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
-import { SITES } from "./sites";
-import { statusForResult } from "./status";
+import { registerShellIpc } from "./shell-ipc";
 import { ViewManager } from "./view-manager";
+import { WorkspaceService } from "./workspace-service";
 
 const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
@@ -37,11 +27,6 @@ let viewManager: ViewManager | null = null;
 let desktopDatabase: DesktopDatabase | null = null;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
-
-interface ShellIpcEvent {
-  readonly sender: WebContents;
-  readonly senderFrame: WebFrameMain | null;
-}
 
 function sendToShell(channel: string, payload: SiteStatus | LayoutState | DisplayPreferences): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
@@ -151,62 +136,6 @@ function createMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function registerIpc(window: BrowserWindow, manager: ViewManager): void {
-  const trustedShell = (event: ShellIpcEvent) =>
-    event.sender.id === window.webContents.id &&
-    event.senderFrame?.parent === null &&
-    isTrustedShellUrl(event.senderFrame.url, MAIN_WINDOW_WEBPACK_ENTRY);
-
-  ipcMain.handle("polyask:bootstrap", (event) => {
-    if (!trustedShell(event)) throw new Error("untrusted_sender");
-    return {
-      sites: SITES,
-      statuses: manager.getStatuses(),
-      layout: manager.getLayout(),
-      display: manager.getDisplayPreferences()
-    };
-  });
-  ipcMain.handle("polyask:set-display", (event, value: unknown) => {
-    if (!trustedShell(event)) throw new Error("untrusted_sender");
-    const display = parseDisplayPreferences(value);
-    if (!display) throw new Error("invalid_display_preferences");
-    return applyDisplayPreferences(manager, display);
-  });
-  ipcMain.handle("polyask:broadcast", async (event, value: unknown) => {
-    if (!trustedShell(event)) throw new Error("untrusted_sender");
-    const request = parseBroadcastRequest(value);
-    if (!request) throw new Error("invalid_broadcast_request");
-    for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
-    return coordinator.send(
-      request,
-      (site, command, signal) => manager.sendCommand(site, command, signal),
-      44_000,
-      (result) => manager.markStatus(statusForResult(result.site, result))
-    );
-  });
-  ipcMain.on("polyask:cancel", (event) => {
-    if (trustedShell(event)) coordinator.cancel();
-  });
-  ipcMain.on("polyask:set-composer-expanded", (event, value: unknown) => {
-    if (!trustedShell(event) || typeof value !== "boolean") return;
-    manager.setComposerExpanded(value);
-  });
-  ipcMain.on("polyask:set-layout", (event, value: unknown) => {
-    if (!trustedShell(event) || !value || typeof value !== "object") return;
-    const candidate = value as { mode?: unknown; focused?: unknown };
-    if (candidate.mode !== "overview" && candidate.mode !== "focus") return;
-    if (typeof candidate.focused !== "string" || !SITE_KEYS.includes(candidate.focused as SiteKey)) return;
-    manager.setLayout(candidate.mode, candidate.focused as SiteKey);
-  });
-  ipcMain.on("polyask:reload-site", (event, value: unknown) => {
-    if (!trustedShell(event) || typeof value !== "string") return;
-    if (SITE_KEYS.includes(value as SiteKey)) manager.reload(value as SiteKey);
-  });
-  ipcMain.on("polyask:site-response", (event, envelope: SiteResponseEnvelope) => {
-    if (manager.owns(event.sender)) manager.receiveResponse(event.sender, envelope);
-  });
-}
-
 async function createWindow(): Promise<void> {
   const copy = getCopy(app.getLocale());
   const window = new BrowserWindow({
@@ -244,21 +173,27 @@ async function createWindow(): Promise<void> {
     runtimeGates.record
   );
   viewManager = manager;
+  if (!desktopDatabase) throw new Error("database_not_ready");
+  const workspace = new WorkspaceService(
+    desktopDatabase.state,
+    desktopDatabase.meta,
+    (site, url) => manager.navigate(site, url)
+  );
   createMenu();
-  registerIpc(window, manager);
+  const disposeIpc = registerShellIpc({
+    window,
+    manager,
+    workspace,
+    coordinator,
+    shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
+    applyDisplay: (value) => applyDisplayPreferences(manager, value)
+  });
   window.once("ready-to-show", () => window.show());
   await window.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   runtimeGates.writeDiagnostic(manager);
   window.on("closed", () => {
     runtimeGates.dispose();
-    ipcMain.removeHandler("polyask:bootstrap");
-    ipcMain.removeHandler("polyask:set-display");
-    ipcMain.removeHandler("polyask:broadcast");
-    ipcMain.removeAllListeners("polyask:cancel");
-    ipcMain.removeAllListeners("polyask:set-composer-expanded");
-    ipcMain.removeAllListeners("polyask:set-layout");
-    ipcMain.removeAllListeners("polyask:reload-site");
-    ipcMain.removeAllListeners("polyask:site-response");
+    disposeIpc();
     mainWindow = null;
     viewManager = null;
   });

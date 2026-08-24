@@ -54,3 +54,23 @@ export function SendIcon(): React.JSX.Element {
 export function StopIcon(): React.JSX.Element {
   return <Icon><rect x="6" y="6" width="12" height="12" rx="2" /></Icon>;
 }
+
+export function ScopeIcon(): React.JSX.Element {
+  return <Icon><path d="M4 6h16M4 12h10M4 18h7" /><path d="m16 16 2 2 3-4" /></Icon>;
+}
+
+export function NewSessionIcon(): React.JSX.Element {
+  return <Icon><path d="M5 5h10v14H5zM15 9h4v10H9" /><path d="M10 9v6M7 12h6" /></Icon>;
+}
+
+export function CloseIcon(): React.JSX.Element {
+  return <Icon><path d="m6 6 12 12M18 6 6 18" /></Icon>;
+}
+
+export function SaveIcon(): React.JSX.Element {
+  return <Icon><path d="M5 4h12l2 2v14H5z" /><path d="M8 4v6h8V4M8 20v-6h8v6" /></Icon>;
+}
+
+export function TrashIcon(): React.JSX.Element {
+  return <Icon><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" /></Icon>;
+}

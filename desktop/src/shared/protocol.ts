@@ -5,6 +5,7 @@ import {
   type ViewPlacement
 } from "./contracts";
 import type { DisplayPreferences } from "./display";
+import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
 
@@ -59,6 +60,7 @@ export interface BootstrapState {
   readonly statuses: readonly SiteStatus[];
   readonly layout: LayoutState;
   readonly display: DisplayPreferences;
+  readonly workspace: WorkspaceState;
 }
 
 export interface SiteCommandEnvelope {

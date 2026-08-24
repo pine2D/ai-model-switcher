@@ -298,7 +298,7 @@ git commit -m "feat(desktop): add durable workspace data store"
 - Produces Shell IPC: `polyask:workspace-state`、`polyask:set-selection`、`polyask:save-group`、`polyask:delete-group`、`polyask:new-session`、`polyask:set-drawer-open`。
 - `ViewManager.setDrawerOpen(open)` 为 Shell 左侧保留 compact 280px / comfortable 320px，不覆盖原生 views；关闭后恢复原 bounds。
 
-- [ ] **Step 1: 写失败服务测试**
+- [x] **Step 1: 写失败服务测试**
 
 ```ts
 test("new session reloads selected sites at canonical URLs without touching others", async () => {
@@ -312,13 +312,13 @@ test("group deletion writes a tombstone", () => {
 });
 ```
 
-- [ ] **Step 2: RED → service 与 IPC GREEN**
+- [x] **Step 2: RED → service 与 IPC GREEN**
 
 Run: `cd desktop && npx tsx --test test/workspace-service.test.ts test/security.test.ts`
 
 验证未知站点、重复站点、空分组、超长名称和不可信 sender 均被拒绝。
 
-- [ ] **Step 3: 写失败布局测试并实现抽屉占位**
+- [x] **Step 3: 写失败布局测试并实现抽屉占位**
 
 ```ts
 test("opening the scope drawer reserves width instead of covering site views", () => {
@@ -328,11 +328,11 @@ test("opening the scope drawer reserves width instead of covering site views", (
 });
 ```
 
-- [ ] **Step 4: 实现连续多选与分组 UI**
+- [x] **Step 4: 实现连续多选与分组 UI**
 
 抽屉提供全部、清空、支持图片、国外、国内和用户分组；单站选择不会自动关闭抽屉。分组删除使用与条目 id 绑定的二段确认；每次重渲染撤销确认态。
 
-- [ ] **Step 5: 全量验证与提交**
+- [x] **Step 5: 全量验证与提交**
 
 Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 
@@ -340,6 +340,8 @@ Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 git add desktop/src desktop/test CHANGELOG.md
 git commit -m "feat(desktop): add site scope and session controls"
 ```
+
+验证记录（2026-08-25）：服务与 UI 均复用同一份九站能力元数据；选择、档位和分组写入 SQLite state，分组删除保留 tombstone，state outbox 按实体键隔离。迁移了扩展版“内置范围/相同站点组合不可重复保存”和连续多选约束；抽屉在 compact/comfortable 下为 Grid 与 Focus 原生视图分别预留 280/320px。62 项桌面测试、TypeScript、Linux x64 package 与发行产物 smoke（1 个 Shell、9 个安全站点视图）通过。
 
 ### Task 5: 多图片群发
 

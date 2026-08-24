@@ -26,3 +26,14 @@ test("desktop keeps the stable product order", () => {
     ]
   );
 });
+
+test("site capabilities support scope presets without renderer-owned host lists", () => {
+  assert.deepEqual(
+    SITES.filter((site) => site.image).map((site) => site.key),
+    ["claude", "chatgpt", "doubao", "deepseek", "kimi", "yuanbao"]
+  );
+  assert.deepEqual(
+    SITES.filter((site) => site.intl).map((site) => site.key),
+    ["claude", "chatgpt", "gemini"]
+  );
+});

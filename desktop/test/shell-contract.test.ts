@@ -45,7 +45,7 @@ test("CI runs desktop tests and TypeScript checks", () => {
 });
 
 test("shell navigation and IPC trust both lock to the local top frame", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readFileSync("src/main/index.ts", "utf8") + readFileSync("src/main/shell-ipc.ts", "utf8");
   assert.match(main, /senderFrame/);
   assert.match(main, /will-navigate/);
   assert.match(main, /setWindowOpenHandler/);
@@ -53,7 +53,7 @@ test("shell navigation and IPC trust both lock to the local top frame", () => {
 });
 
 test("display preferences cross only the trusted shell bridge", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");
   assert.match(main, /polyask:set-display/);
   assert.match(main, /trustedShell\(event\)/);
@@ -62,13 +62,34 @@ test("display preferences cross only the trusted shell bridge", () => {
 });
 
 test("composer expansion crosses a boolean-only trusted shell bridge", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
   const manager = readFileSync("src/main/view-manager.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");
   assert.match(main, /polyask:set-composer-expanded/);
   assert.match(main, /typeof value !== "boolean"/);
   assert.match(manager, /setComposerExpanded/);
   assert.match(preload, /setComposerExpanded/);
+});
+
+test("workspace mutations cross the trusted shell bridge and the drawer reserves native bounds", () => {
+  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const workspaceLayout = readFileSync("src/main/workspace-layout.ts", "utf8");
+  for (const channel of [
+    "polyask:set-selection",
+    "polyask:set-tier",
+    "polyask:save-group",
+    "polyask:delete-group",
+    "polyask:new-session"
+  ]) {
+    assert.match(main, new RegExp(channel));
+  }
+  assert.match(main, /trustedShell\(event\)/);
+  assert.match(preload, /onWorkspaceState/);
+  assert.match(preload, /setDrawerOpen/);
+  assert.match(manager, /computeWorkspaceLayout/);
+  assert.match(workspaceLayout, /reserveWorkspaceArea/);
 });
 
 test("windows and linux auto-hide the native menu bar", () => {

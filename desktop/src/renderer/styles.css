@@ -18,6 +18,7 @@
   --tile-header-height: 24px;
   --control-height: 32px;
   --target-size: 24px;
+  --drawer-width: 280px;
 }
 
 :root[data-density="comfortable"] {
@@ -26,12 +27,13 @@
   --tile-header-height: 32px;
   --control-height: 40px;
   --target-size: 32px;
+  --drawer-width: 320px;
 }
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font-size: 13px; }
-button, textarea { font: inherit; }
+button, textarea, input { font: inherit; }
 button { cursor: default; }
 button:focus-visible, textarea:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
@@ -70,6 +72,18 @@ button:focus-visible, textarea:focus-visible {
 .command-bar.is-expanded textarea { height: calc(var(--composer-expanded-height) - var(--space-2)); }
 .command-bar textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent); }
 .summary { max-width: 112px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-actions {
+  height: var(--control-height); display: flex; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 7px; background: #f0f1f5;
+}
+.workspace-actions > button {
+  min-width: var(--target-size); height: 100%; padding: 0 6px; display: inline-flex; align-items: center;
+  justify-content: center; gap: 3px; border: 0; border-radius: 5px; color: var(--muted); background: transparent;
+}
+.workspace-actions > button:first-child { font-size: 10px; font-variant-numeric: tabular-nums; }
+.workspace-actions > button.active, .workspace-actions > button:hover { color: var(--accent); background: var(--panel); }
+.workspace-actions > button:disabled { opacity: .4; }
+.workspace-actions .summary { margin: 0 5px 0 2px; }
 .primary-action {
   min-width: 88px; height: var(--control-height); padding: 0 10px; display: inline-flex; align-items: center;
   justify-content: center; gap: 6px; border: 0; border-radius: 7px; color: white; font-weight: 650;
@@ -79,6 +93,52 @@ button:focus-visible, textarea:focus-visible {
 .send:disabled { opacity: .45; }
 .cancel:disabled { opacity: .68; }
 kbd { opacity: .7; font: 10px system-ui; }
+
+.workspace-drawer {
+  position: fixed; z-index: 3; top: var(--shell-height); bottom: 0; left: 0; width: var(--drawer-width);
+  padding: var(--space-2); overflow: auto; border-right: 1px solid var(--border); background: var(--panel);
+}
+.app-shell.is-composer-expanded .workspace-drawer { top: var(--composer-expanded-height); }
+.drawer-heading { height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.drawer-heading strong { font-size: 12px; }
+.drawer-heading button, .group-row > button:last-child, .group-save button {
+  width: 28px; height: 28px; padding: 0; display: grid; place-items: center;
+  border: 0; border-radius: 5px; color: var(--muted); background: transparent;
+}
+.drawer-heading button:hover, .group-row > button:last-child:hover, .group-save button:hover {
+  color: var(--accent); background: var(--accent-soft);
+}
+.scope-presets { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.scope-preset {
+  min-height: 26px; padding: 0 7px; border: 1px solid var(--border); border-radius: 999px;
+  color: inherit; background: #f7f7fa;
+}
+.scope-preset:hover { border-color: var(--accent); color: var(--accent); }
+.drawer-section { margin-top: 8px; }
+.drawer-section h2 { margin: 0 0 5px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.site-checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; }
+.site-checklist label {
+  min-width: 0; height: 26px; padding: 0 4px; display: flex; align-items: center; gap: 5px;
+  border-radius: 5px; overflow: hidden;
+}
+.site-checklist label:hover { background: var(--accent-soft); }
+.site-checklist input { width: 14px; height: 14px; margin: 0; flex: 0 0 auto; accent-color: var(--accent); }
+.site-checklist span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-section > p { margin: 4px 0; color: var(--muted); font-size: 11px; }
+.group-list { display: grid; gap: 2px; }
+.group-row { height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 28px; align-items: center; }
+.group-apply { height: 28px; padding: 0 5px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 5px; color: inherit; background: transparent; }
+.group-apply:hover { background: var(--accent-soft); }
+.group-confirm { min-height: 30px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 3px; }
+.group-confirm span { overflow: hidden; color: var(--danger); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.group-confirm button { height: 26px; padding: 0 6px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: transparent; }
+.group-confirm button.danger { border-color: var(--danger); color: var(--danger); }
+.group-save { height: 30px; margin-top: 5px; display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 3px; }
+.group-save input { min-width: 0; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: #fafafd; }
+.group-save input:focus { border-color: var(--accent); outline: none; }
+.group-save input:disabled { opacity: .5; }
+.group-save button { border: 1px solid var(--border); }
+.group-save button:disabled { opacity: .4; }
 
 .tile-layer { position: fixed; inset: 0; pointer-events: none; }
 .tile-frame {
@@ -142,7 +202,8 @@ kbd { opacity: .7; font: 10px system-ui; }
     --border: #38383f; --panel: #222226; --muted: #a1a1aa;
   }
   .app-shell { background: #17171a; }
-  .mode-switch, .tier-switch { background: #19191d; }
+  .mode-switch, .tier-switch, .workspace-actions { background: #19191d; }
   .mode-switch button.active, .tier-switch button.active { color: #f4f4f5; }
   .command-bar textarea { background: #19191d; }
+  .scope-preset, .group-save input { background: #19191d; }
 }

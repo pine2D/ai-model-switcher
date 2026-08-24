@@ -1,8 +1,9 @@
-import { SITE_KEYS, type SiteKey } from "./contracts";
+import { SITE_KEYS, type SiteDefinition, type SiteKey } from "./contracts";
 import type { Tier } from "./protocol";
 import { validSyncTime } from "./sync";
 
 export const GROUP_NAME_LIMIT = 80;
+export type ScopePresetKey = "all" | "clear" | "image" | "intl" | "domestic";
 
 export interface ActiveWorkspaceGroup {
   readonly id: string;
@@ -23,7 +24,7 @@ export type WorkspaceGroup = ActiveWorkspaceGroup | WorkspaceGroupTombstone;
 
 export interface WorkspaceState {
   readonly selectedSites: readonly SiteKey[];
-  readonly groups: readonly WorkspaceGroup[];
+  readonly groups: readonly ActiveWorkspaceGroup[];
   readonly tier: Tier;
 }
 
@@ -44,6 +45,22 @@ export function normalizeSelection(value: unknown): SiteKey[] {
     typeof site === "string" && SITE_KEYS.includes(site as SiteKey)
   ));
   return SITE_KEYS.filter((site) => selected.has(site));
+}
+
+export function workspacePresets(
+  sites: readonly SiteDefinition[]
+): Readonly<Record<ScopePresetKey, readonly SiteKey[]>> {
+  return {
+    all: sites.map((site) => site.key),
+    clear: [],
+    image: sites.filter((site) => site.image).map((site) => site.key),
+    intl: sites.filter((site) => site.intl).map((site) => site.key),
+    domestic: sites.filter((site) => !site.intl).map((site) => site.key)
+  };
+}
+
+export function groupSignature(sites: readonly SiteKey[]): string {
+  return [...sites].sort().join(",");
 }
 
 export function createWorkspaceGroup(
