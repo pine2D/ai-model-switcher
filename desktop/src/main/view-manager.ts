@@ -11,6 +11,7 @@ import type { SiteDefinition, SiteKey, ViewPlacement } from "../shared/contracts
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   metricsForDensity,
+  shellHeightForComposer,
   zoomForSite,
   type DisplayPreferences
 } from "../shared/display";
@@ -31,8 +32,6 @@ import { navigationDisposition } from "./navigation";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
 
-const LEGACY_SHELL_HEIGHT = 156;
-
 interface PendingCommand {
   readonly contentsId: number;
   readonly resolve: (result: SiteResult) => void;
@@ -52,6 +51,7 @@ export class ViewManager {
   private focusOrder: SiteKey[] = SITES.map((site) => site.key);
   private placements: readonly ViewPlacement[] = [];
   private display = DEFAULT_DISPLAY_PREFERENCES;
+  private composerExpanded = false;
 
   constructor(
     private readonly window: BrowserWindow,
@@ -83,6 +83,12 @@ export class ViewManager {
 
   setDisplayPreferences(value: DisplayPreferences): void {
     this.display = value;
+    this.layout();
+  }
+
+  setComposerExpanded(value: boolean): void {
+    if (this.composerExpanded === value) return;
+    this.composerExpanded = value;
     this.layout();
   }
 
@@ -238,11 +244,12 @@ export class ViewManager {
     const cssWidth = Math.floor(width / zoom);
     const cssHeight = Math.floor(height / zoom);
     const metrics = metricsForDensity(this.display.density);
+    const shellHeight = shellHeightForComposer(this.display.density, this.composerExpanded);
     const area = {
       x: metrics.edgeGap,
-      y: LEGACY_SHELL_HEIGHT,
+      y: shellHeight,
       width: Math.max(1, cssWidth - metrics.edgeGap * 2),
-      height: Math.max(1, cssHeight - LEGACY_SHELL_HEIGHT - metrics.edgeGap)
+      height: Math.max(1, cssHeight - shellHeight - metrics.edgeGap)
     };
     this.renderedMode = resolveLayoutMode(this.mode, area, metrics.viewGap);
     const keys = this.renderedMode === "focus"

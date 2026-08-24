@@ -5,6 +5,7 @@ import {
   DEFAULT_DISPLAY_PREFERENCES,
   metricsForDensity,
   parseDisplayPreferences,
+  shellHeightForComposer,
   zoomForSite
 } from "../src/shared/display";
 import {
@@ -58,6 +59,13 @@ test("fit scale keeps only a focused primary at one hundred percent", () => {
   assert.equal(zoomForSite(DEFAULT_DISPLAY_PREFERENCES, "focus", true), 1);
   assert.equal(zoomForSite(DEFAULT_DISPLAY_PREFERENCES, "focus", false), 0.9);
   assert.equal(zoomForSite({ density: "compact", siteScale: 1 }, "focus", false), 1);
+});
+
+test("composer expansion changes shell height once per focus state", () => {
+  assert.equal(shellHeightForComposer("compact", false), 52);
+  assert.equal(shellHeightForComposer("compact", true), 120);
+  assert.equal(shellHeightForComposer("comfortable", false), 64);
+  assert.equal(shellHeightForComposer("comfortable", true), 144);
 });
 
 test("stored display preferences survive reload and malformed values fall back", () => {

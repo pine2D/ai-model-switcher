@@ -32,6 +32,11 @@ export function metricsForDensity(density: Density): DisplayMetrics {
     : { shellHeight: 64, tileHeaderHeight: 32, edgeGap: 8, viewGap: 8 };
 }
 
+export function shellHeightForComposer(density: Density, expanded: boolean): number {
+  if (expanded) return density === "compact" ? 120 : 144;
+  return metricsForDensity(density).shellHeight;
+}
+
 export function zoomForSite(
   preferences: DisplayPreferences,
   mode: "overview" | "focus",

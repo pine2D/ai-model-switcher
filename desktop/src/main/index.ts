@@ -182,6 +182,10 @@ function registerIpc(window: BrowserWindow, manager: ViewManager): void {
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) coordinator.cancel();
   });
+  ipcMain.on("polyask:set-composer-expanded", (event, value: unknown) => {
+    if (!trustedShell(event) || typeof value !== "boolean") return;
+    manager.setComposerExpanded(value);
+  });
   ipcMain.on("polyask:set-layout", (event, value: unknown) => {
     if (!trustedShell(event) || !value || typeof value !== "object") return;
     const candidate = value as { mode?: unknown; focused?: unknown };
@@ -238,6 +242,7 @@ async function createWindow(): Promise<void> {
     ipcMain.removeHandler("polyask:set-display");
     ipcMain.removeHandler("polyask:broadcast");
     ipcMain.removeAllListeners("polyask:cancel");
+    ipcMain.removeAllListeners("polyask:set-composer-expanded");
     ipcMain.removeAllListeners("polyask:set-layout");
     ipcMain.removeAllListeners("polyask:reload-site");
     ipcMain.removeAllListeners("polyask:site-response");

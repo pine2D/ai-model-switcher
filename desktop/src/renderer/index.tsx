@@ -2,14 +2,16 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
-import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
+import { getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
 import type { LayoutState, SiteStatus, Tier } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
+import { CommandBar, type RunState } from "./command-bar";
 import {
   loadDisplayPreferences,
   saveDisplayPreferences
 } from "./display-preferences";
+import { SiteFrames } from "./site-frames";
 import "./styles.css";
 
 const INITIAL_LAYOUT: LayoutState = {
@@ -39,7 +41,8 @@ function App(): React.JSX.Element {
   const [selected, setSelected] = useState<Set<SiteKey>>(new Set());
   const [text, setText] = useState("");
   const [tier, setTier] = useState<Tier>(null);
-  const [runState, setRunState] = useState<"idle" | "sending" | "cancelling">("idle");
+  const [runState, setRunState] = useState<RunState>("idle");
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
@@ -97,78 +100,43 @@ function App(): React.JSX.Element {
     });
   };
 
+  const changeComposerExpanded = (value: boolean): void => {
+    setComposerExpanded(value);
+    window.polyask.setComposerExpanded(value);
+  };
+
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">P</span><span>PolyAsk</span><small>{copy.brandSub}</small></div>
-        <div className="mode-switch" aria-label={copy.layoutLabel}>
-          <button aria-pressed={layout.mode === "overview"} className={layout.mode === "overview" ? "active" : ""} onClick={() => setMode("overview")}>{copy.overview}</button>
-          <button aria-pressed={layout.mode === "focus"} className={layout.mode === "focus" ? "active" : ""} onClick={() => setMode("focus")}>{copy.focus}</button>
-        </div>
-        <div className="summary" role="status" aria-live="polite">
-          {formatCopy(activeCount > 0 ? copy.sendingSummary : copy.selectedSummary, {
-            count: activeCount,
-            selected: selected.size,
-            total: sites.length || 9
-          })}
-        </div>
-      </header>
-
-      <section className="composer" aria-label={copy.broadcastLabel}>
-        <textarea
-          ref={promptRef}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={copy.promptPlaceholder}
-          aria-label={copy.promptLabel}
-        />
-        <div className="tier-switch" aria-label={copy.tierLabel}>
-          {([[null, copy.followSite], ["fast", copy.fast], ["think", copy.think]] as const).map(([value, label]) => (
-            <button key={label} aria-pressed={tier === value} className={tier === value ? "active" : ""} onClick={() => setTier(value)}>{label}</button>
-          ))}
-        </div>
-        {runState !== "idle"
-          ? <button className="cancel" disabled={runState === "cancelling"} onClick={() => { setRunState("cancelling"); window.polyask.cancel(); }}>{runState === "cancelling" ? copy.cancelling : copy.cancel}</button>
-          : <button className="send" disabled={!text.trim() || selected.size === 0} onClick={() => void submit()}>{copy.send} <kbd>{navigator.userAgent.includes("Mac") ? "⌘↵" : "Ctrl+↵"}</kbd></button>}
-      </section>
+      <CommandBar
+        copy={copy}
+        promptRef={promptRef}
+        text={text}
+        tier={tier}
+        runState={runState}
+        layoutMode={layout.mode}
+        selectedCount={selected.size}
+        totalSites={sites.length || 9}
+        activeCount={activeCount}
+        isMac={navigator.userAgent.includes("Mac")}
+        expanded={composerExpanded}
+        onTextChange={setText}
+        onSubmit={() => void submit()}
+        onCancel={() => { setRunState("cancelling"); window.polyask.cancel(); }}
+        onTierChange={setTier}
+        onLayoutChange={setMode}
+        onExpandedChange={changeComposerExpanded}
+      />
       <div className="sr-only" aria-live="polite">{announcement}</div>
-
-      <section className="tile-layer" aria-label={copy.siteViews}>
-        {layout.placements.map((placement) => {
-          const site = sites.find((candidate) => candidate.key === placement.key);
-          const status = statuses[placement.key] ?? { site: placement.key, phase: "loading" as const };
-          if (!site) return null;
-          return (
-            <article
-              className={`tile-frame phase-${status.phase}`}
-              key={site.key}
-              style={{
-                left: placement.bounds.x,
-                top: placement.bounds.y,
-                width: placement.bounds.width,
-                height: placement.bounds.height
-              }}
-            >
-              <div className="tile-header">
-                <label className="site-select" title={formatCopy(copy.selectSite, { site: site.label })}>
-                  <input type="checkbox" checked={selected.has(site.key)} onChange={() => toggleSite(site.key)} />
-                  <span>{site.label}</span>
-                </label>
-                <span className="answer-rail" aria-hidden="true" />
-                <span className="site-state">{describeStatus(copy, status)}</span>
-                <button title={formatCopy(copy.focusSite, { site: site.label })} aria-label={formatCopy(copy.focusSite, { site: site.label })} onClick={() => setMode("focus", site.key)}>⌗</button>
-                <button title={formatCopy(copy.reloadSite, { site: site.label })} aria-label={formatCopy(copy.reloadSite, { site: site.label })} onClick={() => window.polyask.reloadSite(site.key)}>↻</button>
-              </div>
-            </article>
-          );
-        })}
-      </section>
+      <SiteFrames
+        copy={copy}
+        sites={sites}
+        statuses={statuses}
+        layout={layout}
+        selected={selected}
+        onToggle={toggleSite}
+        onFocus={(site) => setMode("focus", site)}
+        onReload={(site) => window.polyask.reloadSite(site)}
+      />
     </main>
   );
 }

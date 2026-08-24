@@ -16,6 +16,7 @@ export interface PolyAskDesktopApi {
   cancel(): void;
   setLayout(mode: "overview" | "focus", focused: SiteKey): void;
   setDisplayPreferences(value: DisplayPreferences): Promise<DisplayPreferences>;
+  setComposerExpanded(value: boolean): void;
   reloadSite(site: SiteKey): void;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
@@ -35,6 +36,7 @@ const api: PolyAskDesktopApi = Object.freeze({
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),
   setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
+  setComposerExpanded: (value: boolean) => ipcRenderer.send("polyask:set-composer-expanded", value),
   reloadSite: (site: SiteKey) => ipcRenderer.send("polyask:reload-site", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
