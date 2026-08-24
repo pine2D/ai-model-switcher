@@ -7,6 +7,7 @@ import {
 
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import { parseDisplayPreferences, type DisplayPreferences } from "../shared/display";
+import { unsupportedImageSites } from "../shared/images";
 import { parseBroadcastRequest, type SiteResponseEnvelope } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
 import { isTrustedShellUrl } from "./security";
@@ -81,11 +82,14 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
     const request = parseBroadcastRequest(value);
     if (!request) throw new Error("invalid_broadcast_request");
+    if (request.images.length && unsupportedImageSites(request.sites, SITES).length) {
+      throw new Error("image_sites_unsupported");
+    }
     for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
     return coordinator.send(
       request,
       (site, command, signal) => manager.sendCommand(site, command, signal),
-      44_000,
+      request.images.length ? 90_000 : 44_000,
       (result) => manager.markStatus(statusForResult(result.site, result))
     );
   });

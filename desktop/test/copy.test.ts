@@ -57,6 +57,30 @@ test("desktop status details never expose raw adapter reasons", () => {
     }),
     "Failed"
   );
+  assert.equal(
+    describeStatus(getCopy("zh-CN"), {
+      site: "claude",
+      phase: "failed",
+      code: "attachment_unsupported"
+    }),
+    "该站点不支持图片群发"
+  );
+  assert.equal(
+    describeStatus(getCopy("zh-TW"), {
+      site: "claude",
+      phase: "failed",
+      code: "attachment_timeout"
+    }),
+    "等待圖片附件逾時"
+  );
+  assert.equal(
+    describeStatus(getCopy("zh-CN"), {
+      site: "claude",
+      phase: "failed",
+      code: "attachment_action_required"
+    }),
+    "请在该站点完成图片附件操作"
+  );
 });
 
 test("dense tiles show short text only for statuses that need attention", () => {

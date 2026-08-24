@@ -13,6 +13,11 @@ export function describeStatus(copy: DesktopCopy, status: SiteStatus): string {
     case "no_view": return copy.siteUnavailable;
     case "load_failed": return copy.loadFailed;
     case "renderer_crashed": return copy.crashed;
+    case "image_invalid": return copy.imagePayloadInvalid;
+    case "attachment_unsupported": return copy.attachmentUnsupported;
+    case "attachment_failed": return copy.attachmentFailed;
+    case "attachment_timeout": return copy.attachmentTimedOut;
+    case "attachment_action_required": return copy.attachmentActionRequired;
   }
   switch (status.phase) {
     case "loading": return copy.loading;

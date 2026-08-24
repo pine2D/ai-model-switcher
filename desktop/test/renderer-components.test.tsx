@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 
 import { CommandBar } from "../src/renderer/command-bar";
+import { ImagePicker } from "../src/renderer/image-picker";
 import { SiteFrames } from "../src/renderer/site-frames";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { getCopy } from "../src/shared/copy";
@@ -25,6 +26,8 @@ test("command bar renders one compact command surface with stateful controls", (
       totalSites={9}
       activeCount={0}
       drawerOpen={false}
+      imageControl={<span data-test="images" />}
+      sendBlockedReason={null}
       isMac={false}
       expanded={false}
       onTextChange={noop}
@@ -35,6 +38,7 @@ test("command bar renders one compact command surface with stateful controls", (
       onExpandedChange={noop}
       onToggleDrawer={noop}
       onNewSession={noop}
+      onPasteImages={noop}
     />
   );
 
@@ -55,6 +59,35 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
   assert.match(html, /aria-controls="workspace-drawer"/);
   assert.match(html, /aria-label="New session for selected sites"/);
+  assert.match(html, /data-test="images"/);
+});
+
+test("image picker stays icon-first and exposes removable previews and scope warning", () => {
+  const html = renderToStaticMarkup(
+    <ImagePicker
+      copy={getCopy("en")}
+      images={[
+        { name: "one.png", type: "image/png", size: 8, dataUrl: "data:image/png;base64,iVBORw0KGgo=" },
+        { name: "two.jpg", type: "image/jpeg", size: 3, dataUrl: "data:image/jpeg;base64,/9j/" }
+      ]}
+      open
+      disabled={false}
+      warning="Gemini does not support image broadcasts; adjust site scope"
+      warningCount={1}
+      error={null}
+      onOpenChange={noop}
+      onFiles={noop}
+      onRemove={noop}
+      onAdjustScope={noop}
+    />
+  );
+
+  assert.match(html, /data-image-count="2"/);
+  assert.match(html, /aria-label="Manage 2 images"/);
+  assert.equal([...html.matchAll(/class="image-preview"/g)].length, 2);
+  assert.match(html, /aria-label="Remove one.png"/);
+  assert.match(html, /aria-label="Adjust site scope: 1 unsupported"/);
+  assert.match(html, /role="alert"/);
 });
 
 test("workspace drawer exposes compact presets, continuous selection and bound group deletion", () => {

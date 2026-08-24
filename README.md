@@ -63,6 +63,8 @@ npm start
 
 桌面端可用 `Cmd/Ctrl+Shift+P` 将焦点从站点页面送回提问框，`Cmd/Ctrl+PageUp` / `Cmd/Ctrl+PageDown` 在九个站点间切换聚焦。提问框获得焦点时会临时展开，失焦或按 `Esc` 后恢复单行命令栏。
 
+桌面端命令栏可选择或粘贴最多 4 张 PNG/JPEG 图片（总计不超过 10 MiB），并将同一批图片群发到 Claude、ChatGPT、DeepSeek、豆包、Kimi 和元宝。若当前范围包含 Gemini、千问或智谱，发送前会明确列出不兼容站点并引导调整范围，不会静默漏发。
+
 执行 `npm run package` 可生成当前平台的未签名应用目录。Gemini 已在 WSLg 中完成首次登录与群发；Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键

@@ -2,8 +2,13 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
-import { getCopy, resolveLocale } from "../shared/copy";
+import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
+import {
+  unsupportedImageSites,
+  type DesktopImage,
+  type ImageInputError
+} from "../shared/images";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
 import type { WorkspaceState } from "../shared/workspace";
@@ -12,6 +17,7 @@ import {
   loadDisplayPreferences,
   saveDisplayPreferences
 } from "./display-preferences";
+import { ImagePicker, readDesktopImages } from "./image-picker";
 import { SiteFrames } from "./site-frames";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import "./styles.css";
@@ -39,13 +45,17 @@ function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const selectionRef = useRef<readonly SiteKey[]>([]);
+  const imageReadEpoch = useRef(0);
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
   const [workspace, setWorkspace] = useState<WorkspaceState>(INITIAL_WORKSPACE);
   const [text, setText] = useState("");
   const [runState, setRunState] = useState<RunState>("idle");
-  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [imageTrayOpen, setImageTrayOpen] = useState(false);
+  const [images, setImages] = useState<readonly DesktopImage[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const acceptWorkspace = (value: WorkspaceState): void => {
@@ -63,6 +73,32 @@ function App(): React.JSX.Element {
     selectionRef.current = ordered;
     setWorkspace((current) => ({ ...current, selectedSites: ordered }));
     void window.polyask.setSelection(ordered).then(acceptWorkspace).catch(recoverWorkspace);
+  };
+  const changeDrawerOpen = (value: boolean): void => {
+    setDrawerOpen(value);
+    window.polyask.setDrawerOpen(value);
+  };
+  const imageErrorText = (code: ImageInputError): string => ({
+    image_count: copy.imageCountError,
+    image_type: copy.imageTypeError,
+    image_size: copy.imageSizeError,
+    image_invalid: copy.imageInvalid
+  })[code];
+  const chooseImages = async (files: readonly File[]): Promise<void> => {
+    if (runState !== "idle") return;
+    const epoch = ++imageReadEpoch.current;
+    const result = await readDesktopImages(files);
+    if (epoch !== imageReadEpoch.current) return;
+    if (!result.ok) {
+      const message = imageErrorText(result.code);
+      setImageError(message);
+      setAnnouncement(message);
+      return;
+    }
+    setImages(result.images);
+    setImageError(null);
+    setImageTrayOpen(true);
+    setAnnouncement(formatCopy(copy.imagesReady, { count: result.images.length }));
   };
 
   useEffect(() => {
@@ -93,18 +129,47 @@ function App(): React.JSX.Element {
     };
   }, [copy]);
 
+  const composerExpanded = promptExpanded || imageTrayOpen;
+  useEffect(() => window.polyask.setComposerExpanded(composerExpanded), [composerExpanded]);
+
   const activeCount = useMemo(
     () => Object.values(statuses).filter((status) => status.phase === "sending").length,
     [statuses]
   );
   const selected = useMemo(() => new Set(workspace.selectedSites), [workspace.selectedSites]);
+  const unsupportedSites = useMemo(() => {
+    if (!images.length) return [];
+    const unsupported = new Set(unsupportedImageSites([...selected], sites));
+    return sites.filter((site) => unsupported.has(site.key));
+  }, [images.length, selected, sites]);
+  const imageWarning = unsupportedSites.length
+    ? formatCopy(copy.imageUnsupported, {
+      sites: new Intl.ListFormat(navigator.language, { style: "short", type: "conjunction" })
+        .format(unsupportedSites.map((site) => site.label))
+    })
+    : null;
 
   const submit = async (): Promise<void> => {
     const prompt = text.trim();
     if (!prompt || selected.size === 0 || runState !== "idle") return;
+    if (imageWarning) {
+      setAnnouncement(imageWarning);
+      setImageTrayOpen(false);
+      changeDrawerOpen(true);
+      return;
+    }
+    imageReadEpoch.current += 1;
+    setImageTrayOpen(false);
     setRunState("sending");
     try {
-      await window.polyask.broadcast({ text: prompt, tier: workspace.tier, sites: [...selected] });
+      await window.polyask.broadcast({
+        text: prompt,
+        tier: workspace.tier,
+        sites: [...selected],
+        images
+      });
+    } catch {
+      setAnnouncement(copy.failed);
     } finally {
       setRunState("idle");
     }
@@ -121,11 +186,6 @@ function App(): React.JSX.Element {
     changeSelection(sites.map((item) => item.key).filter((key) => next.has(key)));
   };
 
-  const changeComposerExpanded = (value: boolean): void => {
-    setComposerExpanded(value);
-    window.polyask.setComposerExpanded(value);
-  };
-
   return (
     <main className={`app-shell${composerExpanded ? " is-composer-expanded" : ""}${drawerOpen ? " has-drawer" : ""}`}>
       <CommandBar
@@ -139,6 +199,29 @@ function App(): React.JSX.Element {
         totalSites={sites.length || 9}
         activeCount={activeCount}
         drawerOpen={drawerOpen}
+        imageControl={(
+          <ImagePicker
+            copy={copy}
+            images={images}
+            open={imageTrayOpen}
+            disabled={runState !== "idle"}
+            warning={imageWarning}
+            warningCount={unsupportedSites.length}
+            error={imageError}
+            onOpenChange={setImageTrayOpen}
+            onFiles={(files) => { void chooseImages(files); }}
+            onRemove={(index) => {
+              imageReadEpoch.current += 1;
+              const next = images.filter((_image, current) => current !== index);
+              setImages(next);
+              setImageError(null);
+              if (!next.length) setImageTrayOpen(false);
+              setAnnouncement(formatCopy(copy.imagesReady, { count: next.length }));
+            }}
+            onAdjustScope={() => { setImageTrayOpen(false); changeDrawerOpen(true); }}
+          />
+        )}
+        sendBlockedReason={imageWarning}
         isMac={navigator.userAgent.includes("Mac")}
         expanded={composerExpanded}
         onTextChange={setText}
@@ -149,13 +232,12 @@ function App(): React.JSX.Element {
           void window.polyask.setTier(value).then(acceptWorkspace).catch(recoverWorkspace);
         }}
         onLayoutChange={setMode}
-        onExpandedChange={changeComposerExpanded}
+        onExpandedChange={setPromptExpanded}
         onToggleDrawer={() => {
-          const next = !drawerOpen;
-          setDrawerOpen(next);
-          window.polyask.setDrawerOpen(next);
+          changeDrawerOpen(!drawerOpen);
         }}
         onNewSession={() => { void window.polyask.newSession([...selected]).catch(recoverWorkspace); }}
+        onPasteImages={(files) => { void chooseImages(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>
       {drawerOpen ? (
@@ -164,7 +246,7 @@ function App(): React.JSX.Element {
           sites={sites}
           selected={selected}
           groups={workspace.groups}
-          onClose={() => { setDrawerOpen(false); window.polyask.setDrawerOpen(false); }}
+          onClose={() => changeDrawerOpen(false)}
           onSelectionChange={changeSelection}
           onSaveGroup={(name) => {
             void window.polyask.saveGroup({ name, sites: [...selected] }).then(acceptWorkspace).catch(recoverWorkspace);

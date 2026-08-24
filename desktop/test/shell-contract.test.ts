@@ -92,6 +92,12 @@ test("workspace mutations cross the trusted shell bridge and the drawer reserves
   assert.match(workspaceLayout, /reserveWorkspaceArea/);
 });
 
+test("image IPC rejects unsupported sites before native view dispatch", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  assert.match(ipc, /unsupportedImageSites/);
+  assert.match(ipc, /image_sites_unsupported/);
+});
+
 test("windows and linux auto-hide the native menu bar", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   assert.match(main, /setAutoHideMenuBar\(true\)/);

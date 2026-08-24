@@ -74,3 +74,11 @@ export function SaveIcon(): React.JSX.Element {
 export function TrashIcon(): React.JSX.Element {
   return <Icon><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" /></Icon>;
 }
+
+export function ImagePlusIcon(): React.JSX.Element {
+  return <Icon><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="8.5" cy="9" r="1.5" /><path d="m4 17 4-4 3 3 2-2 4 4M17 6v6M14 9h6" /></Icon>;
+}
+
+export function WarningIcon(): React.JSX.Element {
+  return <Icon><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 9v5M12 17h.01" /></Icon>;
+}

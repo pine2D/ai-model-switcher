@@ -368,7 +368,7 @@ git commit -m "feat(desktop): add site scope and session controls"
 - `BroadcastRequest.images` 最多 4 项；有图 timeout 为 90 秒，无图为 44 秒。
 - Site command 继续把相同 `images` 数组交给现有 `submitPrompt`，由 `content/upload.js` 做最终解码和站点附件确认。
 
-- [ ] **Step 1: 写失败图片契约测试**
+- [x] **Step 1: 写失败图片契约测试**
 
 ```ts
 test("desktop accepts four valid PNG/JPEG files up to ten MiB total", () => {
@@ -380,26 +380,30 @@ test("desktop rejects a mismatched signature before site dispatch", () => {
 });
 ```
 
-- [ ] **Step 2: RED → 校验与协议 GREEN**
+- [x] **Step 2: RED → 校验与协议 GREEN**
 
 Run: `cd desktop && npx tsx --test test/images.test.ts test/protocol.test.ts test/broadcast.test.ts`
 
-- [ ] **Step 3: 实现紧凑图片入口**
+- [x] **Step 3: 实现紧凑图片入口**
 
 命令栏使用 `ImagePlus` 图标；选择后显示数量徽标和可移除的缩略列表。只向 `image:true` 的站点群发；用户选择了不支持站点时，在发送前以三语明确列出并要求用户调整范围，不静默跳过。
 
-- [ ] **Step 4: 真机验证与提交**
+- [x] **Step 4: 自动门禁与提交**
 
-在 Claude、ChatGPT、DeepSeek、豆包、Kimi、元宝各验证一张 PNG；Gemini、千问、智谱显示不支持而不发送。确认取消不会让同一图片自动重传。
-
-Run: `cd desktop && npm test && npm run typecheck && npm run package`
+Run: `cd desktop && npm test && npm run typecheck && npm run package && npm run smoke`
 
 Run: `bash scripts/verify.sh`
+
+- [ ] **Step 5: 六站真机附件回归**
+
+在 Claude、ChatGPT、DeepSeek、豆包、Kimi、元宝各验证一张 PNG；Gemini、千问、智谱显示不支持而不发送。确认取消不会让同一图片自动重传。
 
 ```bash
 git add desktop/src desktop/test README.md CHANGELOG.md
 git commit -m "feat(desktop): support multi-image broadcasts"
 ```
+
+验证记录（2026-08-25）：69 项桌面测试和 TypeScript 检查通过；图片数量、类型、总大小、data URL、声明长度与 PNG/JPEG 魔数在可信 IPC 前校验，站点 preload 继续交由 `content/upload.js` 做实际解码与附件确认。发行产物 package/smoke 证明新协议可在 Electron 主进程加载且仍保持 1 个 Shell、9 个安全站点视图。取消后的同一图片只分发一次已有自动化断言。六个兼容站点的真实附件上传仍需人工逐站回归，不能由上述证据替代。
 
 ### Task 6: 回答汇总、历史与归档工作区
 

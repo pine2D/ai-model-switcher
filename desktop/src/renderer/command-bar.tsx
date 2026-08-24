@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
@@ -19,6 +19,8 @@ interface CommandBarProps {
   readonly totalSites: number;
   readonly activeCount: number;
   readonly drawerOpen: boolean;
+  readonly imageControl: ReactNode;
+  readonly sendBlockedReason: string | null;
   readonly isMac: boolean;
   readonly expanded: boolean;
   readonly onTextChange: (value: string) => void;
@@ -29,6 +31,7 @@ interface CommandBarProps {
   readonly onExpandedChange: (value: boolean) => void;
   readonly onToggleDrawer: () => void;
   readonly onNewSession: () => void;
+  readonly onPasteImages: (files: readonly File[]) => void;
 }
 
 export function CommandBar(props: CommandBarProps): React.JSX.Element {
@@ -43,6 +46,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     totalSites,
     activeCount,
     drawerOpen,
+    imageControl,
+    sendBlockedReason,
     isMac,
     expanded,
     onTextChange,
@@ -52,7 +57,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onLayoutChange,
     onExpandedChange,
     onToggleDrawer,
-    onNewSession
+    onNewSession,
+    onPasteImages
   } = props;
   const tierOptions = [
     { value: null, label: copy.followSite, icon: "site-setting", glyph: <SiteSettingIcon /> },
@@ -76,6 +82,10 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         rows={1}
         value={text}
         onChange={(event) => onTextChange(event.target.value)}
+        onPaste={(event) => {
+          const files = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
+          if (files.length) onPasteImages(files);
+        }}
         onFocus={() => onExpandedChange(true)}
         onBlur={() => onExpandedChange(false)}
         onKeyDown={(event) => {
@@ -100,6 +110,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
           <button type="button" key={icon} title={label} aria-label={label} aria-pressed={tier === value} data-tier-icon={icon} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{glyph}</button>
         ))}
       </div>
+      {imageControl}
       <WorkspaceActions
         copy={copy}
         selectedCount={selectedCount}
@@ -115,7 +126,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
           <StopIcon /><span>{runState === "cancelling" ? copy.cancelling : copy.cancel}</span>
         </button>
       ) : (
-        <button type="button" className="send primary-action priority-p0" disabled={!text.trim() || selectedCount === 0} onClick={onSubmit}>
+        <button type="button" className="send primary-action priority-p0" title={sendBlockedReason ?? undefined} disabled={!text.trim() || selectedCount === 0 || !!sendBlockedReason} onClick={onSubmit}>
           <SendIcon /><span>{copy.send}</span><kbd>{isMac ? "⌘↵" : "Ctrl+↵"}</kbd>
         </button>
       )}

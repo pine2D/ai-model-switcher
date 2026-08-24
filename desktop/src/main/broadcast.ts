@@ -49,7 +49,8 @@ export class BroadcastCoordinator {
           cmd: "submitPrompt",
           text: request.text,
           tier: request.tier,
-          deadline
+          deadline,
+          images: request.images
         };
         const result = await this.dispatchUntilTerminal(
           site,

@@ -5,6 +5,7 @@ import {
   type ViewPlacement
 } from "./contracts";
 import type { DisplayPreferences } from "./display";
+import { validateImages, type DesktopImage } from "./images";
 import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
@@ -13,6 +14,7 @@ export interface BroadcastRequest {
   readonly text: string;
   readonly tier: Tier;
   readonly sites: readonly SiteKey[];
+  readonly images: readonly DesktopImage[];
 }
 
 export interface SiteCommand {
@@ -21,6 +23,7 @@ export interface SiteCommand {
   readonly text: string;
   readonly tier: Tier;
   readonly deadline: number;
+  readonly images: readonly DesktopImage[];
 }
 
 export interface SiteResult {
@@ -85,6 +88,8 @@ export function parseBroadcastRequest(value: unknown): BroadcastRequest | null {
   if (!Array.isArray(candidate.sites) || candidate.sites.length === 0) return null;
   if (!candidate.sites.every((site) => typeof site === "string" && KNOWN_SITES.has(site))) return null;
   if (new Set(candidate.sites).size !== candidate.sites.length) return null;
+  const images = validateImages(candidate.images);
+  if (!images) return null;
 
-  return { text, tier, sites: candidate.sites as SiteKey[] };
+  return { text, tier, sites: candidate.sites as SiteKey[], images };
 }
