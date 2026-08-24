@@ -42,9 +42,10 @@
 
 ```ts
 test("overview requires every tile to meet width and height floors", () => {
-  assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1199, height: 900 }, 4), "focus");
+  assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1147, height: 900 }, 4), "focus");
+  assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1148, height: 900 }, 4), "overview");
   assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1440, height: 620 }, 4), "focus");
-  assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1440, height: 900 }, 4), "overview");
+  assert.equal(resolveLayoutMode("overview", { x: 0, y: 0, width: 1440, height: 638 }, 4), "overview");
 });
 
 test("wide focus uses a four by three mosaic with a two by two primary", () => {
