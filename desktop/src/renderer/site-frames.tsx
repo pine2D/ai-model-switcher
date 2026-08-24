@@ -1,7 +1,7 @@
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
-import { describeStatus } from "../shared/status-copy";
+import { describeStatus, visibleStatus } from "../shared/status-copy";
 import { FocusIcon, ReloadIcon } from "./icons";
 
 interface SiteFramesProps {
@@ -27,6 +27,7 @@ export function SiteFrames(props: SiteFramesProps): React.JSX.Element {
         };
         if (!site) return null;
         const statusText = describeStatus(copy, status);
+        const attentionText = visibleStatus(copy, status);
         return (
           <article
             className={`tile-frame phase-${status.phase}`}
@@ -39,14 +40,17 @@ export function SiteFrames(props: SiteFramesProps): React.JSX.Element {
             }}
           >
             <div className="tile-header">
-              <label className="site-select" title={formatCopy(copy.selectSite, { site: site.label })}>
+              <label className="site-select priority-p0" title={formatCopy(copy.selectSite, { site: site.label })}>
                 <input type="checkbox" checked={selected.has(site.key)} onChange={() => onToggle(site.key)} />
                 <span>{site.label}</span>
               </label>
-              <span className="answer-rail" aria-hidden="true" />
-              <span className="site-state" title={statusText}>{statusText}</span>
-              <button type="button" title={formatCopy(copy.focusSite, { site: site.label })} aria-label={formatCopy(copy.focusSite, { site: site.label })} onClick={() => onFocus(site.key)}><FocusIcon /></button>
-              <button type="button" title={formatCopy(copy.reloadSite, { site: site.label })} aria-label={formatCopy(copy.reloadSite, { site: site.label })} onClick={() => onReload(site.key)}><ReloadIcon /></button>
+              <span className="answer-rail priority-p0" title={statusText} aria-hidden="true" />
+              <span className="tile-status-sr sr-only">{statusText}</span>
+              {attentionText && <span className="site-state priority-p0" title={statusText}>{attentionText}</span>}
+              <span className="tile-actions priority-p2">
+                <button type="button" title={formatCopy(copy.focusSite, { site: site.label })} aria-label={formatCopy(copy.focusSite, { site: site.label })} onClick={() => onFocus(site.key)}><FocusIcon /></button>
+                <button type="button" title={formatCopy(copy.reloadSite, { site: site.label })} aria-label={formatCopy(copy.reloadSite, { site: site.label })} onClick={() => onReload(site.key)}><ReloadIcon /></button>
+              </span>
             </div>
           </article>
         );

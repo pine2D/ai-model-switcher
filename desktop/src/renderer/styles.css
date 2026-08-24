@@ -64,6 +64,7 @@ button:focus-visible, textarea:focus-visible {
   min-width: var(--target-size); min-height: var(--target-size); padding: 0 7px; display: inline-flex;
   align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 5px;
   color: var(--muted); background: transparent; white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 .mode-switch button.active, .tier-switch button.active {
   color: #242036; background: var(--panel); box-shadow: 0 1px 2px #11182718;
@@ -108,17 +109,40 @@ kbd { opacity: .7; font: 10px system-ui; }
 .tile-header button {
   width: var(--target-size); height: var(--target-size); padding: 0; display: grid; place-items: center;
   border: 0; border-radius: 4px; color: var(--muted); background: transparent;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 .tile-header button:hover { color: var(--accent); background: var(--accent-soft); }
+.tile-actions {
+  width: 0; display: flex; flex: 0 0 auto; overflow: hidden; opacity: 0; pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.tile-frame:hover .tile-actions, .tile-frame:focus-within .tile-actions {
+  width: calc(var(--target-size) * 2); opacity: 1; pointer-events: auto;
+}
 .phase-sending .answer-rail { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .phase-submitted .answer-rail { background: var(--success); }
 .phase-warning .answer-rail { background: var(--warning); }
 .phase-warning .site-state { color: var(--warning); }
 .phase-cancelled .answer-rail { background: var(--muted); }
 .phase-failed .answer-rail, .phase-crashed .answer-rail { background: var(--danger); }
+.phase-failed .site-state, .phase-crashed .site-state { color: var(--danger); }
 
 @keyframes pulse { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .phase-sending .answer-rail { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .phase-sending .answer-rail { animation: none; }
+  button, .tile-actions { transition: none; }
+}
+@media (max-width: 1400px) {
+  .brand-name, .mode-switch .priority-p1, .summary, kbd { display: none; }
+}
+@media (max-width: 1100px) {
+  .brand { display: none; }
+  .primary-action { min-width: var(--control-height); width: var(--control-height); padding: 0; }
+  .primary-action > span { display: none; }
+}
+@media (pointer: coarse) {
+  .tile-actions { width: calc(var(--target-size) * 2); opacity: 1; pointer-events: auto; }
+}
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f4f4f5; background: #17171a; --accent: #a5a0ff; --accent-soft: #2d2a50;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { COPY, getCopy } from "../src/shared/copy";
-import { describeStatus } from "../src/shared/status-copy";
+import { describeStatus, visibleStatus } from "../src/shared/status-copy";
 
 test("desktop shell keeps complete English, Simplified Chinese and Traditional Chinese copy", () => {
   const sourceKeys = Object.keys(COPY.en).sort();
@@ -56,4 +56,19 @@ test("desktop status details never expose raw adapter reasons", () => {
     }),
     "Failed"
   );
+});
+
+test("dense tiles show short text only for statuses that need attention", () => {
+  const copy = getCopy("en");
+  assert.equal(visibleStatus(copy, { site: "claude", phase: "ready" }), null);
+  assert.equal(visibleStatus(copy, { site: "claude", phase: "sending" }), null);
+  assert.equal(
+    visibleStatus(copy, { site: "claude", phase: "warning", code: "tier_unconfirmed" }),
+    "Sent with warning"
+  );
+  assert.equal(
+    visibleStatus(copy, { site: "claude", phase: "failed", code: "submit_unconfirmed" }),
+    "Failed"
+  );
+  assert.equal(visibleStatus(copy, { site: "claude", phase: "crashed" }), "Stopped");
 });

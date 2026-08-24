@@ -25,3 +25,12 @@ export function describeStatus(copy: DesktopCopy, status: SiteStatus): string {
     case "crashed": return copy.crashed;
   }
 }
+
+export function visibleStatus(copy: DesktopCopy, status: SiteStatus): string | null {
+  switch (status.phase) {
+    case "warning": return copy.submittedWithWarning;
+    case "failed": return copy.failed;
+    case "crashed": return copy.crashed;
+    default: return null;
+  }
+}

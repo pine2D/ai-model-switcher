@@ -220,6 +220,10 @@ async function createWindow(): Promise<void> {
       webSecurity: true
     }
   });
+  if (process.platform !== "darwin") {
+    window.setAutoHideMenuBar(true);
+    window.setMenuBarVisibility(false);
+  }
   mainWindow = window;
   const guardShellNavigation = (event: Electron.Event, url: string) => {
     if (!isTrustedShellUrl(url, MAIN_WINDOW_WEBPACK_ENTRY)) event.preventDefault();

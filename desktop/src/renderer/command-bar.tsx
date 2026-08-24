@@ -54,19 +54,20 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
 
   return (
     <header className={expanded ? "command-bar is-expanded" : "command-bar"} aria-label={copy.broadcastLabel}>
-      <div className="brand" aria-label={copy.appTitle}>
+      <div className="brand priority-p1" aria-label={copy.appTitle}>
         <span className="brand-mark">P</span>
         <span className="brand-name">PolyAsk</span>
       </div>
-      <div className="mode-switch" aria-label={copy.layoutLabel}>
+      <div className="mode-switch priority-p0" aria-label={copy.layoutLabel}>
         <button type="button" title={copy.overview} aria-pressed={layoutMode === "overview"} className={layoutMode === "overview" ? "active" : ""} onClick={() => onLayoutChange("overview")}>
-          <GridIcon /><span>{copy.overview}</span>
+          <GridIcon /><span className="priority-p1">{copy.overview}</span>
         </button>
         <button type="button" title={copy.focus} aria-pressed={layoutMode === "focus"} className={layoutMode === "focus" ? "active" : ""} onClick={() => onLayoutChange("focus")}>
-          <FocusIcon /><span>{copy.focus}</span>
+          <FocusIcon /><span className="priority-p1">{copy.focus}</span>
         </button>
       </div>
       <textarea
+        className="priority-p0"
         ref={promptRef}
         rows={1}
         value={text}
@@ -84,18 +85,18 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         placeholder={copy.promptPlaceholder}
         aria-label={copy.promptLabel}
       />
-      <div className="tier-switch" aria-label={copy.tierLabel}>
+      <div className="tier-switch priority-p0" aria-label={copy.tierLabel}>
         {([[null, copy.followSite], ["fast", copy.fast], ["think", copy.think]] as const).map(([value, label]) => (
           <button type="button" key={label} aria-pressed={tier === value} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{label}</button>
         ))}
       </div>
-      <span className="summary" role="status" aria-live="polite">{summary}</span>
+      <span className="summary priority-p1" role="status" aria-live="polite">{summary}</span>
       {runState !== "idle" ? (
-        <button type="button" className="cancel primary-action" disabled={runState === "cancelling"} onClick={onCancel}>
+        <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>
           <StopIcon /><span>{runState === "cancelling" ? copy.cancelling : copy.cancel}</span>
         </button>
       ) : (
-        <button type="button" className="send primary-action" disabled={!text.trim() || selectedCount === 0} onClick={onSubmit}>
+        <button type="button" className="send primary-action priority-p0" disabled={!text.trim() || selectedCount === 0} onClick={onSubmit}>
           <SendIcon /><span>{copy.send}</span><kbd>{isMac ? "⌘↵" : "Ctrl+↵"}</kbd>
         </button>
       )}

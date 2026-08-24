@@ -38,6 +38,8 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.match(html, /aria-label="Broadcast prompt"/);
   assert.match(html, /<textarea[^>]*>Question<\/textarea>/);
   assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /priority-p0/);
+  assert.match(html, /priority-p1/);
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
 });
 
@@ -63,4 +65,6 @@ test("site frames keep all nine live placements and accessible actions", () => {
   assert.equal([...html.matchAll(/type="checkbox"/g)].length, 9);
   assert.match(html, /aria-label="Focus Claude"/);
   assert.match(html, /aria-label="Reload Claude"/);
+  assert.match(html, /class="tile-actions priority-p2"/);
+  assert.match(html, /class="site-select priority-p0"/);
 });

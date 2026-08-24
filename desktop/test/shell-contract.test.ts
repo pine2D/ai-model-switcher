@@ -70,3 +70,9 @@ test("composer expansion crosses a boolean-only trusted shell bridge", () => {
   assert.match(manager, /setComposerExpanded/);
   assert.match(preload, /setComposerExpanded/);
 });
+
+test("windows and linux auto-hide the native menu bar", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  assert.match(main, /setAutoHideMenuBar\(true\)/);
+  assert.match(main, /setMenuBarVisibility\(false\)/);
+});
