@@ -9,7 +9,7 @@
     "package": "electron-forge package",
     "smoke": "node scripts/smoke.mjs",
     "soak": "node scripts/soak.mjs",
-    "test": "tsx --test test/**/*.test.ts && node --test scripts/*.test.mjs",
+    "test": "tsx --test test/**/*.test.ts test/**/*.test.tsx && node --test scripts/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

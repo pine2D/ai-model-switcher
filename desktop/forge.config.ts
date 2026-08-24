@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
@@ -6,8 +9,13 @@ import { WebpackPlugin } from "@electron-forge/plugin-webpack";
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
 
+const oauthResource = join(__dirname, "resources", "oauth.json");
+
 const config: ForgeConfig = {
-  packagerConfig: { asar: true },
+  packagerConfig: {
+    asar: true,
+    ...(existsSync(oauthResource) ? { extraResource: [oauthResource] } : {})
+  },
   makers: [],
   plugins: [
     new WebpackPlugin({

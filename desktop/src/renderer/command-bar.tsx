@@ -36,6 +36,7 @@ interface CommandBarProps {
   readonly onCollectAnswers: () => void;
   readonly onOpenArchive: () => void;
   readonly onCollectSynthesis: () => void;
+  readonly onOpenSettings: () => void;
   readonly onPasteImages: (files: readonly File[]) => void;
 }
 
@@ -68,6 +69,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onCollectAnswers,
     onOpenArchive,
     onCollectSynthesis,
+    onOpenSettings,
     onPasteImages
   } = props;
   const tierOptions = [
@@ -134,6 +136,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         onCollectAnswers={onCollectAnswers}
         onOpenArchive={onOpenArchive}
         onCollectSynthesis={onCollectSynthesis}
+        onOpenSettings={onOpenSettings}
       />
       {runState !== "idle" ? (
         <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>

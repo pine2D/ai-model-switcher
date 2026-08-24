@@ -1,0 +1,131 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { DesktopDatabase } from "../src/main/database";
+import { HistoryService } from "../src/main/history-service";
+import { SyncEngine, type SyncAuth, type SyncDrive } from "../src/main/sync-engine";
+import { SyncRepository } from "../src/main/sync-repository";
+import {
+  compareSyncVersion,
+  mergeHistoryRecords,
+  mergeStateFragments
+} from "../src/shared/sync";
+
+test("sync merge uses updatedAt then deviceId and lets tombstones win ties", () => {
+  assert.equal(compareSyncVersion({ updatedAt: 2, deviceId: "a" }, { updatedAt: 1, deviceId: "z" }) > 0, true);
+  assert.equal(compareSyncVersion({ updatedAt: 2, deviceId: "z" }, { updatedAt: 2, deviceId: "a" }) > 0, true);
+  const live = { schema: 1 as const, id: "h", textHash: "h", text: "hello", preview: "hello", createdAt: 1, lastUsedAt: 2, updatedAt: 3, deviceId: "a" };
+  const tombstone = { schema: 1 as const, id: "h", textHash: "h", createdAt: 1, lastUsedAt: 2, updatedAt: 3, deletedAt: 3, deviceId: "a" };
+  assert.equal("deletedAt" in mergeHistoryRecords([live, tombstone])![0], true);
+});
+
+test("state fragments preserve independent groups and enter read-only on future schema", () => {
+  const merged = mergeStateFragments([
+    { schema: 1, deviceId: "a", settings: { tier: { value: "fast", updatedAt: 1, deviceId: "a" } }, templates: {}, groups: { one: { id: "one", name: "One", hosts: ["claude.ai"], updatedAt: 1, deviceId: "a" } } },
+    { schema: 1, deviceId: "b", settings: { tier: { value: "think", updatedAt: 2, deviceId: "b" } }, templates: {}, groups: { two: { id: "two", name: "Two", hosts: ["chatgpt.com"], updatedAt: 2, deviceId: "b" } } },
+    { schema: 2, deviceId: "future", settings: {}, templates: {}, groups: {} }
+  ]);
+  assert.equal(merged.settings.tier.value, "think");
+  assert.deepEqual(merged.groups.map((group) => group.id), ["one", "two"]);
+  assert.equal(merged.readOnly, true);
+});
+
+test("state merge accepts extension schema 1 entries that inherit the fragment device", () => {
+  const merged = mergeStateFragments([{
+    schema: 1,
+    deviceId: "extension-device",
+    settings: { amsTheme: { value: "dark", updatedAt: 2 } },
+    templates: {},
+    groups: { shared: { id: "shared", name: "Shared", hosts: ["claude.ai"], updatedAt: 3 } }
+  }]);
+  assert.equal(merged.corrupt, 0);
+  assert.equal(merged.settings.amsTheme.deviceId, "extension-device");
+  assert.equal(merged.groups[0]?.deviceId, "extension-device");
+});
+
+function auth(): SyncAuth & { disconnected: boolean } {
+  return {
+    disconnected: false,
+    configured: () => true,
+    securePersistence: () => true,
+    connect: async () => undefined,
+    async disconnect() { this.disconnected = true; }
+  };
+}
+
+test("sync pulls a remote history tombstone and never lets an old upload revision clear a newer write", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  let now = 1_000;
+  const history = new HistoryService(database.history, { deviceId: () => "desktop-device", now: () => now });
+  const local = history.record("Question")!;
+  const tombstone = { schema: 1 as const, id: local.id, textHash: local.id, createdAt: local.createdAt, lastUsedAt: local.lastUsedAt, updatedAt: 2_000, deletedAt: 2_000, deviceId: "remote" };
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  const first = repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  assert.equal(repository.complete(first.key, first.revision), false);
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [{ id: "history-file", appProperties: { app: "polyask", schema: "1", kind: "history", id: local.id, device: "remote" } }],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => tombstone,
+    upsert: async (_id, name, appProperties) => ({ id: `uploaded-${name}`, appProperties }),
+    clearAll: async () => undefined
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: auth(), now: () => now });
+    const status = await engine.syncNow();
+    assert.equal(status.state, "idle");
+    assert.equal("deletedAt" in repository.history(local.id)!, true);
+    assert.equal(repository.config().pageToken, "next");
+  } finally { database.close(); }
+});
+
+test("future schema blocks uploads and disconnect keeps local and remote data intact", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  let uploads = 0;
+  let clears = 0;
+  const session = auth();
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [{ id: "future", appProperties: { app: "polyask", schema: "2", kind: "state", id: "future" } }],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => { throw new Error("must_not_download"); },
+    upsert: async () => { uploads += 1; return { id: "uploaded" }; },
+    clearAll: async () => { clears += 1; }
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: session });
+    assert.equal((await engine.syncNow()).state, "schema");
+    assert.equal(uploads, 0);
+    assert.equal((await engine.disconnect()).connected, false);
+    assert.equal(session.disconnected, true);
+    assert.equal(clears, 0);
+    assert.equal(repository.pending(), 1);
+  } finally { database.close(); }
+});
+
+test("remote body identity must match Drive metadata before import", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [{ id: "mismatch", appProperties: { app: "polyask", schema: "1", kind: "history", id: "expected", device: "remote" } }],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => ({ schema: 1, id: "actual", textHash: "actual", text: "not a matching hash", preview: "", createdAt: 1, lastUsedAt: 1, updatedAt: 1, deviceId: "remote" }),
+    upsert: async () => ({ id: "unused" }),
+    clearAll: async () => undefined
+  };
+  try {
+    await new SyncEngine({ repository, drive, auth: auth() }).syncNow();
+    assert.equal(repository.history("actual"), null);
+    assert.equal(repository.config().errorCount, 1);
+  } finally { database.close(); }
+});

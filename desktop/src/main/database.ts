@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { ArchiveRepository } from "./archive-repository";
 import { HistoryRepository } from "./history-repository";
+import { DriveFileRepository } from "./drive-file-repository";
 import { MetaRepository } from "./meta-repository";
 import { OutboxRepository } from "./outbox-repository";
 import { StateRepository } from "./state-repository";
@@ -65,6 +66,7 @@ export class DesktopDatabase {
   readonly history: HistoryRepository;
   readonly archives: ArchiveRepository;
   readonly state: StateRepository;
+  readonly driveFiles: DriveFileRepository;
   readonly meta: MetaRepository;
   private closed = false;
 
@@ -73,6 +75,7 @@ export class DesktopDatabase {
     this.history = new HistoryRepository(database, this.outbox);
     this.archives = new ArchiveRepository(database, this.outbox);
     this.state = new StateRepository(database, this.outbox);
+    this.driveFiles = new DriveFileRepository(database);
     this.meta = new MetaRepository(database);
   }
 

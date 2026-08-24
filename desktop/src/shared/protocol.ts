@@ -7,6 +7,7 @@ import {
 import type { DisplayPreferences } from "./display";
 import { validateImages, type DesktopImage } from "./images";
 import type { PendingSynthesis } from "./synthesis";
+import type { SyncStatus } from "./sync";
 import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
@@ -97,6 +98,7 @@ export interface BootstrapState {
   readonly display: DisplayPreferences;
   readonly workspace: WorkspaceState;
   readonly pendingSynthesis: PendingSynthesis | null;
+  readonly sync: SyncStatus;
 }
 
 export interface SiteCommandEnvelope {

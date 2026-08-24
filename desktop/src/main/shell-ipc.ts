@@ -20,6 +20,8 @@ import { ArchiveService } from "./archive-service";
 import { CollectionService } from "./collection-service";
 import { HistoryService } from "./history-service";
 import { SynthesisService } from "./synthesis-service";
+import { SyncEngine } from "./sync-engine";
+import { registerSyncIpc } from "./sync-ipc";
 import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
@@ -40,6 +42,7 @@ interface ShellIpcOptions {
   readonly archives: ArchiveService;
   readonly history: HistoryService;
   readonly synthesis: SynthesisService;
+  readonly sync: SyncEngine;
   readonly shellEntry: string;
   readonly applyDisplay: (value: DisplayPreferences) => DisplayPreferences;
 }
@@ -82,7 +85,7 @@ function strictId(value: unknown): string {
 }
 
 export function registerShellIpc(options: ShellIpcOptions): () => void {
-  const { window, manager, workspace, coordinator, collection, archives, history, synthesis } = options;
+  const { window, manager, workspace, coordinator, collection, archives, history, synthesis, sync } = options;
   const trustedShell = (event: ShellIpcEvent) =>
     event.sender.id === window.webContents.id &&
     event.senderFrame?.parent === null &&
@@ -92,6 +95,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (!window.isDestroyed()) window.webContents.send("polyask:workspace-state", state);
     return state;
   };
+  const disposeSyncIpc = registerSyncIpc({ sync, trusted: trustedShell });
 
   ipcMain.handle("polyask:bootstrap", (event) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
@@ -101,7 +105,8 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       layout: manager.getLayout(),
       display: manager.getDisplayPreferences(),
       workspace: workspace.getState(),
-      pendingSynthesis: synthesis.getPending()
+      pendingSynthesis: synthesis.getPending(),
+      sync: sync.status()
     };
   });
   ipcMain.handle("polyask:set-display", (event, value: unknown) => {
@@ -244,6 +249,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   });
 
   return () => {
+    disposeSyncIpc();
     for (const channel of HANDLERS) ipcMain.removeHandler(channel);
     for (const channel of LISTENERS) ipcMain.removeAllListeners(channel);
   };

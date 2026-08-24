@@ -1,13 +1,13 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import type { SiteDefinition, SiteKey } from "../shared/contracts";
+import type { SiteDefinition } from "../shared/contracts";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
 import { unsupportedImageSites } from "../shared/images";
-import type { LayoutState, SiteStatus } from "../shared/protocol";
+import type { DesktopSurface, LayoutState, SiteStatus } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
-import type { WorkspaceState } from "../shared/workspace";
+import type { SyncStatus } from "../shared/sync";
 import { ArchiveSurface } from "./archive-surface";
 import { CommandBar, type RunState } from "./command-bar";
 import {
@@ -16,11 +16,14 @@ import {
 } from "./display-preferences";
 import { ImagePicker } from "./image-picker";
 import { SiteFrames } from "./site-frames";
+import { SettingsWorkspace } from "./settings-workspace";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import { useArchiveCapture } from "./use-archive-capture";
 import { useImageSelection } from "./use-image-selection";
 import { useSynthesisFlow } from "./use-synthesis-flow";
+import { useWorkspaceFlow } from "./use-workspace-flow";
 import "./styles.css";
+import "./settings.css";
 
 const INITIAL_LAYOUT: LayoutState = {
   mode: "overview",
@@ -32,7 +35,10 @@ const INITIAL_DISPLAY = loadDisplayPreferences(
   window.localStorage,
   window.matchMedia("(pointer: coarse)").matches
 );
-const INITIAL_WORKSPACE: WorkspaceState = { selectedSites: [], groups: [], tier: null };
+const INITIAL_SYNC: SyncStatus = {
+  state: "idle", connected: false, pending: 0, errorCount: 0,
+  readOnly: false, oauthConfigured: false, secureTokenStorage: true
+};
 
 function applyDisplayPreferences(value: DisplayPreferences): void {
   document.documentElement.dataset.density = value.density;
@@ -44,34 +50,19 @@ applyDisplayPreferences(INITIAL_DISPLAY);
 function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
-  const selectionRef = useRef<readonly SiteKey[]>([]);
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
-  const [workspace, setWorkspace] = useState<WorkspaceState>(INITIAL_WORKSPACE);
   const [text, setText] = useState("");
   const [runState, setRunState] = useState<RunState>("idle");
   const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [surface, setSurface] = useState<"sites" | "archive">("sites");
+  const [surface, setSurface] = useState<DesktopSurface>("sites");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [announcement, setAnnouncement] = useState("");
-  const acceptWorkspace = (value: WorkspaceState): void => {
-    selectionRef.current = value.selectedSites;
-    setWorkspace(value);
-  };
-  const recoverWorkspace = (): void => {
-    setAnnouncement(copy.workspaceActionFailed);
-    void window.polyask.bootstrap()
-      .then((state) => acceptWorkspace(state.workspace))
-      .catch(() => undefined);
-  };
-  const changeSelection = (value: readonly SiteKey[]): void => {
-    const ordered = sites.map((site) => site.key).filter((key) => value.includes(key));
-    selectionRef.current = ordered;
-    setWorkspace((current) => ({ ...current, selectedSites: ordered }));
-    void window.polyask.setSelection(ordered).then(acceptWorkspace).catch(recoverWorkspace);
-  };
+  const workspaceFlow = useWorkspaceFlow(sites, copy.workspaceActionFailed, setAnnouncement);
+  const { workspace, selected } = workspaceFlow;
   const changeDrawerOpen = (value: boolean): void => {
     setDrawerOpen(value);
     window.polyask.setDrawerOpen(value);
@@ -87,8 +78,9 @@ function App(): React.JSX.Element {
       setSites(state.sites);
       setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
       setLayout(state.layout);
-      acceptWorkspace(state.workspace);
+      workspaceFlow.accept(state.workspace);
       synthesis.acceptPending(state.pendingSynthesis);
+      setSyncStatus(state.sync);
     });
     const offStatus = window.polyask.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
@@ -97,7 +89,8 @@ function App(): React.JSX.Element {
     const offLayout = window.polyask.onLayout(setLayout);
     const offDisplay = window.polyask.onDisplayPreferences(applyDisplayPreferences);
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
-    const offWorkspace = window.polyask.onWorkspaceState(acceptWorkspace);
+    const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
+    const offSync = window.polyask.onSyncStatus(setSyncStatus);
     void window.polyask.setDisplayPreferences(INITIAL_DISPLAY).then(applyDisplayPreferences);
     return () => {
       active = false;
@@ -106,6 +99,7 @@ function App(): React.JSX.Element {
       offDisplay();
       offFocusPrompt();
       offWorkspace();
+      offSync();
     };
   }, [copy]);
 
@@ -116,7 +110,6 @@ function App(): React.JSX.Element {
     () => Object.values(statuses).filter((status) => status.phase === "sending").length,
     [statuses]
   );
-  const selected = useMemo(() => new Set(workspace.selectedSites), [workspace.selectedSites]);
   const archiveCapture = useArchiveCapture({ sites, selected, prompt: text });
   const unsupportedSites = useMemo(() => {
     if (!images.length) return [];
@@ -161,15 +154,8 @@ function App(): React.JSX.Element {
     window.polyask.setLayout(mode, focused);
   };
 
-  const toggleSite = (site: SiteKey): void => {
-    const next = new Set(selectionRef.current);
-    if (next.has(site)) next.delete(site);
-    else next.add(site);
-    changeSelection(sites.map((item) => item.key).filter((key) => next.has(key)));
-  };
-
-  const changeSurface = (value: "sites" | "archive"): void => {
-    if (value === "archive") {
+  const changeSurface = (value: DesktopSurface): void => {
+    if (value !== "sites") {
       imageSelection.invalidateAndClose();
       setPromptExpanded(false);
       if (drawerOpen) changeDrawerOpen(false);
@@ -203,6 +189,9 @@ function App(): React.JSX.Element {
 
   if (surface === "archive") {
     return <ArchiveSurface copy={copy} locale={navigator.language} sites={sites} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} />;
+  }
+  if (surface === "settings") {
+    return <SettingsWorkspace copy={copy} locale={navigator.language} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} />;
   }
 
   return (
@@ -241,19 +230,17 @@ function App(): React.JSX.Element {
         onTextChange={setText}
         onSubmit={() => void submit()}
         onCancel={() => { setRunState("cancelling"); window.polyask.cancel(); }}
-        onTierChange={(value) => {
-          setWorkspace((current) => ({ ...current, tier: value }));
-          void window.polyask.setTier(value).then(acceptWorkspace).catch(recoverWorkspace);
-        }}
+        onTierChange={workspaceFlow.changeTier}
         onLayoutChange={setMode}
         onExpandedChange={setPromptExpanded}
         onToggleDrawer={() => {
           changeDrawerOpen(!drawerOpen);
         }}
-        onNewSession={() => { void window.polyask.newSession([...selected]).catch(recoverWorkspace); }}
+        onNewSession={() => { void window.polyask.newSession([...selected]).catch(workspaceFlow.recover); }}
         onCollectAnswers={() => { void collectAndCopy(); }}
         onOpenArchive={() => changeSurface("archive")}
         onCollectSynthesis={() => { void collectSynthesis(); }}
+        onOpenSettings={() => changeSurface("settings")}
         onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>
@@ -264,11 +251,9 @@ function App(): React.JSX.Element {
           selected={selected}
           groups={workspace.groups}
           onClose={() => changeDrawerOpen(false)}
-          onSelectionChange={changeSelection}
-          onSaveGroup={(name) => {
-            void window.polyask.saveGroup({ name, sites: [...selected] }).then(acceptWorkspace).catch(recoverWorkspace);
-          }}
-          onDeleteGroup={(id) => { void window.polyask.deleteGroup(id).then(acceptWorkspace).catch(recoverWorkspace); }}
+          onSelectionChange={workspaceFlow.changeSelection}
+          onSaveGroup={workspaceFlow.saveGroup}
+          onDeleteGroup={workspaceFlow.deleteGroup}
         />
       ) : null}
       <SiteFrames
@@ -277,7 +262,7 @@ function App(): React.JSX.Element {
         statuses={statuses}
         layout={layout}
         selected={selected}
-        onToggle={toggleSite}
+        onToggle={workspaceFlow.toggleSite}
         onFocus={(site) => setMode("focus", site)}
         onReload={(site) => window.polyask.reloadSite(site)}
       />

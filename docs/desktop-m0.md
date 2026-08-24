@@ -126,6 +126,17 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 - Focus 槽位顺序属于当前窗口状态，不进入跨设备数据；密度与页面缩放偏好保存在桌面 Shell 自己的持久存储，不进入 Chrome 扩展同步。
 - 页面加载状态和群发运行状态继续分层；布局、密度和缩放变化不得覆盖提交终态或产生新的自动重发路径。
 
+## Google Drive 同步
+
+- 桌面端只接受 Google Cloud 的 Desktop app OAuth 客户端 ID；使用系统浏览器授权、PKCE S256、随机 `state` 和绑定 `127.0.0.1` 的随机端口回调，不内嵌登录页，不复用扩展 OAuth 客户端。
+- 权限固定为 `https://www.googleapis.com/auth/drive.appdata`。列举、变更订阅、下载、上传和删除全部限定在 `appDataFolder`；清云只处理 `appProperties.app === "polyask"` 的文件。
+- 刷新令牌只通过 Electron 异步 `safeStorage` 持久化。Linux 后端为 `basic_text`、`unknown` 或安全存储不可用时，只保留进程内令牌并提示重启后需重新登录。
+- 同步复用扩展 schema 1：每设备一个 state 文件、每设备/文本哈希一份 history 文件、每归档一份 archive 文件。状态按 `updatedAt` 后 `deviceId` 合并，同时间 tombstone 优先；远端正文必须与 Drive metadata 的 id/device 一致。
+- 本机变更 3 秒防抖，应用启动时及每 15 分钟同步一次；429/5xx 指数退避，410 自动全量重扫，401 只刷新令牌重试一次。未来 schema 进入只读兼容模式，仍允许下载但禁止上传。
+- 断开连接会撤销 OAuth、清本机 Drive 索引并保留本机数据、云端数据与待同步 outbox。「删除云端数据」必须在设置页逐字输入 `DELETE`，完成后断开连接；中断时保留进度，可重新进入操作。
+
+开发时将 `resources/oauth.example.json` 复制为被 Git 忽略的 `resources/oauth.json` 并填入 Desktop client ID，或设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`。打包时若存在 `resources/oauth.json`，Forge 会把它作为独立资源复制到产物；未配置的构建仍可运行，但设置页会禁用连接并说明原因。
+
 ### 验收指标
 
 - 在 2048×1152、100% 系统缩放下，Shell 固定占高从 156px 降至不超过 56px；Grid 每站原生内容高度至少增加 36px；Focus 次要站宽度至少 480px。
@@ -150,15 +161,15 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 
 ## 当前实现状态
 
-已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁九个站点视图，支持搜索、收藏、标签、备注、最佳答案和 Markdown 预览/导出。辅助综合同样复用单窗口结果库：选择至少两条成功回答并预览完整载荷后，只向一个目标原生站点的新会话发送；用户可实时观察生成，再采集并经确认写回原归档。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
+已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁九个站点视图，支持搜索、收藏、标签、备注、最佳答案和 Markdown 预览/导出。辅助综合同样复用单窗口结果库：选择至少两条成功回答并预览完整载荷后，只向一个目标原生站点的新会话发送；用户可实时观察生成，再采集并经确认写回原归档。Google Drive 同步已迁移 schema 1 数据、原生 OAuth/PKCE、操作系统令牌保护、增量同步、退避、未来格式只读和受保护的云端清理。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
 
 2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。人工验证进一步确认九站均可登录，Gemini 首次登录与群发成功；除 Kimi 因站点当时要求付费订阅而拒绝对话外，其余 8 站均成功提交并实时显示回答。该 Kimi 结果属于站点业务限制，不是容器、登录或群发链路故障。
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 92 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行 Linux 打包产物 smoke。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 122 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过；CI 同样执行 Linux 打包产物 smoke。
 
-尚未完成 M0 退出验收：Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
+尚未完成 M0 退出验收：使用真实 Desktop OAuth 客户端的 Drive 联网同步、Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
 
 运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞。完整 `npm audit` 仍报告 Electron Forge 构建链的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包不进入应用运行依赖，但正式发布前必须重新评估并清零或形成明确处置记录。
 

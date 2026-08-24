@@ -27,6 +27,19 @@ export class StateRepository {
     });
   }
 
+  entries<T = unknown>(prefix: string): { readonly key: string; readonly value: T }[] {
+    if (!prefix) throw new Error("invalid_state_prefix");
+    const rows = this.database.prepare(`
+      SELECT key, body FROM state_items
+      WHERE substr(key, 1, ?) = ? ORDER BY updated_at DESC, key
+    `).all(prefix.length, prefix);
+    return rows.flatMap((row) => {
+      const value = readJson<T>(row);
+      const key = (row as { key?: unknown }).key;
+      return value !== null && typeof key === "string" ? [{ key, value }] : [];
+    });
+  }
+
   put<T>(key: string, value: T, updatedAt: number, enqueue = true): T {
     if (!key || !Number.isSafeInteger(updatedAt) || updatedAt < 0) throw new Error("invalid_state_item");
     const deletedAt = value && typeof value === "object" && "deletedAt" in value

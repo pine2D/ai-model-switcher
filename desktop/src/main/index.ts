@@ -14,6 +14,8 @@ import {
   type DisplayPreferences
 } from "../shared/display";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
+import type { SyncStatus } from "../shared/sync";
+import type { WorkspaceState } from "../shared/workspace";
 import { ArchiveService } from "./archive-service";
 import { BroadcastCoordinator } from "./broadcast";
 import { CollectionService } from "./collection-service";
@@ -24,6 +26,7 @@ import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
+import { createSyncRuntime } from "./sync-runtime";
 import { SynthesisService } from "./synthesis-service";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
@@ -35,7 +38,9 @@ let desktopDatabase: DesktopDatabase | null = null;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
 
-function sendToShell(channel: string, payload: SiteStatus | LayoutState | DisplayPreferences): void {
+type ShellPayload = SiteStatus | LayoutState | DisplayPreferences | WorkspaceState | SyncStatus;
+
+function sendToShell(channel: string, payload: ShellPayload): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
@@ -196,6 +201,7 @@ async function createWindow(): Promise<void> {
     if (!desktopDatabase) throw new Error("database_not_ready");
     return desktopDatabase.meta.put("deviceId", randomUUID());
   };
+  deviceId();
   const archives = new ArchiveService(desktopDatabase.archives, { deviceId });
   const history = new HistoryService(desktopDatabase.history, { deviceId });
   const synthesis = new SynthesisService({
@@ -218,6 +224,12 @@ async function createWindow(): Promise<void> {
     },
     recordHistory: (text) => history.record(text)
   });
+  const sync = await createSyncRuntime({
+    database: desktopDatabase,
+    workspace: () => workspace.getState(),
+    onStatus: (status) => sendToShell("polyask:sync-status", status),
+    onWorkspace: (state) => sendToShell("polyask:workspace-state", state)
+  });
   createMenu();
   const disposeIpc = registerShellIpc({
     window,
@@ -228,14 +240,17 @@ async function createWindow(): Promise<void> {
     archives,
     history,
     synthesis,
+    sync,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
     applyDisplay: (value) => applyDisplayPreferences(manager, value)
   });
   window.once("ready-to-show", () => window.show());
   await window.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  sync.start();
   runtimeGates.writeDiagnostic(manager);
   window.on("closed", () => {
     runtimeGates.dispose();
+    sync.dispose();
     disposeIpc();
     mainWindow = null;
     viewManager = null;

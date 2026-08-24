@@ -43,6 +43,7 @@ test("command bar renders one compact command surface with stateful controls", (
       onCollectAnswers={noop}
       onOpenArchive={noop}
       onCollectSynthesis={noop}
+      onOpenSettings={noop}
       onPasteImages={noop}
     />
   );

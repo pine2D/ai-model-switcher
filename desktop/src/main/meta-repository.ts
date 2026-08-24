@@ -18,4 +18,8 @@ export class MetaRepository {
     `).run(key, JSON.stringify(value));
     return value;
   }
+
+  delete(key: string): void {
+    this.database.prepare("DELETE FROM meta WHERE key = ?").run(key);
+  }
 }

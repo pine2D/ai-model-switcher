@@ -12,6 +12,7 @@ dist/
 desktop/.webpack/
 desktop/out/
 desktop/node_modules/
+desktop/resources/oauth.json
 
 # 本地调试脚本
 scratchpad/

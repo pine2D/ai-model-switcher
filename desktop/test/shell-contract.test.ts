@@ -147,6 +147,19 @@ test("assisted synthesis state and mutations stay behind the trusted shell bridg
   assert.match(preload, /saveSynthesis/);
 });
 
+test("Drive sync uses a trusted typed bridge and protects destructive cloud clearing", () => {
+  const ipc = readFileSync("src/main/sync-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const protocol = readFileSync("src/shared/protocol.ts", "utf8");
+  for (const channel of ["polyask:sync-connect", "polyask:sync-now", "polyask:sync-disconnect", "polyask:sync-clear"]) {
+    assert.match(ipc, new RegExp(channel));
+  }
+  assert.match(ipc, /options\.trusted\(event\)/);
+  assert.match(ipc, /CLEAR_REMOTE_CONFIRMATION/);
+  assert.match(preload, /onSyncStatus/);
+  assert.match(protocol, /readonly sync: SyncStatus/);
+});
+
 test("windows and linux auto-hide the native menu bar", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   assert.match(main, /setAutoHideMenuBar\(true\)/);

@@ -20,6 +20,7 @@ import type {
   SiteStatus
 } from "../shared/protocol";
 import type { WorkspaceState } from "../shared/workspace";
+import type { SyncStatus } from "../shared/sync";
 import type {
   SynthesisCandidate,
   SynthesisSendRequest,
@@ -51,12 +52,17 @@ export interface PolyAskDesktopApi {
   saveGroup(input: { readonly name: string; readonly sites: readonly SiteKey[] }): Promise<WorkspaceState>;
   deleteGroup(id: string): Promise<WorkspaceState>;
   newSession(sites: readonly SiteKey[]): Promise<void>;
+  connectSync(): Promise<SyncStatus>;
+  syncNow(): Promise<SyncStatus>;
+  disconnectSync(): Promise<SyncStatus>;
+  clearRemoteSync(confirmation: string): Promise<SyncStatus>;
   reloadSite(site: SiteKey): void;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
   onFocusPrompt(listener: () => void): () => void;
   onWorkspaceState(listener: (value: WorkspaceState) => void): () => void;
+  onSyncStatus(listener: (value: SyncStatus) => void): () => void;
 }
 
 function subscribe<T>(channel: string, listener: (value: T) => void): () => void {
@@ -91,6 +97,10 @@ const api: PolyAskDesktopApi = Object.freeze({
     ipcRenderer.invoke("polyask:save-group", input),
   deleteGroup: (id: string) => ipcRenderer.invoke("polyask:delete-group", id),
   newSession: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:new-session", sites),
+  connectSync: () => ipcRenderer.invoke("polyask:sync-connect"),
+  syncNow: () => ipcRenderer.invoke("polyask:sync-now"),
+  disconnectSync: () => ipcRenderer.invoke("polyask:sync-disconnect"),
+  clearRemoteSync: (confirmation: string) => ipcRenderer.invoke("polyask:sync-clear", confirmation),
   reloadSite: (site: SiteKey) => ipcRenderer.send("polyask:reload-site", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
@@ -98,7 +108,8 @@ const api: PolyAskDesktopApi = Object.freeze({
     subscribe("polyask:display-preferences", listener),
   onFocusPrompt: (listener: () => void) => subscribe("polyask:focus-prompt", listener),
   onWorkspaceState: (listener: (value: WorkspaceState) => void) =>
-    subscribe("polyask:workspace-state", listener)
+    subscribe("polyask:workspace-state", listener),
+  onSyncStatus: (listener: (value: SyncStatus) => void) => subscribe("polyask:sync-status", listener)
 });
 
 contextBridge.exposeInMainWorld("polyask", api);

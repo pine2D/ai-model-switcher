@@ -69,7 +69,13 @@ npm start
 
 桌面端结果库也支持辅助综合：从一条结果中选择至少两条成功回答，核对完整综合载荷、目标 AI 与档位后，只向目标站点的新会话发送。发送后应用回到该原生站点并保持实时可见；生成完成后可从命令栏采集结果并回写原记录，替换已有综合结果前必须再次确认。
 
-执行 `npm run package` 可生成当前平台的未签名应用目录。Gemini 已在 WSLg 中完成首次登录与群发；Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
+桌面端设置页支持与扩展共用同一套 schema 1 Google Drive 数据：站点范围、分组、提问历史和结果库可在两种客户端之间合并，删除标记与新版本只读保护同样生效。断开连接只撤销授权并清理本机同步索引，不删除本机或云端记录；「删除云端数据」需输入 `DELETE`，且只删除 Drive 应用专属目录内标记为 PolyAsk 的文件。
+
+桌面开发版使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。先在 Google Cloud 启用 Drive API 并创建 Desktop app 客户端，然后复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId`；也可在启动或打包时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`。真实配置文件已被 Git 忽略，存在时会随当前平台产物放入 resources 目录。
+
+刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
+
+执行 `npm run package` 可生成当前平台的未签名应用目录。Gemini 已在 WSLg 中完成首次登录与群发；Google OAuth/Drive 仍需使用真实客户端完成联网回归，Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 
