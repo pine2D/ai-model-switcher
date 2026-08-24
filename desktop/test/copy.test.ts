@@ -9,6 +9,7 @@ test("desktop shell keeps complete English, Simplified Chinese and Traditional C
   assert.deepEqual(Object.keys(COPY.zhCN).sort(), sourceKeys);
   assert.deepEqual(Object.keys(COPY.zhTW).sort(), sourceKeys);
   assert.ok(sourceKeys.every((key) => COPY.en[key as keyof typeof COPY.en].length > 0));
+  assert.equal(sourceKeys.includes("brandSub"), false);
 });
 
 test("desktop shell resolves exact supported locale and falls back to English", () => {

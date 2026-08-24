@@ -1,7 +1,6 @@
 export const COPY = {
   en: {
     appTitle: "PolyAsk · AI Answers",
-    brandSub: "AI Answers",
     overview: "Grid",
     focus: "Focus",
     layoutLabel: "View layout",
@@ -53,7 +52,6 @@ export const COPY = {
   },
   zhCN: {
     appTitle: "PolyAsk · AI 众答",
-    brandSub: "AI 众答",
     overview: "九宫格",
     focus: "聚焦",
     layoutLabel: "视图布局",
@@ -105,7 +103,6 @@ export const COPY = {
   },
   zhTW: {
     appTitle: "PolyAsk · AI 眾答",
-    brandSub: "AI 眾答",
     overview: "九宮格",
     focus: "聚焦",
     layoutLabel: "檢視版面",

@@ -46,7 +46,7 @@
 - Produces: `SiteSettingIcon`、`FastIcon`、`DeepThinkIcon`，均为 `aria-hidden` 的 16px Lucide 几何。
 - Preserves: `aria-pressed`、三语 `title`/`aria-label`、可见焦点、粗指针命中区和发送/取消状态机。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```ts
 test("tier choices are icon-only while their accessible names stay complete", () => {
@@ -64,13 +64,13 @@ test("IME composition never submits or collapses the prompt", () => {
 });
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run: `cd desktop && npx tsx --test test/renderer-components.test.tsx test/keyboard.test.ts`
 
 Expected: 品牌仍在、档位仍输出文字、`commandKeyAction` 不存在而失败。
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
 ```ts
 export interface PromptKeyEvent {
@@ -89,7 +89,7 @@ export function commandKeyAction(event: PromptKeyEvent): "submit" | "collapse" |
 
 删除 `.brand` DOM/CSS；档位顺序固定为“使用站点设置 / 快速 / 深度思考”，使用 `SlidersHorizontal`、`Zap`、`BrainCircuit` 图标，完整名称进入 `title` 与 `aria-label`。
 
-- [ ] **Step 4: GREEN 与全量验证**
+- [x] **Step 4: GREEN 与全量验证**
 
 Run: `cd desktop && npm test && npm run typecheck`
 
@@ -97,16 +97,18 @@ Run: `bash scripts/verify.sh && git diff --check`
 
 Expected: 桌面测试和扩展门禁全部通过，三语键集合一致。
 
-- [ ] **Step 5: 视觉回归**
+- [x] **Step 5: 视觉回归**
 
 启动应用，在 2048×1152 和约 1280×720 CSS px 下确认命令栏无品牌重复、三个档位可辨、键盘焦点可见、中文输入法候选确认不会群发。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add desktop/src desktop/test docs/desktop-m0.md CHANGELOG.md
 git commit -m "feat(desktop): converge compact command controls"
 ```
+
+验证记录（2026-08-24）：定向 RED/GREEN、43 项桌面测试、TypeScript 类型检查、根仓库全量门禁和 Linux x64 打包均通过；在 WSLg 的约 1600×1050 与 1280×720 CSS px 实际窗口完成 Grid 截图检查，命令栏无重复品牌，三档图标和 P0 控件均完整可见。
 
 ### Task 2: Electron smoke 与 60 分钟稳定性门禁
 

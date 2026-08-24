@@ -40,6 +40,14 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.match(html, /aria-pressed="true"/);
   assert.match(html, /priority-p0/);
   assert.match(html, /priority-p1/);
+  assert.doesNotMatch(html, /class="brand/);
+  assert.doesNotMatch(html, />PolyAsk</);
+  assert.equal([...html.matchAll(/data-tier-icon=/g)].length, 3);
+  for (const label of ["Use site setting", "Fast", "Deep thinking"]) {
+    assert.match(html, new RegExp(`aria-label="${label}"`));
+    assert.match(html, new RegExp(`title="${label}"`));
+    assert.equal([...html.matchAll(new RegExp(label, "g"))].length, 2);
+  }
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
 });
 

@@ -2,7 +2,8 @@ import type { RefObject } from "react";
 
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
-import { FocusIcon, GridIcon, SendIcon, StopIcon } from "./icons";
+import { DeepThinkIcon, FastIcon, FocusIcon, GridIcon, SendIcon, SiteSettingIcon, StopIcon } from "./icons";
+import { commandKeyAction } from "./keyboard";
 
 export type RunState = "idle" | "sending" | "cancelling";
 
@@ -51,13 +52,14 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     selected: selectedCount,
     total: totalSites || 9
   });
+  const tierOptions = [
+    { value: null, label: copy.followSite, icon: "site-setting", glyph: <SiteSettingIcon /> },
+    { value: "fast", label: copy.fast, icon: "fast", glyph: <FastIcon /> },
+    { value: "think", label: copy.think, icon: "think", glyph: <DeepThinkIcon /> }
+  ] as const;
 
   return (
     <header className={expanded ? "command-bar is-expanded" : "command-bar"} aria-label={copy.broadcastLabel}>
-      <div className="brand priority-p1" aria-label={copy.appTitle}>
-        <span className="brand-mark">P</span>
-        <span className="brand-name">PolyAsk</span>
-      </div>
       <div className="mode-switch priority-p0" aria-label={copy.layoutLabel}>
         <button type="button" title={copy.overview} aria-pressed={layoutMode === "overview"} className={layoutMode === "overview" ? "active" : ""} onClick={() => onLayoutChange("overview")}>
           <GridIcon /><span className="priority-p1">{copy.overview}</span>
@@ -75,10 +77,16 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         onFocus={() => onExpandedChange(true)}
         onBlur={() => onExpandedChange(false)}
         onKeyDown={(event) => {
-          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          const action = commandKeyAction({
+            key: event.key,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            isComposing: event.nativeEvent.isComposing
+          });
+          if (action === "submit") {
             event.preventDefault();
             onSubmit();
-          } else if (event.key === "Escape") {
+          } else if (action === "collapse") {
             onExpandedChange(false);
           }
         }}
@@ -86,8 +94,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         aria-label={copy.promptLabel}
       />
       <div className="tier-switch priority-p0" aria-label={copy.tierLabel}>
-        {([[null, copy.followSite], ["fast", copy.fast], ["think", copy.think]] as const).map(([value, label]) => (
-          <button type="button" key={label} aria-pressed={tier === value} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{label}</button>
+        {tierOptions.map(({ value, label, icon, glyph }) => (
+          <button type="button" key={icon} title={label} aria-label={label} aria-pressed={tier === value} data-tier-icon={icon} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{glyph}</button>
         ))}
       </div>
       <span className="summary priority-p1" role="status" aria-live="polite">{summary}</span>

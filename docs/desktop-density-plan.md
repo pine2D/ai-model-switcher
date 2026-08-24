@@ -367,7 +367,7 @@ Main 的 `polyask:set-composer-expanded` 只接受 boolean 且复用 `trustedShe
 }
 ```
 
-`.command-bar` 使用单行 grid：品牌、布局切换、`minmax(200px, 1fr)` 提问框、档位、数量、发送。收起 textarea 高度等于 control；展开时 command bar 高度跟随 main 传入的 transient 状态。删除原 `.topbar` + `.composer` 双层结构和 `brandSub` 的可见输出，但保留应用标题与读屏名称。
+`.command-bar` 使用单行 grid：布局切换、`minmax(200px, 1fr)` 提问框、档位、数量、发送。收起 textarea 高度等于 control；展开时 command bar 高度跟随 main 传入的 transient 状态。删除原 `.topbar` + `.composer` 双层结构和命令栏内的重复品牌，只在系统标题栏、任务栏和应用菜单保留应用身份。
 
 - [ ] **Step 6: 保持群发、取消和焦点行为不回归**
 
