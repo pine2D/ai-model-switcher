@@ -8,6 +8,12 @@ import {
 } from "electron";
 
 import type { SiteDefinition, SiteKey, ViewPlacement } from "../shared/contracts";
+import {
+  DEFAULT_DISPLAY_PREFERENCES,
+  metricsForDensity,
+  zoomForSite,
+  type DisplayPreferences
+} from "../shared/display";
 import type {
   LayoutState,
   SiteCommand,
@@ -25,9 +31,7 @@ import { navigationDisposition } from "./navigation";
 import { SITES } from "./sites";
 import { effectiveStatus } from "./status";
 
-const SHELL_HEIGHT = 156;
-const TILE_HEADER_HEIGHT = 32;
-const EDGE_GAP = 10;
+const LEGACY_SHELL_HEIGHT = 156;
 
 interface PendingCommand {
   readonly contentsId: number;
@@ -47,6 +51,7 @@ export class ViewManager {
   private focused: SiteKey = "claude";
   private focusOrder: SiteKey[] = SITES.map((site) => site.key);
   private placements: readonly ViewPlacement[] = [];
+  private display = DEFAULT_DISPLAY_PREFERENCES;
 
   constructor(
     private readonly window: BrowserWindow,
@@ -70,6 +75,15 @@ export class ViewManager {
 
   getLayout(): LayoutState {
     return { mode: this.renderedMode, focused: this.focused, placements: this.placements };
+  }
+
+  getDisplayPreferences(): DisplayPreferences {
+    return this.display;
+  }
+
+  setDisplayPreferences(value: DisplayPreferences): void {
+    this.display = value;
+    this.layout();
   }
 
   setLayout(mode: "overview" | "focus", focused: SiteKey = this.focused): void {
@@ -223,13 +237,14 @@ export class ViewManager {
     const zoom = Math.max(0.25, this.window.webContents.getZoomFactor());
     const cssWidth = Math.floor(width / zoom);
     const cssHeight = Math.floor(height / zoom);
+    const metrics = metricsForDensity(this.display.density);
     const area = {
-      x: EDGE_GAP,
-      y: SHELL_HEIGHT,
-      width: Math.max(1, cssWidth - EDGE_GAP * 2),
-      height: Math.max(1, cssHeight - SHELL_HEIGHT - EDGE_GAP)
+      x: metrics.edgeGap,
+      y: LEGACY_SHELL_HEIGHT,
+      width: Math.max(1, cssWidth - metrics.edgeGap * 2),
+      height: Math.max(1, cssHeight - LEGACY_SHELL_HEIGHT - metrics.edgeGap)
     };
-    this.renderedMode = resolveLayoutMode(this.mode, area, 8);
+    this.renderedMode = resolveLayoutMode(this.mode, area, metrics.viewGap);
     const keys = this.renderedMode === "focus"
       ? this.focusOrder
       : SITES.map((site) => site.key);
@@ -237,18 +252,26 @@ export class ViewManager {
       keys,
       area,
       this.renderedMode === "overview"
-        ? { mode: "overview", gap: 8 }
-        : { mode: "focus", focused: this.focused, gap: 8 }
+        ? { mode: "overview", gap: metrics.viewGap }
+        : { mode: "focus", focused: this.focused, gap: metrics.viewGap }
     );
     for (const placement of this.placements) {
       const view = this.views.get(placement.key);
       if (!view) continue;
       view.setBounds(scaleBounds({
         x: placement.bounds.x + 1,
-        y: placement.bounds.y + TILE_HEADER_HEIGHT,
+        y: placement.bounds.y + metrics.tileHeaderHeight,
         width: Math.max(1, placement.bounds.width - 2),
-        height: Math.max(1, placement.bounds.height - TILE_HEADER_HEIGHT - 1)
+        height: Math.max(1, placement.bounds.height - metrics.tileHeaderHeight - 1)
       }, zoom));
+      const siteZoom = zoomForSite(
+        this.display,
+        this.renderedMode,
+        placement.key === this.focused
+      );
+      if (Math.abs(view.webContents.getZoomFactor() - siteZoom) > 0.001) {
+        view.webContents.setZoomFactor(siteZoom);
+      }
     }
     const layout = this.getLayout();
     this.onLayout(layout);

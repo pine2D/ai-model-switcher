@@ -20,6 +20,22 @@ test("desktop shell resolves exact supported locale and falls back to English", 
   assert.equal(getCopy("fr-FR").send, "Send");
 });
 
+test("display preferences have complete localized menu labels", () => {
+  assert.deepEqual(
+    [
+      getCopy("en").densityMenu,
+      getCopy("en").compactDensity,
+      getCopy("en").comfortableDensity,
+      getCopy("en").siteScaleMenu,
+      getCopy("en").fitSiteScale,
+      getCopy("en").actualSiteScale
+    ],
+    ["Interface density", "Compact", "Comfortable", "Site scale", "Fit (90%)", "Actual size (100%)"]
+  );
+  assert.equal(getCopy("zh-CN").compactDensity, "紧凑");
+  assert.equal(getCopy("zh-TW").actualSiteScale, "原始大小（100%）");
+});
+
 test("desktop status details never expose raw adapter reasons", () => {
   assert.equal(getCopy("zh-CN").tierUnconfirmed, "已发送，回答档位未确认");
   assert.equal(getCopy("zh-TW").submitUnconfirmed, "是否送出尚未確認");

@@ -11,6 +11,11 @@ import {
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import { getCopy } from "../shared/copy";
 import {
+  DEFAULT_DISPLAY_PREFERENCES,
+  parseDisplayPreferences,
+  type DisplayPreferences
+} from "../shared/display";
+import {
   parseBroadcastRequest,
   type LayoutState,
   type SiteResponseEnvelope,
@@ -33,12 +38,23 @@ interface ShellIpcEvent {
   readonly senderFrame: WebFrameMain | null;
 }
 
-function sendToShell(channel: string, payload: SiteStatus | LayoutState): void {
+function sendToShell(channel: string, payload: SiteStatus | LayoutState | DisplayPreferences): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+function applyDisplayPreferences(
+  manager: ViewManager,
+  value: DisplayPreferences
+): DisplayPreferences {
+  manager.setDisplayPreferences(value);
+  createMenu();
+  sendToShell("polyask:display-preferences", value);
+  return value;
 }
 
 function createMenu(): void {
   const copy = getCopy(app.getLocale());
+  const display = viewManager?.getDisplayPreferences() ?? DEFAULT_DISPLAY_PREFERENCES;
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === "darwin"
       ? [{ label: app.name, submenu: [{ role: "about" as const }, { type: "separator" as const }, { role: "quit" as const }] }]
@@ -59,6 +75,49 @@ function createMenu(): void {
       submenu: [
         { role: "reload" }, { role: "forceReload" }, { type: "separator" },
         { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+        { type: "separator" },
+        {
+          label: copy.densityMenu,
+          submenu: [
+            {
+              label: copy.compactDensity,
+              type: "radio",
+              checked: display.density === "compact",
+              click: () => {
+                if (viewManager) applyDisplayPreferences(viewManager, { ...display, density: "compact" });
+              }
+            },
+            {
+              label: copy.comfortableDensity,
+              type: "radio",
+              checked: display.density === "comfortable",
+              click: () => {
+                if (viewManager) applyDisplayPreferences(viewManager, { ...display, density: "comfortable" });
+              }
+            }
+          ]
+        },
+        {
+          label: copy.siteScaleMenu,
+          submenu: [
+            {
+              label: copy.fitSiteScale,
+              type: "radio",
+              checked: display.siteScale === 0.9,
+              click: () => {
+                if (viewManager) applyDisplayPreferences(viewManager, { ...display, siteScale: 0.9 });
+              }
+            },
+            {
+              label: copy.actualSiteScale,
+              type: "radio",
+              checked: display.siteScale === 1,
+              click: () => {
+                if (viewManager) applyDisplayPreferences(viewManager, { ...display, siteScale: 1 });
+              }
+            }
+          ]
+        },
         { type: "separator" },
         {
           label: copy.focusPromptMenu,
@@ -95,7 +154,18 @@ function registerIpc(window: BrowserWindow, manager: ViewManager): void {
 
   ipcMain.handle("polyask:bootstrap", (event) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
-    return { sites: SITES, statuses: manager.getStatuses(), layout: manager.getLayout() };
+    return {
+      sites: SITES,
+      statuses: manager.getStatuses(),
+      layout: manager.getLayout(),
+      display: manager.getDisplayPreferences()
+    };
+  });
+  ipcMain.handle("polyask:set-display", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    const display = parseDisplayPreferences(value);
+    if (!display) throw new Error("invalid_display_preferences");
+    return applyDisplayPreferences(manager, display);
   });
   ipcMain.handle("polyask:broadcast", async (event, value: unknown) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
@@ -159,11 +229,13 @@ async function createWindow(): Promise<void> {
     (layout) => sendToShell("polyask:layout", layout)
   );
   viewManager = manager;
+  createMenu();
   registerIpc(window, manager);
   window.once("ready-to-show", () => window.show());
   await window.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   window.on("closed", () => {
     ipcMain.removeHandler("polyask:bootstrap");
+    ipcMain.removeHandler("polyask:set-display");
     ipcMain.removeHandler("polyask:broadcast");
     ipcMain.removeAllListeners("polyask:cancel");
     ipcMain.removeAllListeners("polyask:set-layout");

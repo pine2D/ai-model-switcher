@@ -3,8 +3,13 @@ import { createRoot } from "react-dom/client";
 
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
+import type { DisplayPreferences } from "../shared/display";
 import type { LayoutState, SiteStatus, Tier } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
+import {
+  loadDisplayPreferences,
+  saveDisplayPreferences
+} from "./display-preferences";
 import "./styles.css";
 
 const INITIAL_LAYOUT: LayoutState = {
@@ -12,6 +17,18 @@ const INITIAL_LAYOUT: LayoutState = {
   focused: "claude",
   placements: []
 };
+
+const INITIAL_DISPLAY = loadDisplayPreferences(
+  window.localStorage,
+  window.matchMedia("(pointer: coarse)").matches
+);
+
+function applyDisplayPreferences(value: DisplayPreferences): void {
+  document.documentElement.dataset.density = value.density;
+  saveDisplayPreferences(window.localStorage, value);
+}
+
+applyDisplayPreferences(INITIAL_DISPLAY);
 
 function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
@@ -39,8 +56,16 @@ function App(): React.JSX.Element {
       setAnnouncement(`${status.site}: ${describeStatus(copy, status)}`);
     });
     const offLayout = window.polyask.onLayout(setLayout);
+    const offDisplay = window.polyask.onDisplayPreferences(applyDisplayPreferences);
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
-    return () => { active = false; offStatus(); offLayout(); offFocusPrompt(); };
+    void window.polyask.setDisplayPreferences(INITIAL_DISPLAY).then(applyDisplayPreferences);
+    return () => {
+      active = false;
+      offStatus();
+      offLayout();
+      offDisplay();
+      offFocusPrompt();
+    };
   }, [copy]);
 
   const activeCount = useMemo(

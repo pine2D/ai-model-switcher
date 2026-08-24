@@ -43,7 +43,13 @@ export const COPY = {
     windowMenu: "Window",
     focusPromptMenu: "Focus prompt input",
     nextSiteMenu: "Focus next site",
-    previousSiteMenu: "Focus previous site"
+    previousSiteMenu: "Focus previous site",
+    densityMenu: "Interface density",
+    compactDensity: "Compact",
+    comfortableDensity: "Comfortable",
+    siteScaleMenu: "Site scale",
+    fitSiteScale: "Fit (90%)",
+    actualSiteScale: "Actual size (100%)"
   },
   zhCN: {
     appTitle: "PolyAsk · AI 众答",
@@ -89,7 +95,13 @@ export const COPY = {
     windowMenu: "窗口",
     focusPromptMenu: "聚焦提问框",
     nextSiteMenu: "聚焦下一个站点",
-    previousSiteMenu: "聚焦上一个站点"
+    previousSiteMenu: "聚焦上一个站点",
+    densityMenu: "界面密度",
+    compactDensity: "紧凑",
+    comfortableDensity: "舒适",
+    siteScaleMenu: "站点缩放",
+    fitSiteScale: "适应（90%）",
+    actualSiteScale: "原始大小（100%）"
   },
   zhTW: {
     appTitle: "PolyAsk · AI 眾答",
@@ -135,7 +147,13 @@ export const COPY = {
     windowMenu: "視窗",
     focusPromptMenu: "聚焦提問框",
     nextSiteMenu: "聚焦下一個網站",
-    previousSiteMenu: "聚焦上一個網站"
+    previousSiteMenu: "聚焦上一個網站",
+    densityMenu: "介面密度",
+    compactDensity: "緊湊",
+    comfortableDensity: "舒適",
+    siteScaleMenu: "網站縮放",
+    fitSiteScale: "適應（90%）",
+    actualSiteScale: "原始大小（100%）"
   }
 } as const;
 

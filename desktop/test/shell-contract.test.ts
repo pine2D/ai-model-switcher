@@ -50,3 +50,12 @@ test("shell navigation and IPC trust both lock to the local top frame", () => {
   assert.match(main, /setWindowOpenHandler/);
   assert.match(main, /removeSwitch\("remote-debugging-port"\)/);
 });
+
+test("display preferences cross only the trusted shell bridge", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  assert.match(main, /polyask:set-display/);
+  assert.match(main, /trustedShell\(event\)/);
+  assert.match(preload, /setDisplayPreferences/);
+  assert.match(preload, /onDisplayPreferences/);
+});

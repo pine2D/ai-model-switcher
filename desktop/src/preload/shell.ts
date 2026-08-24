@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { SiteKey } from "../shared/contracts";
+import type { DisplayPreferences } from "../shared/display";
 import type {
   BootstrapState,
   BroadcastRequest,
@@ -14,9 +15,11 @@ export interface PolyAskDesktopApi {
   broadcast(request: BroadcastRequest): Promise<SiteRunResult[]>;
   cancel(): void;
   setLayout(mode: "overview" | "focus", focused: SiteKey): void;
+  setDisplayPreferences(value: DisplayPreferences): Promise<DisplayPreferences>;
   reloadSite(site: SiteKey): void;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
+  onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
   onFocusPrompt(listener: () => void): () => void;
 }
 
@@ -31,9 +34,12 @@ const api: PolyAskDesktopApi = Object.freeze({
   broadcast: (request: BroadcastRequest) => ipcRenderer.invoke("polyask:broadcast", request),
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),
+  setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
   reloadSite: (site: SiteKey) => ipcRenderer.send("polyask:reload-site", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
+  onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>
+    subscribe("polyask:display-preferences", listener),
   onFocusPrompt: (listener: () => void) => subscribe("polyask:focus-prompt", listener)
 });
 

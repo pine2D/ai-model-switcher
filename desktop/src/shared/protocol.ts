@@ -4,6 +4,7 @@ import {
   type SiteKey,
   type ViewPlacement
 } from "./contracts";
+import type { DisplayPreferences } from "./display";
 
 export type Tier = "think" | "fast" | null;
 
@@ -57,6 +58,7 @@ export interface BootstrapState {
   readonly sites: readonly SiteDefinition[];
   readonly statuses: readonly SiteStatus[];
   readonly layout: LayoutState;
+  readonly display: DisplayPreferences;
 }
 
 export interface SiteCommandEnvelope {
