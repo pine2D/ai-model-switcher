@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
 import { formatCopy, type DesktopCopy } from "../shared/copy";
+import type { PendingSynthesis, SynthesisCandidate } from "../shared/synthesis";
 import { describeCollectionCode } from "../shared/status-copy";
-import { StarIcon } from "./icons";
+import { ArchiveSynthesis } from "./archive-synthesis";
+import { SparklesIcon, StarIcon } from "./icons";
 import { MarkdownPreview } from "./markdown-preview";
 
 interface ArchiveDetailProps {
@@ -12,6 +14,12 @@ interface ArchiveDetailProps {
   readonly record: ArchiveRecord;
   readonly onPatch: (patch: ArchivePatch) => void;
   readonly onOpenSource: (url: string) => void;
+  readonly pendingSynthesis: PendingSynthesis | null;
+  readonly synthesisCandidate: SynthesisCandidate | null;
+  readonly busy: boolean;
+  readonly onSynthesize: () => void;
+  readonly onCollectSynthesis: () => void;
+  readonly onSaveSynthesis: (replaceExisting: boolean) => void;
 }
 
 export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
@@ -23,6 +31,7 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
     tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
   });
   const favoriteLabel = record.favorite ? copy.unfavoriteArchive : copy.favoriteArchive;
+  const canSynthesize = record.results.filter((result) => !!result.text?.trim()).length >= 2;
   return (
     <article className="archive-detail">
       <header className="archive-detail-heading">
@@ -33,9 +42,10 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
           </time>
           {record.source ? <button type="button" className="archive-source" title={record.source.url} onClick={() => props.onOpenSource(record.source!.url)}>{copy.archiveSource}: {record.source.title || record.source.url}</button> : null}
         </div>
-        <button type="button" className={record.favorite ? "active" : ""} title={favoriteLabel} aria-label={favoriteLabel} aria-pressed={record.favorite} onClick={() => props.onPatch({ favorite: !record.favorite })}>
-          <StarIcon />
-        </button>
+        <div className="archive-detail-actions">
+          {canSynthesize ? <button type="button" title={copy.synthesisAction} aria-label={copy.synthesisAction} disabled={props.busy} onClick={props.onSynthesize}><SparklesIcon /></button> : null}
+          <button type="button" className={record.favorite ? "active" : ""} title={favoriteLabel} aria-label={favoriteLabel} aria-pressed={record.favorite} onClick={() => props.onPatch({ favorite: !record.favorite })}><StarIcon /></button>
+        </div>
       </header>
       <div className="archive-fields">
         <label>{copy.archiveTags}<input value={tags} onChange={(event) => setTags(event.target.value)} onBlur={saveTags} onKeyDown={(event) => { if (event.key === "Enter") saveTags(); }} /></label>
@@ -57,6 +67,7 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
           );
         })}
       </div>
+      <ArchiveSynthesis copy={copy} record={record} pending={props.pendingSynthesis} candidate={props.synthesisCandidate} busy={props.busy} onCollect={props.onCollectSynthesis} onSave={props.onSaveSynthesis} />
     </article>
   );
 }

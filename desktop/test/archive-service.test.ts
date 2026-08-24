@@ -100,6 +100,7 @@ test("archive markdown preserves missing-answer placeholders", () => {
       ]
     });
     service.update(record.id, { winnerHost: "claude.ai" });
+    service.update(record.id, { synthesis: { host: "chatgpt.com", text: "Combined answer", state: "fast", instruction: "Compare", createdAt: 1_000 } });
 
     const markdown = service.exportMarkdown(record.id, "zh-CN");
 
@@ -108,6 +109,7 @@ test("archive markdown preserves missing-answer placeholders", () => {
     assert.match(markdown, /## Claude · 深度思考/);
     assert.match(markdown, /\*\*最佳回答\*\*\n\nAnswer/);
     assert.match(markdown, /## Kimi\n\n> 暂无回答/);
+    assert.match(markdown, /## 综合结果 · 快速\n\n\*\*chatgpt\.com\*\*\n\nCombined answer/);
   } finally {
     database.close();
   }

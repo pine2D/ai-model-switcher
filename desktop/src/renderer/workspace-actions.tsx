@@ -1,5 +1,5 @@
 import { formatCopy, type DesktopCopy } from "../shared/copy";
-import { ArchiveIcon, CopyIcon, NewSessionIcon, ScopeIcon } from "./icons";
+import { ArchiveIcon, CopyIcon, NewSessionIcon, ScopeIcon, SparklesIcon } from "./icons";
 
 interface WorkspaceActionsProps {
   readonly copy: DesktopCopy;
@@ -8,10 +8,12 @@ interface WorkspaceActionsProps {
   readonly activeCount: number;
   readonly drawerOpen: boolean;
   readonly disabled: boolean;
+  readonly synthesisPending: boolean;
   readonly onToggleDrawer: () => void;
   readonly onNewSession: () => void;
   readonly onCollectAnswers: () => void;
   readonly onOpenArchive: () => void;
+  readonly onCollectSynthesis: () => void;
 }
 
 export function WorkspaceActions(props: WorkspaceActionsProps): React.JSX.Element {
@@ -41,6 +43,7 @@ export function WorkspaceActions(props: WorkspaceActionsProps): React.JSX.Elemen
       ><NewSessionIcon /></button>
       <button type="button" title={props.copy.collectAnswers} aria-label={props.copy.collectAnswers} disabled={props.disabled || props.selectedCount === 0} onClick={props.onCollectAnswers}><CopyIcon /></button>
       <button type="button" title={props.copy.openArchive} aria-label={props.copy.openArchive} disabled={props.disabled} onClick={props.onOpenArchive}><ArchiveIcon /></button>
+      {props.synthesisPending ? <button type="button" className="active" title={props.copy.synthesisCollect} aria-label={props.copy.synthesisCollect} disabled={props.disabled} onClick={props.onCollectSynthesis}><SparklesIcon /></button> : null}
       <span className="summary priority-p1" role="status" aria-live="polite">{summary}</span>
     </div>
   );

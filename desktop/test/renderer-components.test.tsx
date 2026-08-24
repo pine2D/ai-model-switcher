@@ -29,6 +29,7 @@ test("command bar renders one compact command surface with stateful controls", (
       drawerOpen={false}
       imageControl={<span data-test="images" />}
       sendBlockedReason={null}
+      synthesisPending={false}
       isMac={false}
       expanded={false}
       onTextChange={noop}
@@ -41,6 +42,7 @@ test("command bar renders one compact command surface with stateful controls", (
       onNewSession={noop}
       onCollectAnswers={noop}
       onOpenArchive={noop}
+      onCollectSynthesis={noop}
       onPasteImages={noop}
     />
   );

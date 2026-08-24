@@ -1,8 +1,10 @@
 import { ARCHIVE_COPY } from "./archive-copy";
+import { SYNTHESIS_COPY } from "./synthesis-copy";
 
 export const COPY = {
   en: {
     ...ARCHIVE_COPY.en,
+    ...SYNTHESIS_COPY.en,
     appTitle: "PolyAsk · AI Answers",
     overview: "Grid",
     focus: "Focus",
@@ -90,6 +92,7 @@ export const COPY = {
   },
   zhCN: {
     ...ARCHIVE_COPY.zhCN,
+    ...SYNTHESIS_COPY.zhCN,
     appTitle: "PolyAsk · AI 众答",
     overview: "九宫格",
     focus: "聚焦",
@@ -177,6 +180,7 @@ export const COPY = {
   },
   zhTW: {
     ...ARCHIVE_COPY.zhTW,
+    ...SYNTHESIS_COPY.zhTW,
     appTitle: "PolyAsk · AI 眾答",
     overview: "九宮格",
     focus: "聚焦",

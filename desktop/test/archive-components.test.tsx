@@ -48,6 +48,11 @@ test("archive workspace exposes dense search, filters, actions and answer metada
       onDelete={noop}
       onPatch={noop}
       onOpenSource={noop}
+      pendingSynthesis={null}
+      synthesisCandidate={null}
+      onSynthesize={noop}
+      onCollectSynthesis={noop}
+      onSaveSynthesis={noop}
     />
   );
 

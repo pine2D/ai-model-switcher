@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
+import type { SiteDefinition } from "../shared/contracts";
 import type { DesktopCopy } from "../shared/copy";
+import type { Tier } from "../shared/protocol";
+import type { PendingSynthesis, SynthesisCandidate, SynthesisSendRequest } from "../shared/synthesis";
 import { ArchiveWorkspace } from "./archive-workspace";
+import { SynthesisWorkspace } from "./synthesis-workspace";
 
 interface ArchiveSurfaceProps {
   readonly copy: DesktopCopy;
   readonly locale: string;
   readonly onClose: () => void;
   readonly onCapture: () => Promise<ArchiveRecord>;
+  readonly sites: readonly SiteDefinition[];
+  readonly defaultTier: Tier;
+  readonly preferredId: string | null;
+  readonly pendingSynthesis: PendingSynthesis | null;
+  readonly synthesisCandidate: SynthesisCandidate | null;
+  readonly onSendSynthesis: (request: SynthesisSendRequest) => Promise<void>;
+  readonly onCollectSynthesis: () => Promise<void>;
+  readonly onSaveSynthesis: (replaceExisting: boolean) => Promise<ArchiveRecord>;
 }
 
 function downloadMarkdown(markdown: string, createdAt: number): void {
@@ -29,6 +41,7 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   const [selectedTag, setSelectedTag] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [synthesisId, setSynthesisId] = useState<string | null>(null);
   const requestEpoch = useRef(0);
   const selected = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
 
@@ -50,14 +63,14 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   }, [favoriteOnly, props.copy.archiveLoadFailed, query, selectedTag]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { void load(); }, query ? 180 : 0);
+    const timer = setTimeout(() => { void load(props.preferredId ?? undefined); }, query ? 180 : 0);
     return () => clearTimeout(timer);
-  }, [load, query]);
+  }, [load, props.preferredId, query]);
 
-  const run = async (action: () => Promise<void>, failure: string): Promise<void> => {
+  const run = async (action: () => Promise<void>, failure: string | ((error: unknown) => string)): Promise<void> => {
     if (busy) return;
     setBusy(true);
-    try { await action(); } catch { setStatus(failure); }
+    try { await action(); } catch (error) { setStatus(typeof failure === "function" ? failure(error) : failure); }
     finally { setBusy(false); }
   };
   const markdown = async (): Promise<string> => {
@@ -107,6 +120,28 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
       }, props.copy.archiveSaveFailed); }}
       onPatch={patch}
       onOpenSource={(url) => { void run(() => window.polyask.openExternal(url), props.copy.archiveLoadFailed); }}
+      pendingSynthesis={props.pendingSynthesis}
+      synthesisCandidate={props.synthesisCandidate}
+      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.sites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => synthesisSendError(props.copy, error)); }} /> : undefined}
+      onSynthesize={() => { if (selected) setSynthesisId(selected.id); }}
+      onCollectSynthesis={() => { void run(props.onCollectSynthesis, props.copy.synthesisCollectFailed); }}
+      onSaveSynthesis={(replaceExisting) => { void run(async () => {
+        const record = await props.onSaveSynthesis(replaceExisting);
+        await load(record.id);
+        setStatus(props.copy.synthesisSavedDone);
+      }, props.copy.archiveSaveFailed); }}
     />
   );
+}
+
+function synthesisSendError(copy: DesktopCopy, error: unknown): string {
+  const code = error instanceof Error ? error.message : "";
+  if (code === "submit_unconfirmed") return copy.submitUnconfirmed;
+  if (code === "tier_unconfirmed") return copy.tierUnconfirmed;
+  if (code === "composer_not_found") return copy.composerNotFound;
+  if (code === "not_ready") return copy.siteNotReady;
+  if (code === "timeout") return copy.timedOut;
+  if (code === "cancelled") return copy.cancelledStatus;
+  if (code === "inject_failed") return copy.injectFailed;
+  return copy.synthesisSendFailed;
 }

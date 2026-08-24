@@ -20,6 +20,11 @@ import type {
   SiteStatus
 } from "../shared/protocol";
 import type { WorkspaceState } from "../shared/workspace";
+import type {
+  SynthesisCandidate,
+  SynthesisSendRequest,
+  SynthesisSendResponse
+} from "../shared/synthesis";
 
 export interface PolyAskDesktopApi {
   bootstrap(): Promise<BootstrapState>;
@@ -31,6 +36,9 @@ export interface PolyAskDesktopApi {
   updateArchive(id: string, patch: ArchivePatch): Promise<ArchiveRecord>;
   deleteArchive(id: string): Promise<void>;
   archiveMarkdown(id: string, locale: string): Promise<string>;
+  sendSynthesis(request: SynthesisSendRequest): Promise<SynthesisSendResponse>;
+  collectSynthesis(): Promise<SynthesisCandidate>;
+  saveSynthesis(replaceExisting: boolean): Promise<ArchiveRecord>;
   openExternal(url: string): Promise<void>;
   cancel(): void;
   setLayout(mode: "overview" | "focus", focused: SiteKey): void;
@@ -67,6 +75,9 @@ const api: PolyAskDesktopApi = Object.freeze({
   updateArchive: (id: string, patch: ArchivePatch) => ipcRenderer.invoke("polyask:archive-update", { id, patch }),
   deleteArchive: (id: string) => ipcRenderer.invoke("polyask:archive-delete", id),
   archiveMarkdown: (id: string, locale: string) => ipcRenderer.invoke("polyask:archive-markdown", { id, locale }),
+  sendSynthesis: (request: SynthesisSendRequest) => ipcRenderer.invoke("polyask:synthesis-send", request),
+  collectSynthesis: () => ipcRenderer.invoke("polyask:synthesis-collect"),
+  saveSynthesis: (replaceExisting: boolean) => ipcRenderer.invoke("polyask:synthesis-save", replaceExisting),
   openExternal: (url: string) => ipcRenderer.invoke("polyask:open-external", url),
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),

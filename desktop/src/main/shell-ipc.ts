@@ -19,6 +19,7 @@ import { BroadcastCoordinator } from "./broadcast";
 import { ArchiveService } from "./archive-service";
 import { CollectionService } from "./collection-service";
 import { HistoryService } from "./history-service";
+import { SynthesisService } from "./synthesis-service";
 import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
@@ -38,6 +39,7 @@ interface ShellIpcOptions {
   readonly collection: CollectionService;
   readonly archives: ArchiveService;
   readonly history: HistoryService;
+  readonly synthesis: SynthesisService;
   readonly shellEntry: string;
   readonly applyDisplay: (value: DisplayPreferences) => DisplayPreferences;
 }
@@ -53,6 +55,9 @@ const HANDLERS = [
   "polyask:archive-update",
   "polyask:archive-delete",
   "polyask:archive-markdown",
+  "polyask:synthesis-send",
+  "polyask:synthesis-collect",
+  "polyask:synthesis-save",
   "polyask:open-external",
   "polyask:set-selection",
   "polyask:set-tier",
@@ -77,7 +82,7 @@ function strictId(value: unknown): string {
 }
 
 export function registerShellIpc(options: ShellIpcOptions): () => void {
-  const { window, manager, workspace, coordinator, collection, archives, history } = options;
+  const { window, manager, workspace, coordinator, collection, archives, history, synthesis } = options;
   const trustedShell = (event: ShellIpcEvent) =>
     event.sender.id === window.webContents.id &&
     event.senderFrame?.parent === null &&
@@ -95,7 +100,8 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       statuses: manager.getStatuses(),
       layout: manager.getLayout(),
       display: manager.getDisplayPreferences(),
-      workspace: workspace.getState()
+      workspace: workspace.getState(),
+      pendingSynthesis: synthesis.getPending()
     };
   });
   ipcMain.handle("polyask:set-display", (event, value: unknown) => {
@@ -161,6 +167,18 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     const locale = typeof input.locale === "string" && input.locale.length <= 32 ? input.locale : "en";
     return archives.exportMarkdown(strictId(input.id), locale);
   });
+  ipcMain.handle("polyask:synthesis-send", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    return synthesis.send(value);
+  });
+  ipcMain.handle("polyask:synthesis-collect", (event) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    return synthesis.collect();
+  });
+  ipcMain.handle("polyask:synthesis-save", (event, value: unknown) => {
+    if (!trustedShell(event) || typeof value !== "boolean") throw new Error("invalid_synthesis_save");
+    return synthesis.save(value);
+  });
   ipcMain.handle("polyask:open-external", async (event, value: unknown) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
     const url = safeExternalUrl(value);
@@ -192,7 +210,10 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     await workspace.newSession(value);
   });
   ipcMain.on("polyask:cancel", (event) => {
-    if (trustedShell(event)) coordinator.cancel();
+    if (trustedShell(event)) {
+      coordinator.cancel();
+      synthesis.cancel();
+    }
   });
   ipcMain.on("polyask:set-composer-expanded", (event, value: unknown) => {
     if (!trustedShell(event) || typeof value !== "boolean") return;

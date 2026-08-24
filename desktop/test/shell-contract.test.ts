@@ -135,6 +135,18 @@ test("archive mutations and history persistence stay behind trusted main-process
   assert.match(preload, /archiveMarkdown/);
 });
 
+test("assisted synthesis state and mutations stay behind the trusted shell bridge", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  for (const channel of ["polyask:synthesis-send", "polyask:synthesis-collect", "polyask:synthesis-save"]) {
+    assert.match(ipc, new RegExp(channel));
+  }
+  assert.match(ipc, /pendingSynthesis: synthesis\.getPending\(\)/);
+  assert.match(preload, /sendSynthesis/);
+  assert.match(preload, /collectSynthesis/);
+  assert.match(preload, /saveSynthesis/);
+});
+
 test("windows and linux auto-hide the native menu bar", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   assert.match(main, /setAutoHideMenuBar\(true\)/);

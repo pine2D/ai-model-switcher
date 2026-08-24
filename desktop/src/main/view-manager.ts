@@ -140,7 +140,7 @@ export class ViewManager {
     view.webContents.reload();
   }
 
-  navigate(site: SiteKey, url: string): void {
+  async navigate(site: SiteKey, url: string): Promise<void> {
     const definition = SITES.find((candidate) => candidate.key === site);
     const view = this.views.get(site);
     if (!definition || definition.url !== url || !view || view.webContents.isDestroyed()) {
@@ -148,7 +148,7 @@ export class ViewManager {
     }
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
-    void view.webContents.loadURL(url);
+    await view.webContents.loadURL(url);
   }
 
   markStatus(status: SiteStatus): void {

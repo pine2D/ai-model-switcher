@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
 import type { DesktopCopy } from "../shared/copy";
+import type { PendingSynthesis, SynthesisCandidate } from "../shared/synthesis";
 import { ArchiveDetail } from "./archive-detail";
 import { deleteIntent, type ArmedArchiveDelete } from "./archive-delete";
 import {
@@ -35,6 +36,12 @@ interface ArchiveWorkspaceProps {
   readonly onDelete: (id: string) => void;
   readonly onPatch: (patch: ArchivePatch) => void;
   readonly onOpenSource: (url: string) => void;
+  readonly pendingSynthesis: PendingSynthesis | null;
+  readonly synthesisCandidate: SynthesisCandidate | null;
+  readonly detailOverride?: React.ReactNode;
+  readonly onSynthesize: () => void;
+  readonly onCollectSynthesis: () => void;
+  readonly onSaveSynthesis: (replaceExisting: boolean) => void;
 }
 
 export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Element {
@@ -80,7 +87,7 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
           {!props.items.length ? <p>{props.query || props.favoriteOnly || props.selectedTag ? copy.archiveNoMatches : copy.archiveEmpty}</p> : null}
         </aside>
         <main className="archive-detail-pane">
-          {selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} /> : <p>{copy.archiveEmpty}</p>}
+          {props.detailOverride ?? (selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} pendingSynthesis={props.pendingSynthesis} synthesisCandidate={props.synthesisCandidate} busy={props.busy} onSynthesize={props.onSynthesize} onCollectSynthesis={props.onCollectSynthesis} onSaveSynthesis={props.onSaveSynthesis} /> : <p>{copy.archiveEmpty}</p>)}
         </main>
       </div>
       <div className="archive-status" role="status" aria-live="polite">{props.status}</div>

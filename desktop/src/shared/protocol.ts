@@ -6,6 +6,7 @@ import {
 } from "./contracts";
 import type { DisplayPreferences } from "./display";
 import { validateImages, type DesktopImage } from "./images";
+import type { PendingSynthesis } from "./synthesis";
 import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
@@ -95,6 +96,7 @@ export interface BootstrapState {
   readonly layout: LayoutState;
   readonly display: DisplayPreferences;
   readonly workspace: WorkspaceState;
+  readonly pendingSynthesis: PendingSynthesis | null;
 }
 
 export interface SiteCommandEnvelope {

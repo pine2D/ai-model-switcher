@@ -19,6 +19,7 @@ import { SiteFrames } from "./site-frames";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import { useArchiveCapture } from "./use-archive-capture";
 import { useImageSelection } from "./use-image-selection";
+import { useSynthesisFlow } from "./use-synthesis-flow";
 import "./styles.css";
 
 const INITIAL_LAYOUT: LayoutState = {
@@ -76,6 +77,7 @@ function App(): React.JSX.Element {
     window.polyask.setDrawerOpen(value);
   };
   const imageSelection = useImageSelection(copy, runState === "idle", setAnnouncement);
+  const synthesis = useSynthesisFlow();
   const { images, open: imageTrayOpen } = imageSelection;
 
   useEffect(() => {
@@ -86,6 +88,7 @@ function App(): React.JSX.Element {
       setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
       setLayout(state.layout);
       acceptWorkspace(state.workspace);
+      synthesis.acceptPending(state.pendingSynthesis);
     });
     const offStatus = window.polyask.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
@@ -188,9 +191,18 @@ function App(): React.JSX.Element {
       setAuxiliaryBusy(false);
     }
   };
+  const collectSynthesis = async (): Promise<void> => {
+    if (auxiliaryBusy || runState !== "idle") return;
+    setAuxiliaryBusy(true);
+    try {
+      await synthesis.collect();
+      changeSurface("archive");
+    } catch { setAnnouncement(copy.synthesisCollectFailed); }
+    finally { setAuxiliaryBusy(false); }
+  };
 
   if (surface === "archive") {
-    return <ArchiveSurface copy={copy} locale={navigator.language} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} />;
+    return <ArchiveSurface copy={copy} locale={navigator.language} sites={sites} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} />;
   }
 
   return (
@@ -223,6 +235,7 @@ function App(): React.JSX.Element {
           />
         )}
         sendBlockedReason={imageWarning}
+        synthesisPending={!!synthesis.pending}
         isMac={navigator.userAgent.includes("Mac")}
         expanded={composerExpanded}
         onTextChange={setText}
@@ -240,6 +253,7 @@ function App(): React.JSX.Element {
         onNewSession={() => { void window.polyask.newSession([...selected]).catch(recoverWorkspace); }}
         onCollectAnswers={() => { void collectAndCopy(); }}
         onOpenArchive={() => changeSurface("archive")}
+        onCollectSynthesis={() => { void collectSynthesis(); }}
         onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>

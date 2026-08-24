@@ -498,7 +498,7 @@ git commit -m "feat(desktop): add collection and archive workspace"
 - Produces: `SynthesisService.send({ archiveId, targetSite, tier, selectedHosts, instruction })`。
 - 流程：目标站新会话 → 单站发送综合提示 → 用户看到实时生成 → 收集目标站最新回答 → 确认保存到原归档 `synthesis` 字段。
 
-- [ ] **Step 1: 写失败纯模型测试**
+- [x] **Step 1: 写失败纯模型测试**
 
 ```ts
 test("synthesis prompt contains only selected successful answers", () => {
@@ -509,19 +509,19 @@ test("synthesis prompt contains only selected successful answers", () => {
 });
 ```
 
-- [ ] **Step 2: RED → 模型 GREEN**
+- [x] **Step 2: RED → 模型 GREEN**
 
 Run: `cd desktop && npx tsx --test test/synthesis.test.ts`
 
-- [ ] **Step 3: 写失败状态机测试**
+- [x] **Step 3: 写失败状态机测试**
 
 验证 archive 不存在、没有成功答案、目标未选择、发送取消、`submit_unconfirmed`、收集失败和替换已有 synthesis 的二段确认。
 
-- [ ] **Step 4: 实现单窗口综合 UI 与服务**
+- [x] **Step 4: 实现单窗口综合 UI 与服务**
 
 综合工作区复用 Archive surface；提供答案复选、目标站、档位、自定义要求和完整提示预览。发送后返回 sites surface 并聚焦目标站；保存后回到原归档详情。
 
-- [ ] **Step 5: 验证与提交**
+- [x] **Step 5: 验证与提交**
 
 Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 
@@ -529,6 +529,8 @@ Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 git add desktop/src desktop/test CHANGELOG.md
 git commit -m "feat(desktop): add assisted synthesis workflow"
 ```
+
+验证记录（2026-08-25）：桌面端复用扩展的综合载荷语义和 60,000 字符硬上限，在结果库单窗口内提供候选回答、目标站、档位、自定义要求与完整预览。发送只进入一个目标站的新会话，`submit_unconfirmed` 不重发；新会话导航有 22 秒超时并可取消，发送成功后回到九站原生视图并聚焦目标站。主进程保存当前待采集状态，Shell 重载后仍可恢复；用户采集目标站当前回答后回到原归档，已有综合结果必须二次确认才能替换。92 项桌面测试与 1 项运行器测试、TypeScript 检查通过；真实站点的新会话发送、实时生成、采集回写仍列入最终人工回归。
 
 ### Task 8: Google Drive 桌面 OAuth 与同步
 

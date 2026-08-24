@@ -22,6 +22,7 @@ interface CommandBarProps {
   readonly drawerOpen: boolean;
   readonly imageControl: ReactNode;
   readonly sendBlockedReason: string | null;
+  readonly synthesisPending: boolean;
   readonly isMac: boolean;
   readonly expanded: boolean;
   readonly onTextChange: (value: string) => void;
@@ -34,6 +35,7 @@ interface CommandBarProps {
   readonly onNewSession: () => void;
   readonly onCollectAnswers: () => void;
   readonly onOpenArchive: () => void;
+  readonly onCollectSynthesis: () => void;
   readonly onPasteImages: (files: readonly File[]) => void;
 }
 
@@ -52,6 +54,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     drawerOpen,
     imageControl,
     sendBlockedReason,
+    synthesisPending,
     isMac,
     expanded,
     onTextChange,
@@ -64,6 +67,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onNewSession,
     onCollectAnswers,
     onOpenArchive,
+    onCollectSynthesis,
     onPasteImages
   } = props;
   const tierOptions = [
@@ -124,10 +128,12 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         activeCount={activeCount}
         drawerOpen={drawerOpen}
         disabled={runState !== "idle" || auxiliaryBusy}
+        synthesisPending={synthesisPending}
         onToggleDrawer={onToggleDrawer}
         onNewSession={onNewSession}
         onCollectAnswers={onCollectAnswers}
         onOpenArchive={onOpenArchive}
+        onCollectSynthesis={onCollectSynthesis}
       />
       {runState !== "idle" ? (
         <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>

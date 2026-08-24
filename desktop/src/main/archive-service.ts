@@ -85,6 +85,12 @@ export class ArchiveService {
       if (record.winnerHost === result.host && result.text?.trim()) markdown.push(`\n**${copy.archiveBestAnswer}**`);
       markdown.push(`\n${result.text?.trim() || `> ${describeCollectionCode(copy, result.code)}`}`);
     }
+    if (record.synthesis) {
+      const tier = record.synthesis.state === "think" ? ` · ${copy.think}` : record.synthesis.state === "fast" ? ` · ${copy.fast}` : "";
+      markdown.push(`\n## ${copy.synthesisSaved}${tier}`);
+      markdown.push(`\n**${record.synthesis.host}**`);
+      markdown.push(`\n${record.synthesis.text}`);
+    }
     return markdown.join("\n");
   }
 }

@@ -23,6 +23,8 @@ import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
 import { SITES } from "./sites";
+import { statusForResult } from "./status";
+import { SynthesisService } from "./synthesis-service";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
 
@@ -196,6 +198,26 @@ async function createWindow(): Promise<void> {
   };
   const archives = new ArchiveService(desktopDatabase.archives, { deviceId });
   const history = new HistoryService(desktopDatabase.history, { deviceId });
+  const synthesis = new SynthesisService({
+    sites: SITES,
+    archives,
+    navigate: (site, url) => manager.navigate(site, url),
+    send: (request) => {
+      for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
+      return coordinator.send(
+        request,
+        (site, command, signal) => manager.sendCommand(site, command, signal),
+        44_000,
+        (result) => manager.markStatus(statusForResult(result.site, result))
+      );
+    },
+    collect: (sites, runId) => collection.collect(sites, runId),
+    showTarget: (site) => {
+      manager.setSurface("sites");
+      manager.setLayout("focus", site);
+    },
+    recordHistory: (text) => history.record(text)
+  });
   createMenu();
   const disposeIpc = registerShellIpc({
     window,
@@ -205,6 +227,7 @@ async function createWindow(): Promise<void> {
     collection,
     archives,
     history,
+    synthesis,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
     applyDisplay: (value) => applyDisplayPreferences(manager, value)
   });

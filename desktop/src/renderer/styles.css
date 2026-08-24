@@ -175,8 +175,8 @@ kbd { opacity: .7; font: 10px system-ui; }
 .archive-filters input { height: 32px; padding: 0 8px; }
 .archive-filters select { height: 32px; padding: 0 5px; }
 .archive-actions { display: flex; gap: 2px; }
-.archive-actions button, .archive-filters button, .archive-detail-heading > button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: transparent; }
-.archive-actions button:hover, .archive-actions button:focus-visible, .archive-filters button.active, .archive-detail-heading > button.active { color: var(--accent); background: var(--accent-soft); }
+.archive-actions button, .archive-filters button, .archive-detail-actions button { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: transparent; }
+.archive-actions button:hover, .archive-actions button:focus-visible, .archive-filters button.active, .archive-detail-actions button:hover, .archive-detail-actions button.active { color: var(--accent); background: var(--accent-soft); }
 .archive-actions button.danger { border-color: var(--danger); color: var(--danger); }
 .archive-actions button:disabled { opacity: .4; }
 .archive-body { min-height: 0; display: grid; grid-template-columns: minmax(240px, 286px) minmax(0, 1fr); }
@@ -191,7 +191,8 @@ kbd { opacity: .7; font: 10px system-ui; }
 .archive-badges i { padding: 1px 4px; border-radius: 999px; background: var(--panel); font-size: 9px; font-style: normal; }
 .archive-detail-pane { min-width: 0; min-height: 0; overflow: auto; }
 .archive-detail { max-width: 980px; margin: 0 auto; padding: 12px 16px 40px; }
-.archive-detail-heading { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: start; gap: 8px; }
+.archive-detail-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.archive-detail-actions { display: flex; gap: 3px; }
 .archive-detail h1 { margin: 0; font-size: 20px; line-height: 1.25; }
 .archive-detail-heading time { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .archive-source { max-width: 100%; margin: 3px 0 0; padding: 0; display: block; overflow: hidden; text-align: left; border: 0; color: var(--accent); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; background: transparent; }
@@ -206,6 +207,39 @@ kbd { opacity: .7; font: 10px system-ui; }
 .archive-answer h2 { margin: 0; font-size: 14px; }
 .archive-answer > header button { height: 26px; padding: 0 6px; display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: transparent; }
 .archive-answer > header button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.archive-synthesis { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.synthesis-card { margin-top: 6px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.synthesis-card.pending { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--accent-soft); }
+.synthesis-card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.synthesis-card h2 { margin: 0; display: inline-flex; align-items: center; gap: 5px; font-size: 14px; }
+.synthesis-card header span { color: var(--muted); font-size: 10px; }
+.synthesis-card > p { margin: 0 0 6px; color: var(--muted); }
+.synthesis-card > button, .synthesis-confirm button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; color: inherit; background: var(--panel); }
+.synthesis-confirm { padding-top: 7px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; border-top: 1px solid var(--border); }
+.synthesis-confirm span { flex: 1; color: var(--danger); font-size: 11px; }
+.synthesis-confirm button.danger { border-color: var(--danger); color: var(--danger); }
+.synthesis-workspace { height: 100%; display: grid; grid-template: 40px minmax(0, 1fr) 38px / minmax(250px, 34%) minmax(0, 1fr); background: var(--panel); }
+.synthesis-workspace > header { grid-column: 1 / -1; padding: 4px 7px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.synthesis-workspace > header strong { display: inline-flex; align-items: center; gap: 5px; }
+.synthesis-workspace > header button { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
+.synthesis-workspace > header button:hover { color: var(--accent); background: var(--accent-soft); }
+.synthesis-config { min-height: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; border-right: 1px solid var(--border); }
+.synthesis-config fieldset { margin: 0; padding: 5px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 5px; border: 1px solid var(--border); border-radius: 6px; }
+.synthesis-config legend { padding: 0 3px; color: var(--muted); font-size: 10px; }
+.synthesis-config fieldset label { min-width: 0; height: 25px; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.synthesis-config fieldset input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.synthesis-config fieldset span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.synthesis-config > small { color: var(--muted); font-size: 10px; }
+.synthesis-config > label, .synthesis-preview { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.synthesis-config select, .synthesis-config textarea, .synthesis-preview textarea { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: #fafafd; }
+.synthesis-config select { height: 30px; padding: 0 6px; }
+.synthesis-config textarea { min-height: 76px; padding: 6px; resize: vertical; }
+.synthesis-preview { min-height: 0; padding: 8px; grid-template-rows: auto minmax(0, 1fr); }
+.synthesis-preview textarea { min-height: 0; padding: 8px; resize: none; font: 11px/1.45 ui-monospace, "Cascadia Code", monospace; }
+.synthesis-workspace > footer { grid-column: 1 / -1; padding: 4px 7px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); }
+.synthesis-workspace > footer span { flex: 1; overflow: hidden; color: var(--warning); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.synthesis-workspace > footer button { min-height: 30px; padding: 0 10px; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 6px; color: white; background: var(--accent); }
+.synthesis-workspace > footer button:disabled { opacity: .45; }
 .markdown-preview { overflow-wrap: anywhere; line-height: 1.55; }
 .markdown-preview p { margin: 7px 0; white-space: pre-wrap; }
 .markdown-preview h3, .markdown-preview h4 { margin: 10px 0 4px; }
@@ -283,4 +317,5 @@ kbd { opacity: .7; font: 10px system-ui; }
   .scope-preset, .group-save input { background: #19191d; }
   .archive-workspace, .archive-answer-nav { background: #17171a; }
   .archive-filters input, .archive-filters select, .archive-fields input, .archive-fields textarea { background: #19191d; }
+  .synthesis-config select, .synthesis-config textarea, .synthesis-preview textarea { background: #19191d; }
 }
