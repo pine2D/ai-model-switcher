@@ -1,23 +1,22 @@
 name: Release
 
-# 推送 v* 标签即自动打包并发布 GitHub Release。
+# 推送 v* 标签后发布 Chrome 扩展与无签名 Desktop 预览包。
 # 本地入口：prepare-release.sh 准备版本 → release.sh --publish 做 exact-HEAD CI 门禁并推 tag。
 on:
   push:
     tags: ["v*"]
 
 permissions:
-  contents: write   # 创建 Release 需写权限
-  actions: read     # 校验 tag 对应提交的 CI 结果
+  contents: write
+  actions: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
     steps:
-      # 第三方 Action 固定到 commit SHA：可变 tag 在 contents:write 权限下构成供应链投毒面；升级时人工审 diff 后更新 SHA
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
@@ -31,7 +30,6 @@ jobs:
             echo "::error::tag 提交不在 origin/main 上"
             exit 1
           }
-
           CI_RESULT=$(gh run list \
             --repo "$GITHUB_REPOSITORY" \
             --workflow "CI" \
@@ -44,13 +42,111 @@ jobs:
             exit 1
           }
 
-      - name: 构建并校验发布产物
+  extension:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: 构建并校验 Chrome 扩展
         run: bash scripts/release.sh --build-only
 
-      - name: 发布 Release（ZIP + SHA-256）
+      - name: 暂存扩展发布资产
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-extension
+          path: |
+            dist/polyask-*.zip
+            dist/polyask-*.zip.sha256
+            dist/release-notes.md
+          if-no-files-found: error
+
+  desktop:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            maker: "@electron-forge/maker-squirrel"
+            asset: windows-x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            maker: "@electron-forge/maker-deb"
+            asset: linux-x64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            maker: "@electron-forge/maker-zip"
+            asset: macos-x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            maker: "@electron-forge/maker-zip"
+            asset: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: 安装 Linux maker 依赖
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot
+
+      - name: 安装 Desktop 依赖
+        working-directory: desktop
+        run: npm ci
+
+      - name: 写入 Desktop OAuth 公共客户端 ID
+        working-directory: desktop
+        env:
+          POLYASK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.POLYASK_GOOGLE_DESKTOP_CLIENT_ID }}
+        run: npm run configure-oauth
+
+      - name: 构建当前平台可分发包
+        working-directory: desktop
+        run: npm run make -- --platform="${{ matrix.platform }}" --arch="${{ matrix.arch }}" --targets="${{ matrix.maker }}"
+
+      - name: 规范化文件名并生成 SHA-256
+        working-directory: desktop
+        run: npm run collect-release -- "${{ matrix.platform }}" "${{ matrix.arch }}"
+
+      - name: 暂存 Desktop 发布资产
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-desktop-${{ matrix.asset }}
+          path: desktop/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [extension, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总发布资产
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: 发布 Chrome 扩展与 Desktop 预览包
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
-            dist/polyask-*.zip
-            dist/polyask-*.zip.sha256
-          body_path: dist/release-notes.md
+            release-assets/polyask-v*.zip
+            release-assets/polyask-v*.zip.sha256
+            release-assets/polyask-desktop-*
+          body_path: release-assets/release-notes.md
+          fail_on_unmatched_files: true

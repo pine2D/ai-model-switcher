@@ -54,6 +54,7 @@ done
 echo "[test] 用户可见文案与本地化"
 node scripts/test-content-l10n.js
 node scripts/test-err-codes.js
+node scripts/test-release-flow.js
 
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-page-context.js

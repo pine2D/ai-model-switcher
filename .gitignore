@@ -11,6 +11,7 @@ docs/superpowers/
 dist/
 desktop/.webpack/
 desktop/out/
+desktop/release/
 desktop/node_modules/
 desktop/resources/oauth.json
 

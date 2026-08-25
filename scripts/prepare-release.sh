@@ -29,19 +29,23 @@ ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 command -v python3 >/dev/null || { echo "需要 python3" >&2; exit 1; }
 
-python3 - "manifest.json" "CHANGELOG.md" "$SPEC" "$(date +%F)" "$DRY_RUN" <<'PY'
+python3 - "manifest.json" "CHANGELOG.md" "desktop/package.json" "desktop/package-lock.json" "$SPEC" "$(date +%F)" "$DRY_RUN" <<'PY'
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-manifest_path, changelog_path, spec, today, dry = sys.argv[1:]
+manifest_path, changelog_path, desktop_path, desktop_lock_path, spec, today, dry = sys.argv[1:]
 dry = dry == "1"
 manifest_file = Path(manifest_path)
 changelog_file = Path(changelog_path)
+desktop_file = Path(desktop_path)
+desktop_lock_file = Path(desktop_lock_path)
 manifest_text = manifest_file.read_text(encoding="utf-8")
 manifest = json.loads(manifest_text)
+desktop = json.loads(desktop_file.read_text(encoding="utf-8"))
+desktop_lock = json.loads(desktop_lock_file.read_text(encoding="utf-8"))
 current = manifest.get("version", "")
 
 def parse(value, label):
@@ -50,6 +54,10 @@ def parse(value, label):
     return tuple(map(int, value.split(".")))
 
 current_parts = parse(current, "manifest 版本")
+if desktop.get("version") != current:
+    raise SystemExit(f"错误：desktop/package.json 版本 {desktop.get('version')} 与 manifest {current} 不一致")
+if desktop_lock.get("version") != current or desktop_lock.get("packages", {}).get("", {}).get("version") != current:
+    raise SystemExit("错误：desktop/package-lock.json 根版本与 manifest 不一致")
 
 if spec == "auto":
     result = subprocess.run(
@@ -138,5 +146,10 @@ if dry:
 else:
     manifest_file.write_text(updated_manifest, encoding="utf-8")
     changelog_file.write_text(updated_changelog, encoding="utf-8")
-    print("已更新 manifest.json 与 CHANGELOG.md；请审阅后提交。")
+    desktop["version"] = target
+    desktop_lock["version"] = target
+    desktop_lock["packages"][""]["version"] = target
+    desktop_file.write_text(json.dumps(desktop, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    desktop_lock_file.write_text(json.dumps(desktop_lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("已更新扩展、Desktop 与 CHANGELOG.md；请审阅后提交。")
 PY

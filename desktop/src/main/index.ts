@@ -7,6 +7,7 @@ import {
   Menu,
   type MenuItemConstructorOptions
 } from "electron";
+import squirrelStartup from "electron-squirrel-startup";
 
 import { getCopy } from "../shared/copy";
 import {
@@ -30,6 +31,9 @@ import { createSyncRuntime } from "./sync-runtime";
 import { SynthesisService } from "./synthesis-service";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
+
+if (squirrelStartup) app.quit();
+if (process.platform === "win32") app.setAppUserModelId("com.squirrel.PolyAsk.PolyAsk");
 
 const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;

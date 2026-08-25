@@ -14,9 +14,37 @@ const oauthResource = join(__dirname, "resources", "oauth.json");
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    appBundleId: "com.pine2d.polyask",
+    appCategoryType: "public.app-category.productivity",
+    executableName: "polyask-desktop",
     ...(existsSync(oauthResource) ? { extraResource: [oauthResource] } : {})
   },
-  makers: [],
+  makers: [
+    {
+      name: "@electron-forge/maker-squirrel",
+      platforms: ["win32"],
+      config: {
+        name: "PolyAsk",
+        authors: "pine2D",
+        description: "Compare answers from nine live AI sites in one window"
+      }
+    },
+    {
+      name: "@electron-forge/maker-deb",
+      platforms: ["linux"],
+      config: {
+        options: {
+          maintainer: "pine2D",
+          homepage: "https://github.com/pine2D/polyask"
+        }
+      }
+    },
+    {
+      name: "@electron-forge/maker-zip",
+      platforms: ["darwin"],
+      config: {}
+    }
+  ],
   plugins: [
     new WebpackPlugin({
       mainConfig,
