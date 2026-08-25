@@ -16,15 +16,15 @@ export function packageApplication() {
   if (result.status !== 0) throw new Error(`package_failed:${result.status ?? "unknown"}`);
 }
 
-function executablePath() {
+export function packagedExecutablePath(platform = process.platform, arch = process.arch) {
   const base = join(
     desktopDirectory,
     "out",
-    `polyask-desktop-${process.platform}-${process.arch}`
+    `PolyAsk-${platform}-${arch}`
   );
-  if (process.platform === "win32") return join(base, "polyask-desktop.exe");
-  if (process.platform === "darwin") {
-    return join(base, "polyask-desktop.app", "Contents", "MacOS", "polyask-desktop");
+  if (platform === "win32") return join(base, "polyask-desktop.exe");
+  if (platform === "darwin") {
+    return join(base, "PolyAsk.app", "Contents", "MacOS", "polyask-desktop");
   }
   return join(base, "polyask-desktop");
 }
@@ -39,7 +39,7 @@ export async function prepareRuntime(prefix, environmentForDirectory) {
 export async function launchRuntime(prefix, environmentForDirectory) {
   const prepared = await prepareRuntime(prefix, environmentForDirectory);
   const logs = [];
-  const child = spawn(executablePath(), [`--user-data-dir=${prepared.userData}`], {
+  const child = spawn(packagedExecutablePath(), [`--user-data-dir=${prepared.userData}`], {
     cwd: desktopDirectory,
     env: { ...process.env, ...prepared.environment },
     stdio: ["ignore", "pipe", "pipe"]

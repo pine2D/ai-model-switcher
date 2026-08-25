@@ -13,6 +13,8 @@ test("OAuth build resource accepts only a Google Desktop client id", async () =>
 
   await writeOAuthResource(clientId, path);
   assert.deepEqual(JSON.parse(await readFile(path, "utf8")), { clientId });
-  assert.equal((await stat(path)).mode & 0o777, 0o644);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(path)).mode & 0o777, 0o644);
+  }
   await assert.rejects(writeOAuthResource("not-a-client", path), /invalid_desktop_oauth_client_id/);
 });
