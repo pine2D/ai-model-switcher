@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.17.0] - 2026-08-25
+
 ### 新增
 
 - 新增跨平台 Desktop 预览版：在一个 Electron 窗口内承载 9 个实时 AI 站点页面，支持九宫格/聚焦布局、站点选择、统一档位群发、取消、三语状态提示、单站重载和跨视图键盘焦点命令
@@ -408,7 +410,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.16.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/pine2D/polyask/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/pine2D/polyask/compare/v0.15.2...v0.16.0
 [0.15.2]: https://github.com/pine2D/polyask/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/pine2D/polyask/compare/v0.15.0...v0.15.1
