@@ -45,6 +45,9 @@ test("CI tests and packages desktop on Linux, Windows and macOS", () => {
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /macos-latest/);
   assert.match(workflow, /npm run package/);
+  assert.match(workflow, /chown root:root "out\/PolyAsk-linux-x64\/chrome-sandbox"/);
+  assert.match(workflow, /chmod 4755 "out\/PolyAsk-linux-x64\/chrome-sandbox"/);
+  assert.doesNotMatch(workflow, /--no-sandbox/);
 });
 
 test("shell navigation and IPC trust both lock to the local top frame", () => {

@@ -47,6 +47,12 @@ jobs:
         working-directory: desktop
         run: npm run package
 
+      - name: 配置 Linux Chromium 沙箱
+        working-directory: desktop
+        run: |
+          sudo chown root:root "out/PolyAsk-linux-x64/chrome-sandbox"
+          sudo chmod 4755 "out/PolyAsk-linux-x64/chrome-sandbox"
+
       - name: 冒烟测试桌面端运行时
         working-directory: desktop
         run: xvfb-run -a npm run smoke -- --skip-package
