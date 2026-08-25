@@ -1,6 +1,6 @@
 # PolyAsk Desktop 产品化审计
 
-最后核对：2026-08-25。本文是桌面端产品化的持续审计台账，记录可复现现象、根因、修复和验证证据。架构与验收边界见 `docs/desktop-m0.md`，执行顺序见 `docs/desktop-productization-plan.md`。
+最后核对：2026-08-26。本文是桌面端产品化的持续审计台账，记录可复现现象、根因、修复和验证证据。架构与验收边界见 `docs/desktop-m0.md`，执行顺序见 `docs/desktop-productization-plan.md`。
 
 ## 审计口径
 
@@ -27,9 +27,9 @@
 
 2026-08-24 的桌面 M0 已具备一个 Shell 和 9 个持久 `WebContentsView`、共享站点登录 session、绝对 deadline/epoch 群发、Grid/Focus、密度与页面缩放、三语状态、单站重载和安全 IPC。WSLg 真机确认九站可登录，除 Kimi 当时的付费业务限制外其余 8 站可提交并实时显示回答。
 
-当前自动化基线为 131 项桌面 TypeScript/React 测试、4 项运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh`，上述门禁均通过。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。SQLite schema 1、WAL、事务 outbox、历史/归档 tombstone 与重开持久化已有自动化证据。站点范围、图片群发、回答采集、结果库、辅助综合和 Drive schema 1 同步均已迁移；归档 detach/reattach 不销毁站点视图，Drive 对 401、429/5xx、410、未来 schema、远端身份和断开竞态均有测试。
+当前自动化基线包括桌面 TypeScript/React 与运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh`。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。SQLite schema 1、WAL、事务 outbox、历史/归档 tombstone 与重开持久化已有自动化证据。站点范围、图片群发、回答采集、结果库、辅助综合和 Drive schema 1 同步均已迁移；归档 detach/reattach 不销毁站点视图，Drive 对 401、429/5xx、410、未来 schema、远端身份和断开竞态均有测试。
 
-发行基线已增加 Windows Squirrel、Linux deb、macOS x64/arm64 ZIP maker，扩展和 Desktop 共用版本。实际 Linux x64 `.deb` 已生成并检查包元数据、可执行链接和 OAuth 资源；归档脚本会验证 OAuth Client ID、统一文件名并生成 SHA-256。Release workflow 尚未在本分支 tag 上执行，因此不能把四个远端 runner 产物写成已发布证据。
+发行基线包括 Windows Squirrel 安装包和免安装 ZIP、Linux deb、macOS x64/arm64 ZIP maker，扩展和 Desktop 共用版本。实际 Linux x64 `.deb` 已生成并检查包元数据、可执行链接和 OAuth 资源；归档脚本会验证 OAuth Client ID、统一文件名并生成 SHA-256。只有对应 tag 的 Release workflow 成功后，原生 runner 产物才算发布证据。
 
 ## 已知未完成证据
 
@@ -39,12 +39,14 @@
 - 九站真实回答采集与结果库打开/关闭后的页面进度保持尚未在同一版本逐站人工回归。
 - Windows Narrator、macOS VoiceOver、Ubuntu Orca、高对比度和完整缩放矩阵尚无证据。
 - Google Desktop OAuth Client ID 已配置并证明进入 Linux `.deb`；系统浏览器授权、refresh token 持久化和 Drive 联网同步尚无真实账号证据。
-- Windows `.exe`、macOS x64/arm64 ZIP 和 Linux `.deb` 尚未完成同版本原生安装、升级与卸载；所有包仍未签名，macOS 未公证。
+- Windows `.exe` 安装包和免安装 ZIP、macOS x64/arm64 ZIP、Linux `.deb` 尚未完成同版本原生安装、升级与卸载；所有包仍未签名，macOS 未公证。
 
 这些项目保持未通过，直至 `docs/desktop-productization-plan.md` 的对应任务完成并在本文记录证据。
 
 ## 发现与处置
 
 2026-08-25 已完成一轮静态缺陷与 UI/UX 审查，补齐串行写入、删除确认时效、同步中断、异步安全存储降级、表单语义、键盘焦点、Windows 高对比度和三语日期格式。发布链路实跑又发现并修复两项只在 maker 阶段出现的问题：`productName` 与 Deb 可执行文件名不一致，以及 OAuth 资源以 root-only `0600` 进入 `.deb`。两项均有回归测试和实际包内容复核。
+
+2026-08-26 收紧群发、重试、新会话、采集和辅助综合之间的并发边界，并修复结果库筛选竞态与启动失败恢复。发布矩阵同时增加 Windows x64 免安装 ZIP；自动化覆盖任意站点数量、原发送范围重试和双 Windows 产物收集，但仍需 Windows 原生运行验收。
 
 后续发现仍需记录复现步骤和影响范围；每个代码修复先有失败测试，无法自动化的视觉或平台问题必须附运行环境与截图。静态审查和 WSLg 证据不替代原生平台验收。

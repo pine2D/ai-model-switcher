@@ -1,7 +1,7 @@
 import type { ArchiveService } from "./archive-service";
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import type {
-  BroadcastRequest,
+  BroadcastPayload,
   CollectedAnswer,
   SiteRunResult
 } from "../shared/protocol";
@@ -18,10 +18,11 @@ interface SynthesisServiceOptions {
   readonly sites: readonly SiteDefinition[];
   readonly archives: ArchiveService;
   readonly navigate: (site: SiteKey, url: string) => Promise<void>;
-  readonly send: (request: BroadcastRequest) => Promise<SiteRunResult[]>;
+  readonly send: (request: BroadcastPayload) => Promise<SiteRunResult[]>;
   readonly collect: (sites: readonly SiteKey[], runId: string | null) => Promise<CollectedAnswer[]>;
   readonly showTarget: (site: SiteKey) => void;
   readonly recordHistory: (text: string) => void;
+  readonly beforeSend?: () => void;
   readonly now?: () => number;
 }
 
@@ -65,6 +66,7 @@ export class SynthesisService {
       selectedHosts: request.selectedHosts,
       instruction: request.instruction
     });
+    this.options.beforeSend?.();
     this.activeController?.abort();
     const controller = new AbortController();
     this.activeController = controller;

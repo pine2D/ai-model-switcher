@@ -117,7 +117,7 @@ export async function authorizeWithPkce(input: AuthorizeInput): Promise<TokenSet
     if (callback.error) throw new Error("oauth_denied");
     if (!callback.state || callback.state !== request.state) throw new Error("oauth_state_mismatch");
     if (!callback.code) throw new Error("oauth_code_missing");
-    return exchangeAuthorizationCode({
+    return await exchangeAuthorizationCode({
       clientId: input.clientId,
       code: callback.code,
       verifier: request.verifier,

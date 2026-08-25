@@ -23,12 +23,6 @@ test("focus action transfers keyboard focus to the native site view", () => {
   assert.match(manager, /webContents\.focus\(\)/);
 });
 
-test("cancel keeps the current run locked until its promise settles", () => {
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
-  assert.match(renderer, /setRunState\("cancelling"\)/);
-  assert.doesNotMatch(renderer, /window\.polyask\.cancel\(\);\s*setSending\(false\)/);
-});
-
 test("application menu offers a keyboard route back to the prompt", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   const renderer = readFileSync("src/renderer/index.tsx", "utf8");

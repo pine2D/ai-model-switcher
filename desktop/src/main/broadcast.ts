@@ -1,6 +1,6 @@
 import type { SiteKey } from "../shared/contracts";
 import type {
-  BroadcastRequest,
+  BroadcastPayload,
   SubmitSiteCommand,
   SiteResult,
   SiteRunResult
@@ -31,7 +31,7 @@ export class BroadcastCoordinator {
   }
 
   async send(
-    request: BroadcastRequest,
+    request: BroadcastPayload,
     dispatch: SiteDispatch,
     timeoutMs: number,
     onResult?: ResultObserver

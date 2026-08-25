@@ -47,6 +47,7 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 | 系统 | 文件 | 安装方式 |
 | --- | --- | --- |
 | Windows x64 | `polyask-desktop-vX.Y.Z-windows-x64.exe` | 运行安装程序 |
+| Windows x64（免安装） | `polyask-desktop-vX.Y.Z-windows-x64-portable.zip` | 解压后运行 `polyask-desktop.exe` |
 | Ubuntu/Debian x64 | `polyask-desktop-vX.Y.Z-linux-x64.deb` | 执行 `sudo apt install ./polyask-desktop-vX.Y.Z-linux-x64.deb` |
 | macOS Apple Silicon | `polyask-desktop-vX.Y.Z-macos-arm64.zip` | 解压后打开 `PolyAsk.app` |
 | macOS Intel | `polyask-desktop-vX.Y.Z-macos-x64.zip` | 解压后打开 `PolyAsk.app` |
@@ -83,7 +84,7 @@ Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE �
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
-执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64、Linux x64、macOS x64/arm64 预览包并生成独立 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
+执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和免安装 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

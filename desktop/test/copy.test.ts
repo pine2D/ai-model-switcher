@@ -12,6 +12,163 @@ test("desktop shell keeps complete English, Simplified Chinese and Traditional C
   assert.equal(sourceKeys.includes("brandSub"), false);
 });
 
+test("Drive local-only state and settings close action stay precise in all locales", () => {
+  assert.deepEqual(
+    [COPY.en.syncStateLocalOnly, COPY.zhCN.syncStateLocalOnly, COPY.zhTW.syncStateLocalOnly],
+    ["Local only", "仅保存在本机", "僅儲存在本機"]
+  );
+  assert.deepEqual(
+    [COPY.en.closeSettings, COPY.zhCN.closeSettings, COPY.zhTW.closeSettings],
+    ["Close settings", "关闭设置", "關閉設定"]
+  );
+  for (const locale of Object.values(COPY)) {
+    assert.deepEqual([...locale.syncStateLocalOnly.matchAll(/\{[a-z]+\}/g)].map(String), []);
+    assert.deepEqual([...locale.closeSettings.matchAll(/\{[a-z]+\}/g)].map(String), []);
+  }
+});
+
+test("result-library loading copy stays complete and localized", () => {
+  const messages = [COPY.en.archiveLoading, COPY.zhCN.archiveLoading, COPY.zhTW.archiveLoading];
+  assert.deepEqual(messages, ["Loading results…", "正在加载结果…", "正在載入結果…"]);
+  assert.ok(messages.every((message) => message.endsWith("…") && !message.includes("...")));
+  assert.deepEqual(
+    messages.map((message) => [...message.matchAll(/\{[a-z]+\}/g)].map(String)),
+    [[], [], []]
+  );
+});
+
+test("fatal startup copy keeps matching keys and a localized Simplified Chinese title", () => {
+  const startupKeys = ["startupFailedMessage", "startupFailedTitle"];
+  for (const locale of Object.values(COPY)) {
+    assert.deepEqual(Object.keys(locale).filter((key) => key.startsWith("startupFailed")).sort(), startupKeys);
+  }
+  assert.equal(COPY.zhCN.startupFailedTitle, "PolyAsk 无法启动");
+});
+
+test("renderer bootstrap recovery copy stays complete and localized", () => {
+  const expected = {
+    en: [
+      "Starting PolyAsk…",
+      "PolyAsk could not load the workspace.",
+      "Try again",
+      "Could not apply display preferences"
+    ],
+    zhCN: [
+      "正在启动 PolyAsk……",
+      "PolyAsk 工作区加载失败。",
+      "重试",
+      "无法应用显示偏好设置"
+    ],
+    zhTW: [
+      "正在啟動 PolyAsk……",
+      "PolyAsk 工作區載入失敗。",
+      "重試",
+      "無法套用顯示偏好設定"
+    ]
+  } as const;
+
+  for (const locale of Object.keys(expected) as Array<keyof typeof expected>) {
+    const copy = COPY[locale];
+    const messages = [
+      copy.shellLoading,
+      copy.shellLoadFailed,
+      copy.retryShellLoad,
+      copy.displayPreferencesFailed
+    ];
+    assert.deepEqual(messages, expected[locale]);
+    assert.ok(messages.every((message) => !message.includes("...")));
+    assert.deepEqual(
+      messages.map((message) => [...message.matchAll(/\{[a-z]+\}/g)].map(String)),
+      [[], [], [], []]
+    );
+  }
+});
+
+test("run recovery and new-session copy keeps matching keys and placeholders", () => {
+  assert.deepEqual(
+    [
+      COPY.en.failedSummary,
+      COPY.en.cancelledSummary,
+      COPY.en.mixedFailureSummary,
+      COPY.en.retryFailedSites,
+      COPY.en.retryCancelledSites,
+      COPY.en.retryFailedOrCancelledSites,
+      COPY.en.newSessionDone,
+      COPY.en.newSessionPartial
+    ],
+    [
+      "{count} selected sites failed",
+      "Sending was cancelled for {count} selected sites",
+      "Selected sites: {failed} failed, {cancelled} cancelled",
+      "Retry {count} failed sites",
+      "Retry {count} cancelled sites",
+      "Retry {count} failed or cancelled sites",
+      "New sessions opened for {count} selected sites",
+      "New sessions opened for {ok} sites; {failed} failed"
+    ]
+  );
+  assert.deepEqual(
+    [
+      COPY.zhCN.failedSummary,
+      COPY.zhCN.cancelledSummary,
+      COPY.zhCN.mixedFailureSummary,
+      COPY.zhCN.retryFailedSites,
+      COPY.zhCN.retryCancelledSites,
+      COPY.zhCN.retryFailedOrCancelledSites,
+      COPY.zhCN.newSessionDone,
+      COPY.zhCN.newSessionPartial
+    ],
+    [
+      "{count} 个已选站点失败",
+      "{count} 个已选站点已取消发送",
+      "已选站点：{failed} 个失败，{cancelled} 个已取消发送",
+      "重试 {count} 个失败站点",
+      "重试 {count} 个已取消站点",
+      "重试 {count} 个失败或已取消站点",
+      "已为 {count} 个已选站点新建会话",
+      "已为 {ok} 个站点新建会话，{failed} 个失败"
+    ]
+  );
+  assert.deepEqual(
+    [
+      COPY.zhTW.failedSummary,
+      COPY.zhTW.cancelledSummary,
+      COPY.zhTW.mixedFailureSummary,
+      COPY.zhTW.retryFailedSites,
+      COPY.zhTW.retryCancelledSites,
+      COPY.zhTW.retryFailedOrCancelledSites,
+      COPY.zhTW.newSessionDone,
+      COPY.zhTW.newSessionPartial
+    ],
+    [
+      "{count} 個已選網站失敗",
+      "{count} 個已選網站已取消傳送",
+      "已選網站：{failed} 個失敗，{cancelled} 個已取消傳送",
+      "重試 {count} 個失敗網站",
+      "重試 {count} 個已取消網站",
+      "重試 {count} 個失敗或已取消網站",
+      "已為 {count} 個已選網站新增對話",
+      "已為 {ok} 個網站新增對話，{failed} 個失敗"
+    ]
+  );
+  for (const locale of Object.values(COPY)) {
+    assert.deepEqual([...locale.failedSummary.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.cancelledSummary.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual(
+      [...locale.mixedFailureSummary.matchAll(/\{[a-z]+\}/g)].map(String),
+      ["{failed}", "{cancelled}"]
+    );
+    assert.deepEqual([...locale.retryFailedSites.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.retryCancelledSites.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual(
+      [...locale.retryFailedOrCancelledSites.matchAll(/\{[a-z]+\}/g)].map(String),
+      ["{count}"]
+    );
+    assert.deepEqual([...locale.newSessionDone.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.newSessionPartial.matchAll(/\{[a-z]+\}/g)].map(String), ["{ok}", "{failed}"]);
+  }
+});
+
 test("desktop shell resolves exact supported locale and falls back to English", () => {
   assert.equal(getCopy("zh-CN").send, "发送");
   assert.equal(getCopy("zh-TW").send, "傳送");
@@ -89,10 +246,18 @@ test("dense tiles show short text only for statuses that need attention", () => 
   assert.equal(visibleStatus(copy, { site: "claude", phase: "sending" }), null);
   assert.equal(
     visibleStatus(copy, { site: "claude", phase: "warning", code: "tier_unconfirmed" }),
-    "Sent with warning"
+    "Sent; response mode not confirmed"
   );
   assert.equal(
     visibleStatus(copy, { site: "claude", phase: "failed", code: "submit_unconfirmed" }),
+    "Whether it was sent is unconfirmed"
+  );
+  assert.equal(
+    visibleStatus(copy, { site: "claude", phase: "failed", code: "composer_not_found" }),
+    "Prompt box not found"
+  );
+  assert.equal(
+    visibleStatus(copy, { site: "claude", phase: "failed", code: "private_reason" }),
     "Failed"
   );
   assert.equal(visibleStatus(copy, { site: "claude", phase: "crashed" }), "Stopped");

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   type MenuItemConstructorOptions
 } from "electron";
@@ -26,6 +27,7 @@ import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
 import { SITES } from "./sites";
+import { runStartup } from "./startup";
 import { statusForResult } from "./status";
 import { createSyncRuntime } from "./sync-runtime";
 import { SynthesisService } from "./synthesis-service";
@@ -190,14 +192,15 @@ async function createWindow(): Promise<void> {
   );
   viewManager = manager;
   if (!desktopDatabase) throw new Error("database_not_ready");
-  const workspace = new WorkspaceService(
-    desktopDatabase.state,
-    desktopDatabase.meta,
-    (site, url) => manager.navigate(site, url)
-  );
   const collection = new CollectionService(
     SITES,
     (site, deadline) => manager.collect(site, deadline)
+  );
+  const workspace = new WorkspaceService(
+    desktopDatabase.state,
+    desktopDatabase.meta,
+    (site, url) => manager.navigate(site, url),
+    { onNewSession: () => collection.clearRun() }
   );
   const deviceId = () => {
     const stored = desktopDatabase?.meta.get<unknown>("deviceId");
@@ -222,6 +225,7 @@ async function createWindow(): Promise<void> {
       );
     },
     collect: (sites, runId) => collection.collect(sites, runId),
+    beforeSend: () => collection.clearRun(),
     showTarget: (site) => {
       manager.setSurface("sites");
       manager.setLayout("focus", site);
@@ -261,6 +265,20 @@ async function createWindow(): Promise<void> {
   });
 }
 
+function failStartup(error: unknown): void {
+  try {
+    try {
+      console.error("PolyAsk startup failed", error);
+    } catch {
+      // Continue to the visible failure path if diagnostic output is unavailable.
+    }
+    const copy = getCopy(app.getLocale());
+    dialog.showErrorBox(copy.startupFailedTitle, copy.startupFailedMessage);
+  } finally {
+    app.quit();
+  }
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 else {
@@ -272,12 +290,14 @@ else {
   app.on("web-contents-created", (_event, contents) => {
     contents.on("will-attach-webview", (event) => event.preventDefault());
   });
-  void app.whenReady().then(async () => {
+  app.on("activate", () => {
+    if (!mainWindow) void runStartup(createWindow, failStartup);
+  });
+  void app.whenReady().then(() => runStartup(async () => {
     desktopDatabase = DesktopDatabase.open(join(app.getPath("userData"), "polyask.sqlite"));
     createMenu();
     await createWindow();
-    app.on("activate", () => { if (!mainWindow) void createWindow(); });
-  });
+  }, failStartup));
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });

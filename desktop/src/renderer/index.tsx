@@ -5,20 +5,25 @@ import type { SiteDefinition } from "../shared/contracts";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
 import { unsupportedImageSites } from "../shared/images";
-import type { DesktopSurface, LayoutState, SiteStatus } from "../shared/protocol";
+import type { BootstrapState, DesktopSurface, LayoutState, SiteStatus } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
 import { ArchiveSurface } from "./archive-surface";
-import { CommandBar, type RunState } from "./command-bar";
+import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
+import { BootstrapStateView } from "./bootstrap-state";
+import { ExclusiveActionLock } from "./broadcast-flow-state";
+import { CommandBar } from "./command-bar";
 import {
+  applyDisplayDensity,
+  applyDisplayPreferences,
   loadDisplayPreferences,
-  saveDisplayPreferences
 } from "./display-preferences";
 import { ImagePicker } from "./image-picker";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import { useArchiveCapture } from "./use-archive-capture";
+import { useBroadcastFlow } from "./use-broadcast-flow";
 import { useImageSelection } from "./use-image-selection";
 import { useSynthesisFlow } from "./use-synthesis-flow";
 import { useWorkspaceFlow } from "./use-workspace-flow";
@@ -41,21 +46,19 @@ const INITIAL_SYNC: SyncStatus = {
   readOnly: false, oauthConfigured: false, secureTokenStorage: true
 };
 
-function applyDisplayPreferences(value: DisplayPreferences): void {
-  document.documentElement.dataset.density = value.density;
-  saveDisplayPreferences(window.localStorage, value);
-}
-
-applyDisplayPreferences(INITIAL_DISPLAY);
+applyDisplayDensity(document.documentElement, INITIAL_DISPLAY);
 
 function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const bootstrapStarted = useRef(false);
+  const actionLock = useRef<ExclusiveActionLock | null>(null);
+  if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
+  const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
   const [text, setText] = useState("");
-  const [runState, setRunState] = useState<RunState>("idle");
   const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -68,33 +71,56 @@ function App(): React.JSX.Element {
     setDrawerOpen(value);
     window.polyask.setDrawerOpen(value);
   };
-  const imageSelection = useImageSelection(copy, runState === "idle", setAnnouncement);
   const synthesis = useSynthesisFlow();
+  const archiveCapture = useArchiveCapture({ sites, selected, prompt: text });
+  const broadcast = useBroadcastFlow(
+    () => setAnnouncement(copy.failed),
+    archiveCapture.remember,
+    archiveCapture.invalidate
+  );
+  const { runState } = broadcast;
+  const imageSelection = useImageSelection(copy, runState === "idle", setAnnouncement);
   const { images, open: imageTrayOpen } = imageSelection;
+  const acceptDisplayPreferences = (value: DisplayPreferences): void => {
+    applyDisplayPreferences(
+      document.documentElement,
+      window.localStorage,
+      value,
+      () => setAnnouncement(copy.displayPreferencesFailed)
+    );
+  };
+
+  const acceptBootstrap = (state: BootstrapState): void => {
+    setSites(state.sites);
+    setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
+    setLayout(state.layout);
+    workspaceFlow.accept(state.workspace);
+    synthesis.acceptPending(state.pendingSynthesis);
+    setSyncStatus(state.sync);
+  };
+  const bootstrap = async (): Promise<void> => {
+    setBootstrapPhase("loading");
+    setBootstrapPhase(await loadBootstrap(window.polyask.bootstrap, acceptBootstrap));
+  };
 
   useEffect(() => {
-    let active = true;
-    void window.polyask.bootstrap().then((state) => {
-      if (!active) return;
-      setSites(state.sites);
-      setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
-      setLayout(state.layout);
-      workspaceFlow.accept(state.workspace);
-      synthesis.acceptPending(state.pendingSynthesis);
-      setSyncStatus(state.sync);
-    });
+    if (!bootstrapStarted.current) {
+      bootstrapStarted.current = true;
+      void bootstrap();
+      void window.polyask.setDisplayPreferences(INITIAL_DISPLAY)
+        .then(acceptDisplayPreferences)
+        .catch(() => setAnnouncement(copy.displayPreferencesFailed));
+    }
     const offStatus = window.polyask.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
       setAnnouncement(`${status.site}: ${describeStatus(copy, status)}`);
     });
     const offLayout = window.polyask.onLayout(setLayout);
-    const offDisplay = window.polyask.onDisplayPreferences(applyDisplayPreferences);
+    const offDisplay = window.polyask.onDisplayPreferences(acceptDisplayPreferences);
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
     const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
     const offSync = window.polyask.onSyncStatus(setSyncStatus);
-    void window.polyask.setDisplayPreferences(INITIAL_DISPLAY).then(applyDisplayPreferences);
     return () => {
-      active = false;
       offStatus();
       offLayout();
       offDisplay();
@@ -111,7 +137,6 @@ function App(): React.JSX.Element {
     () => Object.values(statuses).filter((status) => status.phase === "sending").length,
     [statuses]
   );
-  const archiveCapture = useArchiveCapture({ sites, selected, prompt: text });
   const unsupportedSites = useMemo(() => {
     if (!images.length) return [];
     const unsupported = new Set(unsupportedImageSites([...selected], sites));
@@ -127,28 +152,21 @@ function App(): React.JSX.Element {
   const submit = async (): Promise<void> => {
     const prompt = text.trim();
     if (!prompt || selected.size === 0 || runState !== "idle") return;
-    if (imageWarning) {
-      setAnnouncement(imageWarning);
-      imageSelection.setOpen(false);
-      changeDrawerOpen(true);
-      return;
-    }
-    imageSelection.invalidateAndClose();
-    setRunState("sending");
-    try {
-      const request = {
+    await actionLock.current!.run(async () => {
+      if (imageWarning) {
+        setAnnouncement(imageWarning);
+        imageSelection.setOpen(false);
+        changeDrawerOpen(true);
+        return;
+      }
+      imageSelection.invalidateAndClose();
+      await broadcast.send({
         text: prompt,
         tier: workspace.tier,
         sites: [...selected],
         images
-      };
-      const results = await window.polyask.broadcast(request);
-      archiveCapture.remember(request, results);
-    } catch {
-      setAnnouncement(copy.failed);
-    } finally {
-      setRunState("idle");
-    }
+      });
+    });
   };
 
   const setMode = (mode: "overview" | "focus", focused = layout.focused): void => {
@@ -164,9 +182,18 @@ function App(): React.JSX.Element {
     setSurface(value);
     window.polyask.setSurface(value);
   };
-  const collectAndCopy = async (): Promise<void> => {
-    if (auxiliaryBusy || runState !== "idle") return;
-    setAuxiliaryBusy(true);
+  const runAuxiliary = async (action: () => Promise<void>): Promise<void> => {
+    if (runState !== "idle") return;
+    await actionLock.current!.run(async () => {
+      setAuxiliaryBusy(true);
+      try {
+        await action();
+      } finally {
+        setAuxiliaryBusy(false);
+      }
+    });
+  };
+  const collectAndCopy = async (): Promise<void> => runAuxiliary(async () => {
     try {
       const record = await archiveCapture.capture();
       const markdown = await window.polyask.archiveMarkdown(record.id, navigator.language);
@@ -174,22 +201,42 @@ function App(): React.JSX.Element {
       setAnnouncement(copy.archiveCollected);
     } catch {
       setAnnouncement(copy.archiveCollectFailed);
-    } finally {
-      setAuxiliaryBusy(false);
     }
-  };
-  const collectSynthesis = async (): Promise<void> => {
-    if (auxiliaryBusy || runState !== "idle") return;
-    setAuxiliaryBusy(true);
+  });
+  const collectSynthesis = async (): Promise<void> => runAuxiliary(async () => {
     try {
       await synthesis.collect();
       changeSurface("archive");
     } catch { setAnnouncement(copy.synthesisCollectFailed); }
-    finally { setAuxiliaryBusy(false); }
-  };
+  });
+  const startNewSession = async (): Promise<void> => runAuxiliary(async () => {
+    const selectedSites = [...selected];
+    broadcast.invalidate();
+    archiveCapture.invalidate();
+    try {
+      const results = await window.polyask.newSession(selectedSites);
+      const failed = results.filter((result) => !result.ok).length;
+      setAnnouncement(failed
+        ? formatCopy(copy.newSessionPartial, { ok: results.length - failed, failed })
+        : formatCopy(copy.newSessionDone, { count: results.length }));
+    } catch {
+      workspaceFlow.recover();
+    }
+  });
+
+  if (bootstrapPhase !== "ready") {
+    return (
+      <BootstrapStateView
+        copy={copy}
+        phase={bootstrapPhase}
+        announcement={announcement}
+        onRetry={() => { void bootstrap(); }}
+      />
+    );
+  }
 
   if (surface === "archive") {
-    return <ArchiveSurface copy={copy} locale={navigator.language} sites={sites} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} />;
+    return <ArchiveSurface copy={copy} locale={navigator.language} sites={sites} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} />;
   }
   if (surface === "settings") {
     return <SettingsWorkspace copy={copy} locale={navigator.language} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} />;
@@ -208,6 +255,8 @@ function App(): React.JSX.Element {
         selectedCount={selected.size}
         totalSites={sites.length || 9}
         activeCount={activeCount}
+        failureCount={broadcast.failureCount}
+        cancelledCount={broadcast.cancelledCount}
         drawerOpen={drawerOpen}
         imageControl={(
           <ImagePicker
@@ -231,14 +280,15 @@ function App(): React.JSX.Element {
         expanded={composerExpanded}
         onTextChange={setText}
         onSubmit={() => void submit()}
-        onCancel={() => { setRunState("cancelling"); window.polyask.cancel(); }}
+        onCancel={broadcast.cancel}
         onTierChange={workspaceFlow.changeTier}
         onLayoutChange={setMode}
         onExpandedChange={setPromptExpanded}
         onToggleDrawer={() => {
           changeDrawerOpen(!drawerOpen);
         }}
-        onNewSession={() => { void window.polyask.newSession([...selected]).catch(workspaceFlow.recover); }}
+        onNewSession={() => { void startNewSession(); }}
+        onRetryFailed={() => { void actionLock.current!.run(broadcast.retry); }}
         onCollectAnswers={() => { void collectAndCopy(); }}
         onOpenArchive={() => changeSurface("archive")}
         onCollectSynthesis={() => { void collectSynthesis(); }}

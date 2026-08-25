@@ -35,3 +35,9 @@ test("desktop focus, reduced motion and Windows high contrast remain explicit", 
   assert.match(css, /forced-colors:\s*active/);
   assert.match(css, /touch-action:\s*manipulation/);
 });
+
+test("Drive idle success color requires an active connection", () => {
+  const css = renderer("settings.css");
+  assert.match(css, /\.sync-state\[data-connected="true"\]\[data-state="idle"\] i\s*\{\s*background:\s*var\(--success\);\s*\}/);
+  assert.doesNotMatch(css, /\.sync-state\[data-state="idle"\] i\s*\{/);
+});

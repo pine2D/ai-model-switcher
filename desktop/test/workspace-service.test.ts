@@ -75,16 +75,89 @@ test("workspace groups reject invalid values and deletion writes a tombstone", (
   }
 });
 
-test("new session reloads selected sites at canonical URLs without touching others", async () => {
+test("new session returns canonical outcomes for every selected site", async () => {
   const { database, navigations, service } = fixture();
   try {
-    await service.newSession(["claude", "kimi"]);
+    const results = await service.newSession(["claude", "kimi"]);
+    assert.deepEqual(results, [
+      { site: "claude", ok: true },
+      { site: "kimi", ok: true }
+    ]);
     assert.deepEqual(navigations, [
       ["claude", "https://claude.ai/new"],
       ["kimi", "https://www.kimi.com/"]
     ]);
     await assert.rejects(() => service.newSession([]), /no_selected_sites/);
     await assert.rejects(() => service.newSession(["claude", "claude"]), /duplicate_site/);
+  } finally {
+    database.close();
+  }
+});
+
+test("new session preserves all selected-site outcomes when one navigation fails", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  const navigations: string[] = [];
+  try {
+    const service = new WorkspaceService(
+      database.state,
+      database.meta,
+      async (site) => {
+        navigations.push(site);
+        if (site === "gemini") throw new Error("navigation failed");
+      }
+    );
+    const results = await service.newSession(["deepseek", "claude", "kimi", "gemini", "chatgpt"]);
+    assert.deepEqual(results, [
+      { site: "claude", ok: true },
+      { site: "chatgpt", ok: true },
+      { site: "gemini", ok: false, code: "not_ready" },
+      { site: "deepseek", ok: true },
+      { site: "kimi", ok: true }
+    ]);
+    assert.deepEqual(navigations, ["claude", "chatgpt", "gemini", "deepseek", "kimi"]);
+  } finally {
+    database.close();
+  }
+});
+
+test("new session invalidates only after accepting a normalized selection", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  const invalidations: string[][] = [];
+  try {
+    const options = {
+      onNewSession: (sites: readonly string[]) => { invalidations.push([...sites]); }
+    };
+    const service = new WorkspaceService(
+      database.state,
+      database.meta,
+      () => undefined,
+      options
+    );
+    await service.newSession(["kimi", "claude"]);
+    assert.deepEqual(invalidations, [["claude", "kimi"]]);
+    await assert.rejects(() => service.newSession([]), /no_selected_sites/);
+    await assert.rejects(() => service.newSession(["claude", "claude"]), /duplicate_site/);
+    await assert.rejects(() => service.newSession(["unknown"]), /unknown_site/);
+    assert.deepEqual(invalidations, [["claude", "kimi"]]);
+  } finally {
+    database.close();
+  }
+});
+
+test("new session invalidates the active run before the first navigation", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  const events: string[] = [];
+  try {
+    const service = new WorkspaceService(
+      database.state,
+      database.meta,
+      (site) => { events.push(`navigate:${site}`); },
+      { onNewSession: (sites) => { events.push(`invalidate:${sites.join(",")}`); } }
+    );
+
+    await service.newSession(["kimi", "claude"]);
+
+    assert.deepEqual(events, ["invalidate:claude,kimi", "navigate:claude", "navigate:kimi"]);
   } finally {
     database.close();
   }

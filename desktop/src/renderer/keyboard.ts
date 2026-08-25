@@ -5,8 +5,13 @@ export interface PromptKeyEvent {
   readonly isComposing: boolean;
 }
 
-export function commandKeyAction(event: PromptKeyEvent): "submit" | "collapse" | null {
+export function commandKeyAction(
+  event: PromptKeyEvent,
+  submitBlocked = false
+): "submit" | "collapse" | null {
   if (event.isComposing) return null;
-  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") return "submit";
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    return submitBlocked ? null : "submit";
+  }
   return event.key === "Escape" ? "collapse" : null;
 }

@@ -24,6 +24,7 @@ interface ArchiveWorkspaceProps {
   readonly query: string;
   readonly favoriteOnly: boolean;
   readonly selectedTag: string;
+  readonly loading: boolean;
   readonly busy: boolean;
   readonly status: string;
   readonly onClose: () => void;
@@ -47,6 +48,9 @@ interface ArchiveWorkspaceProps {
 
 export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Element {
   const { copy, selected } = props;
+  const emptyText = props.query || props.favoriteOnly || props.selectedTag
+    ? copy.archiveNoMatches
+    : copy.archiveEmpty;
   const [armed, setArmed] = useState<ArmedArchiveDelete | null>(null);
   useEffect(() => setArmed(null), [selected?.id]);
   useEffect(() => {
@@ -67,9 +71,9 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
       <header className="archive-toolbar">
         <strong><ArchiveIcon />{copy.archiveTitle}</strong>
         <div className="archive-filters">
-          <input type="search" name="archive-search" autoComplete="off" value={props.query} placeholder={copy.archiveSearch} aria-label={copy.archiveSearch} onChange={(event) => props.onQueryChange(event.target.value)} />
-          <button type="button" className={props.favoriteOnly ? "active" : ""} title={copy.favoriteArchives} aria-label={copy.favoriteArchives} aria-pressed={props.favoriteOnly} onClick={() => props.onFavoriteFilterChange(!props.favoriteOnly)}><StarIcon /></button>
-          <select name="archive-tag-filter" value={props.selectedTag} aria-label={copy.archiveTags} onChange={(event) => props.onTagChange(event.target.value)}>
+          <input type="search" name="archive-search" autoComplete="off" value={props.query} placeholder={copy.archiveSearch} aria-label={copy.archiveSearch} disabled={props.busy} onChange={(event) => props.onQueryChange(event.target.value)} />
+          <button type="button" className={props.favoriteOnly ? "active" : ""} title={copy.favoriteArchives} aria-label={copy.favoriteArchives} aria-pressed={props.favoriteOnly} disabled={props.busy} onClick={() => props.onFavoriteFilterChange(!props.favoriteOnly)}><StarIcon /></button>
+          <select name="archive-tag-filter" value={props.selectedTag} aria-label={copy.archiveTags} disabled={props.busy} onChange={(event) => props.onTagChange(event.target.value)}>
             <option value="">{copy.allArchiveTags}</option>
             {props.tags.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
           </select>
@@ -79,24 +83,31 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
           <button type="button" title={copy.copyArchive} aria-label={copy.copyArchive} disabled={!selected || props.busy} onClick={props.onCopy}><CopyIcon /></button>
           <button type="button" title={copy.exportArchive} aria-label={copy.exportArchive} disabled={!selected || props.busy} onClick={props.onExport}><DownloadIcon /></button>
           <button type="button" className={armed?.id === selected?.id ? "danger" : ""} title={armed?.id === selected?.id ? copy.confirmDeleteArchive : copy.deleteArchive} aria-label={armed?.id === selected?.id ? copy.confirmDeleteArchive : copy.deleteArchive} disabled={!selected || props.busy} onClick={requestDelete}><TrashIcon /></button>
-          <button type="button" title={copy.closeArchive} aria-label={copy.closeArchive} onClick={props.onClose}><CloseIcon /></button>
+          <button type="button" title={copy.closeArchive} aria-label={copy.closeArchive} disabled={props.busy} onClick={props.onClose}><CloseIcon /></button>
         </div>
       </header>
       <div className="archive-body">
-        <aside className="archive-list" aria-label={copy.archiveTitle}>
-          {props.items.map((record) => (
-            <button type="button" key={record.id} aria-current={record.id === selected?.id ? "true" : undefined} onClick={() => props.onSelect(record.id)}>
-              <time dateTime={new Date(record.ts).toISOString()}>{formatDateTime(record.ts, props.locale)}</time>
-              <span>{record.task || record.preview || "—"}</span>
-              <small>{record.results.map((result) => result.label).join(" · ")}</small>
-              {record.favorite || record.tags.length ? <span className="archive-badges">{record.favorite ? <StarIcon /> : null}{record.tags.map((tag) => <i key={tag}>{tag}</i>)}</span> : null}
-            </button>
-          ))}
-          {!props.items.length ? <p>{props.query || props.favoriteOnly || props.selectedTag ? copy.archiveNoMatches : copy.archiveEmpty}</p> : null}
-        </aside>
-        <main className="archive-detail-pane">
-          {props.detailOverride ?? (selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} pendingSynthesis={props.pendingSynthesis} synthesisCandidate={props.synthesisCandidate} busy={props.busy} onSynthesize={props.onSynthesize} onCollectSynthesis={props.onCollectSynthesis} onSaveSynthesis={props.onSaveSynthesis} /> : <p>{copy.archiveEmpty}</p>)}
-        </main>
+        {props.loading || !props.items.length ? (
+          <div className="archive-empty" role="status">
+            {props.loading ? copy.archiveLoading : emptyText}
+          </div>
+        ) : (
+          <>
+            <aside className="archive-list" aria-label={copy.archiveTitle}>
+              {props.items.map((record) => (
+                <button type="button" key={record.id} aria-current={record.id === selected?.id ? "true" : undefined} disabled={props.busy} onClick={() => props.onSelect(record.id)}>
+                  <time dateTime={new Date(record.ts).toISOString()}>{formatDateTime(record.ts, props.locale)}</time>
+                  <span>{record.task || record.preview || "—"}</span>
+                  <small>{record.results.map((result) => result.label).join(" · ")}</small>
+                  {record.favorite || record.tags.length ? <span className="archive-badges">{record.favorite ? <StarIcon /> : null}{record.tags.map((tag) => <i key={tag}>{tag}</i>)}</span> : null}
+                </button>
+              ))}
+            </aside>
+            <main className="archive-detail-pane">
+              {props.detailOverride ?? (selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} pendingSynthesis={props.pendingSynthesis} synthesisCandidate={props.synthesisCandidate} busy={props.busy} onSynthesize={props.onSynthesize} onCollectSynthesis={props.onCollectSynthesis} onSaveSynthesis={props.onSaveSynthesis} /> : null)}
+            </main>
+          </>
+        )}
       </div>
       <div className="archive-status" role="status" aria-live="polite">{props.status}</div>
     </section>

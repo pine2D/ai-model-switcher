@@ -20,6 +20,8 @@ interface CommandBarProps {
   readonly selectedCount: number;
   readonly totalSites: number;
   readonly activeCount: number;
+  readonly failureCount: number;
+  readonly cancelledCount: number;
   readonly drawerOpen: boolean;
   readonly imageControl: ReactNode;
   readonly sendBlockedReason: string | null;
@@ -35,6 +37,7 @@ interface CommandBarProps {
   readonly onExpandedChange: (value: boolean) => void;
   readonly onToggleDrawer: () => void;
   readonly onNewSession: () => void;
+  readonly onRetryFailed: () => void;
   readonly onCollectAnswers: () => void;
   readonly onOpenArchive: () => void;
   readonly onCollectSynthesis: () => void;
@@ -54,6 +57,8 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     selectedCount,
     totalSites,
     activeCount,
+    failureCount,
+    cancelledCount,
     drawerOpen,
     imageControl,
     sendBlockedReason,
@@ -68,6 +73,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     onExpandedChange,
     onToggleDrawer,
     onNewSession,
+    onRetryFailed,
     onCollectAnswers,
     onOpenArchive,
     onCollectSynthesis,
@@ -110,7 +116,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
             ctrlKey: event.ctrlKey,
             metaKey: event.metaKey,
             isComposing: event.nativeEvent.isComposing
-          });
+          }, runState !== "idle" || auxiliaryBusy);
           if (action === "submit") {
             event.preventDefault();
             onSubmit();
@@ -132,12 +138,15 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
         selectedCount={selectedCount}
         totalSites={totalSites}
         activeCount={activeCount}
+        failureCount={failureCount}
+        cancelledCount={cancelledCount}
         drawerOpen={drawerOpen}
         disabled={runState !== "idle" || auxiliaryBusy}
         synthesisPending={synthesisPending}
         syncStatus={props.syncStatus}
         onToggleDrawer={onToggleDrawer}
         onNewSession={onNewSession}
+        onRetryFailed={onRetryFailed}
         onCollectAnswers={onCollectAnswers}
         onOpenArchive={onOpenArchive}
         onCollectSynthesis={onCollectSynthesis}

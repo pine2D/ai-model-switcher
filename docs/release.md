@@ -17,10 +17,13 @@ bash scripts/release.sh --publish      # 推 v* tag；Release workflow 构建并
 
 `--publish` 只在**工作区干净、分支为 main 且跟踪 origin/main、HEAD 已完整推送、exact-HEAD 的 CI 成功、tag 不存在**时才推 tag。Release workflow 再校验同一提交确实位于 `origin/main` 且 CI 成功，之后并行构建各平台。**已发布 tag 不覆盖；要改内容必须升新版本。** 脚本用法跑 `-h`。
 
+`prepare-release.sh auto` 只读取当前版本 tag 之后已经提交的 Conventional Commits。待发布改动尚未提交时，应根据 `[未发布]` 内容显式传入 `patch`、`minor` 或 `major`；不要让 `auto` 猜测尚未进入 Git 历史的改动。
+
 每个 Release 应包含：
 
 - Chrome：`polyask-vX.Y.Z.zip` 及 SHA-256。
 - Windows x64：`polyask-desktop-vX.Y.Z-windows-x64.exe` 及 SHA-256。
+- Windows x64 免安装版：`polyask-desktop-vX.Y.Z-windows-x64-portable.zip` 及 SHA-256。
 - Linux x64：`polyask-desktop-vX.Y.Z-linux-x64.deb` 及 SHA-256。
 - macOS：`polyask-desktop-vX.Y.Z-macos-x64.zip`、`polyask-desktop-vX.Y.Z-macos-arm64.zip` 及各自 SHA-256。
 - `CHANGELOG.md` 对应版本段作为 Release 正文。
@@ -54,8 +57,8 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
 - 更新 `CLAUDE.md` 顶部的「最后与代码核对」日期与版本。
 - 确认 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 存在，OAuth consent screen 的 Audience/测试用户或 Production 状态符合本次发布对象；Client ID 已打包不等于公众账号一定能完成授权。
-- 在能取得原生机器时，至少安装一次本版 Windows `.exe`、Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
-- 核对 Release 资产恰好包含 5 个主包、5 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
+- 在能取得原生机器时，至少运行一次本版 Windows `.exe` 安装包和免安装 ZIP，并安装 Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
+- 核对 Release 资产恰好包含 6 个主包、6 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
 - **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。
 
 ## 用户可见文案

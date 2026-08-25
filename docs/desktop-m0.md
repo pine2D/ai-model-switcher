@@ -161,13 +161,13 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 ## 当前实现状态
 
-已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁九个站点视图，支持搜索、收藏、标签、备注、最佳答案和 Markdown 预览/导出。辅助综合同样复用单窗口结果库：选择至少两条成功回答并预览完整载荷后，只向一个目标原生站点的新会话发送；用户可实时观察生成，再采集并经确认写回原归档。Google Drive 同步已迁移 schema 1 数据、原生 OAuth/PKCE、操作系统令牌保护、增量同步、退避、未来格式只读和受保护的云端清理。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
+已完成 M0 纵向切片和综合密度布局：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、3×3 Grid、宽屏 4×3 Focus、窄屏 3×4 Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层、三语错误/警示状态、单站重载和跨视图键盘焦点命令。群发结果区分失败与取消，并可按原发送范围重试；任意数量的已选站点使用同一套结果和重试逻辑。站点范围、档位和用户分组已持久化；命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁九个站点视图，支持搜索、收藏、标签、备注、最佳答案和 Markdown 预览/导出。辅助综合同样复用单窗口结果库：选择至少两条成功回答并预览完整载荷后，只向一个目标原生站点的新会话发送；用户可实时观察生成，再采集并经确认写回原归档。Google Drive 同步已迁移 schema 1 数据、原生 OAuth/PKCE、操作系统令牌保护、增量同步、退避、未来格式只读和受保护的云端清理。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
 
 2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。人工验证进一步确认九站均可登录，Gemini 首次登录与群发成功；除 Kimi 因站点当时要求付费订阅而拒绝对话外，其余 8 站均成功提交并实时显示回答。该 Kimi 结果属于站点业务限制，不是容器、登录或群发链路故障。
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 131 项 TypeScript/React 测试与 4 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64、Linux x64、macOS x64/arm64 原生 maker 和逐包 SHA-256。远端矩阵结果不替代真机人工验收。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版和免安装 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
 
 2026-08-25 已创建独立 Desktop OAuth Client ID，并通过 Repository Variable 进入 Release 构建。实际 Linux x64 `.deb` 已通过 maker、文件名归一化和内容审计：包内存在普通用户可读的 `resources/oauth.json`，可执行文件与 `/usr/bin/polyask-desktop` 链接一致。该证据只覆盖 Client ID 入包，不等于系统浏览器授权、refresh token 或 Drive 联网同步已经通过。
 

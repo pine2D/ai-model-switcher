@@ -3,15 +3,67 @@ import React, { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 
+import { BootstrapStateView } from "../src/renderer/bootstrap-state";
 import { CommandBar } from "../src/renderer/command-bar";
 import { ImagePicker } from "../src/renderer/image-picker";
 import { SiteFrames } from "../src/renderer/site-frames";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
+import { WorkspaceActions } from "../src/renderer/workspace-actions";
 import { getCopy } from "../src/shared/copy";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
 
 const noop = () => undefined;
+
+test("bootstrap loading is a polite busy state without a retry action", () => {
+  const copy = getCopy("en");
+  const html = renderToStaticMarkup(
+    <BootstrapStateView copy={copy} phase="loading" announcement="" onRetry={noop} />
+  );
+
+  assert.match(html, /^<main class="shell-bootstrap" aria-busy="true">/);
+  assert.equal([...html.matchAll(/role="status"/g)].length, 1);
+  assert.match(html, /aria-live="polite"/);
+  assert.match(html, />Starting PolyAsk…</);
+  assert.doesNotMatch(html, /<button/);
+  assert.doesNotMatch(html, /Try again/);
+});
+
+test("bootstrap failure exposes one alert and one consistently named retry button", () => {
+  const copy = getCopy("en");
+  const html = renderToStaticMarkup(
+    <BootstrapStateView copy={copy} phase="failed" announcement="" onRetry={noop} />
+  );
+
+  assert.equal([...html.matchAll(/role="alert"/g)].length, 1);
+  assert.match(html, />PolyAsk could not load the workspace\.</);
+  assert.equal([...html.matchAll(/<button/g)].length, 1);
+  assert.match(
+    html,
+    /<button type="button" title="Try again" aria-label="Try again">Try again<\/button>/
+  );
+  assert.doesNotMatch(html, /aria-busy="true"/);
+});
+
+test("bootstrap states keep non-blocking announcements available to assistive technology", () => {
+  const copy = getCopy("en");
+  for (const phase of ["loading", "failed"] as const) {
+    const html = renderToStaticMarkup(
+      <BootstrapStateView
+        copy={copy}
+        phase={phase}
+        announcement={copy.displayPreferencesFailed}
+        onRetry={noop}
+      />
+    );
+
+    assert.equal([...html.matchAll(/aria-live="polite"/g)].length, phase === "loading" ? 2 : 1);
+    assert.match(
+      html,
+      /<div class="sr-only" aria-live="polite">Could not apply display preferences<\/div>/
+    );
+  }
+});
 
 test("command bar renders one compact command surface with stateful controls", () => {
   const html = renderToStaticMarkup(
@@ -26,6 +78,8 @@ test("command bar renders one compact command surface with stateful controls", (
       selectedCount={9}
       totalSites={9}
       activeCount={0}
+      failureCount={0}
+      cancelledCount={0}
       drawerOpen={false}
       imageControl={<span data-test="images" />}
       sendBlockedReason={null}
@@ -41,6 +95,7 @@ test("command bar renders one compact command surface with stateful controls", (
       onExpandedChange={noop}
       onToggleDrawer={noop}
       onNewSession={noop}
+      onRetryFailed={noop}
       onCollectAnswers={noop}
       onOpenArchive={noop}
       onCollectSynthesis={noop}
@@ -85,6 +140,8 @@ test("command bar surfaces actionable sync state without consuming toolbar width
       selectedCount={9}
       totalSites={9}
       activeCount={0}
+      failureCount={0}
+      cancelledCount={0}
       drawerOpen={false}
       imageControl={null}
       sendBlockedReason={null}
@@ -100,6 +157,7 @@ test("command bar surfaces actionable sync state without consuming toolbar width
       onExpandedChange={noop}
       onToggleDrawer={noop}
       onNewSession={noop}
+      onRetryFailed={noop}
       onCollectAnswers={noop}
       onOpenArchive={noop}
       onCollectSynthesis={noop}
@@ -111,6 +169,50 @@ test("command bar surfaces actionable sync state without consuming toolbar width
   assert.match(html, /class="sync-attention sync-auth"/);
   assert.match(html, /aria-label="Settings: Sign in again to continue"/);
   assert.match(html, /data-sync-state="auth"/);
+});
+
+test("workspace actions distinguish failed, cancelled and mixed retry summaries", () => {
+  const copy = getCopy("en");
+  const base = {
+    copy,
+    selectedCount: 5,
+    totalSites: 9,
+    activeCount: 0,
+    drawerOpen: false,
+    disabled: false,
+    synthesisPending: false,
+    syncStatus: { state: "idle", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: false, secureTokenStorage: true } as const,
+    onToggleDrawer: noop,
+    onNewSession: noop,
+    onRetryFailed: noop,
+    onCollectAnswers: noop,
+    onOpenArchive: noop,
+    onCollectSynthesis: noop,
+    onOpenSettings: noop
+  };
+  const failedHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} failureCount={2} cancelledCount={0} />
+  );
+  const cancelledHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} failureCount={0} cancelledCount={2} />
+  );
+  const mixedHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} failureCount={2} cancelledCount={1} />
+  );
+  const recoveredHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} failureCount={0} cancelledCount={0} />
+  );
+
+  assert.match(failedHtml, /2 selected sites failed/);
+  assert.equal([...failedHtml.matchAll(/title="Retry 2 failed sites"/g)].length, 1);
+  assert.equal([...failedHtml.matchAll(/aria-label="Retry 2 failed sites"/g)].length, 1);
+  assert.match(cancelledHtml, /Sending was cancelled for 2 selected sites/);
+  assert.equal([...cancelledHtml.matchAll(/title="Retry 2 cancelled sites"/g)].length, 1);
+  assert.equal([...cancelledHtml.matchAll(/aria-label="Retry 2 cancelled sites"/g)].length, 1);
+  assert.match(mixedHtml, /Selected sites: 2 failed, 1 cancelled/);
+  assert.equal([...mixedHtml.matchAll(/title="Retry 3 failed or cancelled sites"/g)].length, 1);
+  assert.equal([...mixedHtml.matchAll(/aria-label="Retry 3 failed or cancelled sites"/g)].length, 1);
+  assert.doesNotMatch(recoveredHtml, /Retry [0-9]+ (?:failed|cancelled)/);
 });
 
 test("image picker stays icon-first and exposes removable previews and scope warning", () => {
@@ -197,4 +299,37 @@ test("site frames keep all nine live placements and accessible actions", () => {
   assert.match(html, /aria-label="Reload Claude"/);
   assert.match(html, /class="tile-actions priority-p2"/);
   assert.match(html, /class="site-select priority-p0"/);
+});
+
+test("site frames visibly distinguish stable failure codes and retain full titles", () => {
+  const sites = SITES.filter((site) => site.key === "claude" || site.key === "gemini");
+  const placements: LayoutState["placements"] = sites.map((site, index) => ({
+    key: site.key,
+    bounds: { x: index * 100, y: 0, width: 100, height: 80 }
+  }));
+  const html = renderToStaticMarkup(
+    <SiteFrames
+      copy={getCopy("en")}
+      sites={sites}
+      statuses={{
+        claude: { site: "claude", phase: "failed", code: "submit_unconfirmed" },
+        gemini: { site: "gemini", phase: "failed", code: "composer_not_found" }
+      }}
+      layout={{ mode: "overview", focused: "claude", placements }}
+      selected={new Set(["claude", "gemini"])}
+      onToggle={noop}
+      onFocus={noop}
+      onReload={noop}
+    />
+  );
+
+  assert.equal([...html.matchAll(/<article class="tile-frame/g)].length, 2);
+  assert.match(
+    html,
+    /<span class="site-state priority-p0" title="Whether it was sent is unconfirmed">Whether it was sent is unconfirmed<\/span>/
+  );
+  assert.match(
+    html,
+    /<span class="site-state priority-p0" title="Prompt box not found">Prompt box not found<\/span>/
+  );
 });

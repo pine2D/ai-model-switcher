@@ -101,5 +101,5 @@ if [ "$MODE" = "publish" ]; then
     echo "tag 推送失败；本地 $TAG 保留，请查明后重试 git push origin $TAG" >&2
     exit 1
   fi
-  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布 Chrome ZIP、四个 Desktop 预览包、校验和与 CHANGELOG 说明。"
+  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布 Chrome ZIP、五个 Desktop 预览包、校验和与 CHANGELOG 说明。"
 fi

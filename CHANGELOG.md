@@ -8,6 +8,32 @@
 
 ## [未发布]
 
+## [0.18.0] - 2026-08-26
+
+### 新增
+
+- Desktop 群发支持重试失败或已取消的站点，并沿用原发送范围
+- 新增 Windows x64 免安装 ZIP 预览包
+
+### 变更
+
+- Desktop 群发结果按站点显示失败原因，并汇总失败、取消和实际重试数量
+- Drive 未连接时明确提示数据仅保存在本机
+- Desktop 结果库分别显示空库与无匹配状态
+- Desktop Markdown 预览改用标准项目列表，方便辅助技术识别
+
+### 修复
+
+- 修复 Desktop 群发、重试、新会话和结果采集可能重复触发的问题
+- 修复 Desktop 结果库可能被较早的筛选请求覆盖的问题
+- 修复 Desktop Google Drive 授权失败后出现未处理异常警告的问题
+- 修复 Desktop 结果库加载时闪出空状态的问题
+- 修复 Desktop 开始新一轮群发、新会话或辅助综合后，较早请求的结果可能串入当前结果库的问题
+- 修复 Desktop 为已选站点新建会话时，部分失败仍提示全部成功的问题
+- 修复 Desktop 启动失败后仍留下无窗口后台进程的问题
+- 修复 Desktop 工作区加载失败后无法重试的问题
+- 修复显示偏好保存失败时界面无法启动的问题；现在会提示失败并继续启动
+
 ## [0.17.1] - 2026-08-25
 
 ### 修复
@@ -416,7 +442,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.17.1...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/pine2D/polyask/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/pine2D/polyask/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/pine2D/polyask/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/pine2D/polyask/compare/v0.15.2...v0.16.0

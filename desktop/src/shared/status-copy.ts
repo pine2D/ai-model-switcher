@@ -33,8 +33,8 @@ export function describeStatus(copy: DesktopCopy, status: SiteStatus): string {
 
 export function visibleStatus(copy: DesktopCopy, status: SiteStatus): string | null {
   switch (status.phase) {
-    case "warning": return copy.submittedWithWarning;
-    case "failed": return copy.failed;
+    case "warning":
+    case "failed": return describeStatus(copy, status);
     case "crashed": return copy.crashed;
     default: return null;
   }

@@ -14,3 +14,13 @@ test("IME composition never submits or collapses the prompt", () => {
   assert.equal(commandKeyAction({ key: "Enter", ctrlKey: true, metaKey: false, isComposing: true }), null);
   assert.equal(commandKeyAction({ key: "Escape", ctrlKey: false, metaKey: false, isComposing: true }), null);
 });
+
+test("prompt shortcut does not submit while another renderer action is locked", () => {
+  assert.equal(
+    commandKeyAction(
+      { key: "Enter", ctrlKey: true, metaKey: false, isComposing: false },
+      true
+    ),
+    null
+  );
+});

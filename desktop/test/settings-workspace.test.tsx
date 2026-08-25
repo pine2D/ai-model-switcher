@@ -19,6 +19,62 @@ const status = (patch: Partial<SyncStatus> = {}): SyncStatus => ({
   ...patch
 });
 
+const renderSettings = (value: SyncStatus): string => renderToStaticMarkup(
+  <SettingsWorkspace
+    copy={getCopy("en")}
+    locale="en"
+    status={value}
+    onStatus={noop}
+    onAnnounce={noop}
+    onClose={noop}
+  />
+);
+
+test("idle Drive status distinguishes local-only data from an up-to-date connection", () => {
+  const disconnected = renderSettings(status({ connected: false, state: "idle" }));
+  assert.match(disconnected, /data-state="idle" data-connected="false"/);
+  assert.match(disconnected, />Local only</);
+  assert.doesNotMatch(disconnected, />Up to date</);
+  assert.match(disconnected, /title="Close settings" aria-label="Close settings"/);
+  assert.equal([...disconnected.matchAll(/aria-live="polite"/g)].length, 1);
+  assert.equal([...disconnected.matchAll(/>Local only</g)].length, 1);
+  assert.match(disconnected, /<footer class="archive-status" role="status" aria-live="polite"><\/footer>/);
+
+  const connected = renderSettings(status({ connected: true, state: "idle" }));
+  assert.match(connected, /data-state="idle" data-connected="true"/);
+  assert.match(connected, />Up to date</);
+  assert.doesNotMatch(connected, />Local only</);
+  assert.equal([...connected.matchAll(/>Up to date</g)].length, 1);
+  assert.equal([...connected.matchAll(/aria-live="polite"/g)].length, 1);
+});
+
+test("disconnected Drive keeps actionable states and reasons visible", () => {
+  const states = [
+    ["offline", "Offline; local changes are queued"],
+    ["auth", "Sign in again to continue"],
+    ["blocked", "Google Drive access is blocked"],
+    ["waiting", "Google is busy; retry scheduled"],
+    ["schema", "Read-only compatibility mode"],
+    ["error", "Sync failed"]
+  ] as const;
+  for (const [state, message] of states) {
+    const html = renderSettings(status({ connected: false, state }));
+    assert.match(html, new RegExp(`>${message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`));
+    assert.doesNotMatch(html, />Local only</);
+  }
+
+  const reason = renderSettings(status({ connected: false, state: "idle", reason: "oauth_not_configured" }));
+  assert.match(reason, />OAuth is not configured</);
+  assert.doesNotMatch(reason, />Local only</);
+});
+
+test("syncing settings disable close and state-changing actions", () => {
+  const html = renderSettings(status({ connected: true, state: "syncing" }));
+  assert.match(html, /<button type="button" title="Close settings" aria-label="Close settings" disabled="">/);
+  assert.match(html, /<button type="button" class="primary" disabled="">Sync now<\/button>/);
+  assert.match(html, /<button type="button" disabled="">Disconnect<\/button>/);
+});
+
 test("sync settings expose compact connection state and protected cloud deletion", () => {
   const html = renderToStaticMarkup(
     <SettingsWorkspace

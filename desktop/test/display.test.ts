@@ -9,6 +9,8 @@ import {
   zoomForSite
 } from "../src/shared/display";
 import {
+  applyDisplayDensity,
+  applyDisplayPreferences,
   loadDisplayPreferences,
   saveDisplayPreferences,
   type DisplayStorage
@@ -23,6 +25,19 @@ class MemoryStorage implements DisplayStorage {
 
   setItem(key: string, value: string): void {
     this.values.set(key, value);
+  }
+}
+
+class ThrowingStorage implements DisplayStorage {
+  constructor(private readonly operation: "read" | "write") {}
+
+  getItem(): string | null {
+    if (this.operation === "read") throw new Error("storage_read_failed");
+    return null;
+  }
+
+  setItem(): void {
+    if (this.operation === "write") throw new Error("storage_write_failed");
   }
 }
 
@@ -83,7 +98,52 @@ test("stored display preferences survive reload and malformed values fall back",
   });
 
   storage.setItem("polyask.display", "{broken");
-  assert.deepEqual(loadDisplayPreferences(storage, true), DEFAULT_DISPLAY_PREFERENCES);
+  assert.deepEqual(loadDisplayPreferences(storage, true), {
+    density: "comfortable",
+    siteScale: 0.9
+  });
   assert.equal(saveDisplayPreferences(storage, { density: "tiny", siteScale: 0.9 }), false);
   assert.equal(storage.getItem("polyask.display"), "{broken");
+});
+
+test("storage read failure falls back to pointer-appropriate display defaults", () => {
+  const storage = new ThrowingStorage("read");
+
+  assert.deepEqual(loadDisplayPreferences(storage, false), DEFAULT_DISPLAY_PREFERENCES);
+  assert.deepEqual(loadDisplayPreferences(storage, true), {
+    density: "comfortable",
+    siteScale: 0.9
+  });
+});
+
+test("storage write failure returns false instead of escaping", () => {
+  const storage = new ThrowingStorage("write");
+
+  assert.equal(saveDisplayPreferences(storage, {
+    density: "comfortable",
+    siteScale: 1
+  }), false);
+});
+
+test("display density can be applied without a storage write", () => {
+  const target = { dataset: {} as { density?: string } };
+
+  applyDisplayDensity(target, DEFAULT_DISPLAY_PREFERENCES);
+
+  assert.equal(target.dataset.density, "compact");
+});
+
+test("display updates keep applied density when local persistence fails", () => {
+  const target = { dataset: {} as { density?: string } };
+  let failures = 0;
+
+  applyDisplayPreferences(
+    target,
+    new ThrowingStorage("write"),
+    { density: "comfortable", siteScale: 1 },
+    () => { failures += 1; }
+  );
+
+  assert.equal(target.dataset.density, "comfortable");
+  assert.equal(failures, 1);
 });

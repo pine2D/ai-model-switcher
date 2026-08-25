@@ -5,7 +5,7 @@ import { ArchiveService } from "../src/main/archive-service";
 import { DesktopDatabase } from "../src/main/database";
 import { SITES } from "../src/main/sites";
 import { SynthesisService } from "../src/main/synthesis-service";
-import type { BroadcastRequest, SiteRunResult } from "../src/shared/protocol";
+import type { BroadcastPayload, SiteRunResult } from "../src/shared/protocol";
 
 function fixture() {
   const database = DesktopDatabase.open(":memory:");
@@ -29,7 +29,7 @@ function fixture() {
 test("synthesis opens one new session, sends once, then reveals the focused native site", async () => {
   const { database, archives, record } = fixture();
   const events: string[] = [];
-  const requests: BroadcastRequest[] = [];
+  const requests: BroadcastPayload[] = [];
   try {
     const service = new SynthesisService({
       sites: SITES,
@@ -61,6 +61,39 @@ test("synthesis opens one new session, sends once, then reveals the focused nati
     assert.deepEqual(requests[0].images, []);
     assert.match(requests[0].text, /Resolve disagreements/);
     assert.deepEqual(service.getPending(), response.pending);
+  } finally {
+    database.close();
+  }
+});
+
+test("synthesis invalidates a completed run after validation and before navigation", async () => {
+  const { database, archives, record } = fixture();
+  const events: string[] = [];
+  try {
+    const options = {
+      sites: SITES,
+      archives,
+      beforeSend: () => { events.push("clear"); },
+      navigate: async () => { events.push("navigate"); },
+      send: async (): Promise<SiteRunResult[]> => { events.push("send"); return [{ site: "claude", ok: true }]; },
+      collect: async () => [],
+      showTarget: () => undefined,
+      recordHistory: () => undefined
+    };
+    const service = new SynthesisService(options);
+    await service.send({
+      archiveId: record.id,
+      targetSite: "claude",
+      tier: null,
+      selectedHosts: ["claude.ai", "chatgpt.com"],
+      instruction: ""
+    });
+    assert.deepEqual(events, ["clear", "navigate", "send"]);
+    await assert.rejects(
+      () => service.send({ archiveId: record.id, targetSite: "claude", tier: null, selectedHosts: [], instruction: "" }),
+      /not_enough_answers/
+    );
+    assert.deepEqual(events, ["clear", "navigate", "send"]);
   } finally {
     database.close();
   }

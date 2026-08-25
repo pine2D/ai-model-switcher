@@ -5,9 +5,16 @@ import { fileURLToPath } from "node:url";
 
 const CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
 const TARGETS = Object.freeze({
-  win32: { label: "windows", extension: ".exe", matches: (name) => name.toLowerCase().endsWith(" setup.exe") },
-  linux: { label: "linux", extension: ".deb", matches: (name, version) => name.endsWith(".deb") && name.includes(`_${version}_`) },
-  darwin: { label: "macos", extension: ".zip", matches: (name, version) => name.endsWith(".zip") && name.includes(`-${version}`) }
+  win32: [
+    { variant: "installer", label: "windows", suffix: "", extension: ".exe", matches: (name) => name.toLowerCase().endsWith(" setup.exe") },
+    { variant: "portable", label: "windows", suffix: "-portable", extension: ".zip", matches: (name, version) => name.toLowerCase().includes("-win32-") && name.endsWith(`-${version}.zip`) }
+  ],
+  linux: [
+    { variant: "installer", label: "linux", suffix: "", extension: ".deb", matches: (name, version) => name.endsWith(".deb") && name.includes(`_${version}_`) }
+  ],
+  darwin: [
+    { variant: "archive", label: "macos", suffix: "", extension: ".zip", matches: (name, version) => name.endsWith(".zip") && name.includes(`-${version}`) }
+  ]
 });
 
 async function filesBelow(directory) {
@@ -39,17 +46,21 @@ async function verifyOAuthResource(outDir, platform, arch) {
 }
 
 export async function collectReleaseArtifact(input) {
-  const target = TARGETS[input.platform];
-  if (!target || !/^(x64|arm64)$/.test(input.arch) || !/^\d+\.\d+\.\d+$/.test(input.version)) {
+  const targets = TARGETS[input.platform];
+  if (!targets || !/^(x64|arm64)$/.test(input.arch) || !/^\d+\.\d+\.\d+$/.test(input.version)) {
     throw new Error("invalid_release_target");
   }
+  const target = input.variant
+    ? targets.find((candidate) => candidate.variant === input.variant)
+    : targets[0];
+  if (!target) throw new Error("invalid_release_target");
   await verifyOAuthResource(input.outDir, input.platform, input.arch);
   const matches = (await filesBelow(join(input.outDir, "make")))
     .filter((path) => target.matches(basename(path), input.version));
   if (matches.length !== 1) throw new Error(`release_artifact_count:${matches.length}`);
 
   await mkdir(input.outputDir, { recursive: true });
-  const name = `polyask-desktop-v${input.version}-${target.label}-${input.arch}${target.extension}`;
+  const name = `polyask-desktop-v${input.version}-${target.label}-${input.arch}${target.suffix}${target.extension}`;
   const path = join(input.outputDir, name);
   await copyFile(matches[0], path);
   const digest = createHash("sha256").update(await readFile(path)).digest("hex");
@@ -57,18 +68,28 @@ export async function collectReleaseArtifact(input) {
   return { name, path };
 }
 
+export async function collectReleaseArtifacts(input) {
+  const targets = TARGETS[input.platform];
+  if (!targets) throw new Error("invalid_release_target");
+  const outputs = [];
+  for (const target of targets) {
+    outputs.push(await collectReleaseArtifact({ ...input, variant: target.variant }));
+  }
+  return outputs;
+}
+
 async function main() {
   const [platform, arch] = process.argv.slice(2);
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const desktopRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-  const output = await collectReleaseArtifact({
+  const outputs = await collectReleaseArtifacts({
     platform,
     arch,
     version: packageJson.version,
     outDir: join(desktopRoot, "out"),
     outputDir: join(desktopRoot, "release")
   });
-  process.stdout.write(`${output.path}\n`);
+  process.stdout.write(`${outputs.map((output) => output.path).join("\n")}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

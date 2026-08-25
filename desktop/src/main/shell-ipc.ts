@@ -122,6 +122,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (request.images.length && unsupportedImageSites(request.sites, SITES).length) {
       throw new Error("image_sites_unsupported");
     }
+    collection.beginRun(request.runId, request.sites);
     for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
     let historyRecorded = false;
     const results = await coordinator.send(
@@ -210,9 +211,9 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     workspace.deleteGroup(value);
     return publishWorkspace();
   });
-  ipcMain.handle("polyask:new-session", async (event, value: unknown) => {
+  ipcMain.handle("polyask:new-session", (event, value: unknown) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
-    await workspace.newSession(value);
+    return workspace.newSession(value);
   });
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) {

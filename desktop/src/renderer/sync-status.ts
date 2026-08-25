@@ -16,6 +16,7 @@ export function describeSync(copy: DesktopCopy, status: SyncStatus): string {
   if (status.reason === "quota") return copy.syncReasonQuota;
   if (status.reason === "policy") return copy.syncReasonPolicy;
   if (status.reason === "oauth_not_configured") return copy.syncReasonOauthMissing;
+  if (!status.connected && status.state === "idle") return copy.syncStateLocalOnly;
   return byState[status.state];
 }
 

@@ -13,11 +13,21 @@ import type { WorkspaceState } from "./workspace";
 export type Tier = "think" | "fast" | null;
 export type DesktopSurface = "sites" | "archive" | "settings";
 
-export interface BroadcastRequest {
+export interface BroadcastPayload {
   readonly text: string;
   readonly tier: Tier;
   readonly sites: readonly SiteKey[];
   readonly images: readonly DesktopImage[];
+}
+
+export interface BroadcastRequest extends BroadcastPayload {
+  readonly runId: string;
+}
+
+export interface NewSessionSiteResult {
+  readonly site: SiteKey;
+  readonly ok: boolean;
+  readonly code?: "not_ready";
 }
 
 export interface SubmitSiteCommand {
@@ -113,9 +123,14 @@ export interface SiteResponseEnvelope {
 
 const KNOWN_SITES = new Set<string>(SITE_KEYS);
 
+function boundedId(value: unknown): value is string {
+  return typeof value === "string" && !!value.trim() && value.length <= 128;
+}
+
 export function parseBroadcastRequest(value: unknown): BroadcastRequest | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
+  if (!boundedId(candidate.runId)) return null;
   const text = typeof candidate.text === "string" ? candidate.text.trim() : "";
   if (!text || text.length > 100_000) return null;
   const tier = candidate.tier == null ? null : candidate.tier;
@@ -126,7 +141,7 @@ export function parseBroadcastRequest(value: unknown): BroadcastRequest | null {
   const images = validateImages(candidate.images);
   if (!images) return null;
 
-  return { text, tier, sites: candidate.sites as SiteKey[], images };
+  return { runId: candidate.runId, text, tier, sites: candidate.sites as SiteKey[], images };
 }
 
 export function parseCollectionRequest(value: unknown): CollectionRequest | null {
@@ -136,6 +151,6 @@ export function parseCollectionRequest(value: unknown): CollectionRequest | null
   if (!candidate.sites.every((site) => typeof site === "string" && KNOWN_SITES.has(site))) return null;
   if (new Set(candidate.sites).size !== candidate.sites.length) return null;
   const runId = candidate.runId == null ? null : candidate.runId;
-  if (runId !== null && (typeof runId !== "string" || !runId || runId.length > 128)) return null;
+  if (runId !== null && !boundedId(runId)) return null;
   return { sites: candidate.sites as SiteKey[], runId };
 }

@@ -11,26 +11,49 @@ export interface DisplayStorage {
   setItem(key: string, value: string): void;
 }
 
+export interface DisplayDensityTarget {
+  readonly dataset: { density?: string };
+}
+
 export function loadDisplayPreferences(
   storage: DisplayStorage,
   coarsePointer: boolean
 ): DisplayPreferences {
-  const raw = storage.getItem(DISPLAY_STORAGE_KEY);
-  if (raw === null) {
-    return coarsePointer
-      ? { ...DEFAULT_DISPLAY_PREFERENCES, density: "comfortable" }
-      : DEFAULT_DISPLAY_PREFERENCES;
-  }
+  const fallback = coarsePointer
+    ? { ...DEFAULT_DISPLAY_PREFERENCES, density: "comfortable" as const }
+    : DEFAULT_DISPLAY_PREFERENCES;
   try {
-    return parseDisplayPreferences(JSON.parse(raw)) ?? DEFAULT_DISPLAY_PREFERENCES;
+    const raw = storage.getItem(DISPLAY_STORAGE_KEY);
+    return raw === null ? fallback : parseDisplayPreferences(JSON.parse(raw)) ?? fallback;
   } catch {
-    return DEFAULT_DISPLAY_PREFERENCES;
+    return fallback;
   }
 }
 
 export function saveDisplayPreferences(storage: DisplayStorage, value: unknown): boolean {
   const preferences = parseDisplayPreferences(value);
   if (!preferences) return false;
-  storage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(preferences));
-  return true;
+  try {
+    storage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(preferences));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function applyDisplayDensity(
+  target: DisplayDensityTarget,
+  value: DisplayPreferences
+): void {
+  target.dataset.density = value.density;
+}
+
+export function applyDisplayPreferences(
+  target: DisplayDensityTarget,
+  storage: DisplayStorage,
+  value: DisplayPreferences,
+  onPersistenceFailure: () => void
+): void {
+  applyDisplayDensity(target, value);
+  if (!saveDisplayPreferences(storage, value)) onPersistenceFailure();
 }

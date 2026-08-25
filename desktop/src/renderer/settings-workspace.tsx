@@ -18,9 +18,10 @@ interface SettingsWorkspaceProps {
 type SyncAction = () => Promise<SyncStatus>;
 
 export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Element {
-  const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [feedback, setFeedback] = useState("");
+  const busy = actionBusy || props.status.state === "syncing";
   const statusText = describeSync(props.copy, props.status);
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === "Escape" && !busy) props.onClose(); };
@@ -35,7 +36,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     : props.copy.syncNever;
   const run = async (action: SyncAction): Promise<void> => {
     if (busy) return;
-    setBusy(true);
+    setActionBusy(true);
     try {
       const next = await action();
       props.onStatus(next);
@@ -46,7 +47,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
       setFeedback(props.copy.syncActionFailed);
       props.onAnnounce(props.copy.syncActionFailed);
     } finally {
-      setBusy(false);
+      setActionBusy(false);
     }
   };
 
@@ -54,7 +55,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     <main className="settings-workspace" aria-busy={busy}>
       <header className="settings-toolbar">
         <strong>{props.copy.settings}</strong>
-        <button type="button" title={props.copy.closeArchive} aria-label={props.copy.closeArchive} onClick={props.onClose}><CloseIcon /></button>
+        <button type="button" title={props.copy.closeSettings} aria-label={props.copy.closeSettings} disabled={busy} onClick={props.onClose}><CloseIcon /></button>
       </header>
       <div className="settings-body">
         <section className="settings-card sync-overview" aria-labelledby="sync-title">
@@ -62,7 +63,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             <h1 id="sync-title">{props.copy.syncTitle}</h1>
             <p>{props.copy.syncDescription}</p>
           </div>
-          <div className="sync-state" data-state={props.status.state} role="status" aria-live="polite">
+          <div className="sync-state" data-state={props.status.state} data-connected={props.status.connected}>
             <i aria-hidden="true" />
             <strong>{props.status.connected ? props.copy.syncConnected : props.copy.syncDisconnected}</strong>
             <span>{statusText}</span>
@@ -99,7 +100,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
           >{props.copy.syncClear}</button>
         </section>
       </div>
-      <footer className="archive-status" role="status" aria-live="polite">{feedback || statusText}</footer>
+      <footer className="archive-status" role="status" aria-live="polite">{feedback}</footer>
     </main>
   );
 }

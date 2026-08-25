@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
-import type { Tier } from "../shared/protocol";
+import type { NewSessionSiteResult, Tier } from "../shared/protocol";
 import {
   createWorkspaceGroup,
   groupSignature,
@@ -38,6 +38,7 @@ interface WorkspaceServiceOptions {
   readonly now?: () => number;
   readonly createId?: () => string;
   readonly createDeviceId?: () => string;
+  readonly onNewSession?: (sites: readonly SiteKey[]) => void;
 }
 
 type NavigateSite = (site: SiteKey, url: string) => void | Promise<void>;
@@ -71,6 +72,7 @@ export class WorkspaceService {
   private readonly now: () => number;
   private readonly createId: () => string;
   private readonly createDeviceId: () => string;
+  private readonly onNewSession: (sites: readonly SiteKey[]) => void;
 
   constructor(
     private readonly state: StateRepository,
@@ -81,6 +83,7 @@ export class WorkspaceService {
     this.now = options.now ?? Date.now;
     this.createId = options.createId ?? randomUUID;
     this.createDeviceId = options.createDeviceId ?? randomUUID;
+    this.onNewSession = options.onNewSession ?? (() => undefined);
   }
 
   getState(): WorkspaceState {
@@ -139,13 +142,17 @@ export class WorkspaceService {
     return deleted;
   }
 
-  async newSession(value: unknown): Promise<void> {
+  async newSession(value: unknown): Promise<NewSessionSiteResult[]> {
     const sites = strictSelection(value, false);
-    await Promise.all(sites.map((site) => {
+    this.onNewSession(sites);
+    const settled = await Promise.allSettled(sites.map((site) => {
       const definition = SITES.find((candidate) => candidate.key === site);
       if (!definition) throw new Error("unknown_site");
       return this.navigate(site, definition.url);
     }));
+    return sites.map((site, index) => settled[index].status === "fulfilled"
+      ? { site, ok: true }
+      : { site, ok: false, code: "not_ready" });
   }
 
   private writeWorkspace(selectedSites: readonly SiteKey[], tier: Tier): void {

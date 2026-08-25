@@ -16,6 +16,7 @@ import type {
   CollectionRequest,
   DesktopSurface,
   LayoutState,
+  NewSessionSiteResult,
   SiteRunResult,
   SiteStatus
 } from "../shared/protocol";
@@ -51,7 +52,7 @@ export interface PolyAskDesktopApi {
   setTier(value: BroadcastRequest["tier"]): Promise<WorkspaceState>;
   saveGroup(input: { readonly name: string; readonly sites: readonly SiteKey[] }): Promise<WorkspaceState>;
   deleteGroup(id: string): Promise<WorkspaceState>;
-  newSession(sites: readonly SiteKey[]): Promise<void>;
+  newSession(sites: readonly SiteKey[]): Promise<NewSessionSiteResult[]>;
   connectSync(): Promise<SyncStatus>;
   syncNow(): Promise<SyncStatus>;
   disconnectSync(): Promise<SyncStatus>;

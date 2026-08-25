@@ -2,7 +2,7 @@
 
 发布物包括 Chrome MV3 扩展和 `desktop/` Electron 跨平台预览包。**核心是群发到 9 个真实 AI 页面并排比较**；切深度/快速档可报错，群发链路不能断。扩展另有网页内容与迁移包；两端均有图片、结果库、辅助综合和 Drive 同步。扩展代码保持原生 JS、无构建、classic script。
 
-<!-- 最后与代码核对：2026-08-25 · manifest v0.17.1。发版前重跑核对并更新这行。
+<!-- 最后与代码核对：2026-08-26 · manifest v0.18.0。发版前重跑核对并更新这行。
      本文件控制在 11 KB 内；新增硬约束先挤旧项或外迁 docs/。 -->
 
 ## 先读哪份（下面几份不常驻上下文，动到对应部分再读）
@@ -40,7 +40,7 @@
 - **真机验证不可省，且本机全绿 ≠ 用户环境可用**：改适配器、切档、发送相关的 bug，必须先重载扩展 + 刷新站点标签，再用生产 `__AMS` 复现和回归，不得只凭静态代码或官方文案推断。**用户报的 bug 在本机复现不出时，先要现象再猜层次**——问「输入框里有没有出现文字 / 有没有发出去 / 有没有报错文案」，据此定位坏在 composer / inject / submit / state 哪一层再动手。两机差异见 `docs/verify.md`——本机跑通不构成「已修复」的证据。
 - **`console.html` 的 `#live` 播报区不可删**：群发进度、失败汇总、收集结果都要写进去。96px 细条上的圆点变色对读屏用户不可见，这是唯一进度通道——「精简 UI」类重构最容易顺手删掉它，且删了不报错。
 - **已发布 tag 不覆盖**，改内容必须升版；新增扩展运行时顶层项必须登记 `RUNTIME`，否则会产出坏包。`desktop/` 独立，禁止打进扩展 ZIP。
-- **扩展与 Desktop 共用发布版本**：`prepare-release.sh` 同步 manifest 与 Desktop package/lock。Desktop Release 必须从 Repository Variable 注入合法 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`，产物缺 `resources/oauth.json` 直接拒发；当前四个平台/架构包均为未签名预览版。
+- **扩展与 Desktop 版本一致**：`prepare-release.sh` 同步 manifest 与 Desktop package/lock。Release 从 Repository Variable 注入合法 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`，缺 `resources/oauth.json` 拒发；5 个包（Windows x64 安装/免安装、Linux x64、macOS x64/arm64）均未签名。
 
 ## 命令
 
@@ -48,7 +48,7 @@
 bash scripts/verify.sh               # 语法 + JSON + 300 行 + 文档/测试登记 + 全部 node 测试 + git diff --check
 node scripts/test-<name>.js          # 单跑一个（改完仍要跑 verify.sh 全量）
 bash scripts/prepare-release.sh auto # 推导版本、晋升 CHANGELOG、同步扩展与 Desktop 版本（只改文件不 commit）
-bash scripts/release.sh --publish    # 推 tag 并触发五个主包发布（--build-only 只验 Chrome 包）
+bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--build-only 只验 Chrome 包）
 ```
 
 ## 架构（先在这里定位入口文件）

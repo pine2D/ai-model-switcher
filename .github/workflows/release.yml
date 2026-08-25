@@ -72,7 +72,7 @@ jobs:
           - os: windows-latest
             platform: win32
             arch: x64
-            maker: "@electron-forge/maker-squirrel"
+            maker: "@electron-forge/maker-squirrel,@electron-forge/maker-zip"
             asset: windows-x64
           - os: ubuntu-latest
             platform: linux
