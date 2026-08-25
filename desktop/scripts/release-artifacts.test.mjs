@@ -21,6 +21,9 @@ test("release artifacts are normalized, checksummed and OAuth-enabled", async ()
     await mkdir(makeDir, { recursive: true });
     await mkdir(packageResources, { recursive: true });
     await writeFile(join(makeDir, item.source), "artifact");
+    if (item.source.includes("0.17.0")) {
+      await writeFile(join(makeDir, item.source.replace("0.17.0", "0.16.0")), "stale artifact");
+    }
     await writeFile(join(packageResources, "oauth.json"), JSON.stringify({ clientId: CLIENT_ID }));
 
     const output = await collectReleaseArtifact({

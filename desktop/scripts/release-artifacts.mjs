@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 const CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
 const TARGETS = Object.freeze({
   win32: { label: "windows", extension: ".exe", matches: (name) => name.toLowerCase().endsWith(" setup.exe") },
-  linux: { label: "linux", extension: ".deb", matches: (name) => name.toLowerCase().endsWith(".deb") },
-  darwin: { label: "macos", extension: ".zip", matches: (name) => name.toLowerCase().endsWith(".zip") }
+  linux: { label: "linux", extension: ".deb", matches: (name, version) => name.endsWith(".deb") && name.includes(`_${version}_`) },
+  darwin: { label: "macos", extension: ".zip", matches: (name, version) => name.endsWith(".zip") && name.includes(`-${version}`) }
 });
 
 async function filesBelow(directory) {
@@ -42,7 +42,7 @@ export async function collectReleaseArtifact(input) {
   }
   await verifyOAuthResource(input.outDir, input.platform, input.arch);
   const matches = (await filesBelow(join(input.outDir, "make")))
-    .filter((path) => target.matches(basename(path)));
+    .filter((path) => target.matches(basename(path), input.version));
   if (matches.length !== 1) throw new Error(`release_artifact_count:${matches.length}`);
 
   await mkdir(input.outputDir, { recursive: true });
