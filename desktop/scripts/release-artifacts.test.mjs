@@ -16,7 +16,10 @@ test("release artifacts are normalized, checksummed and OAuth-enabled", async ()
   ]) {
     const root = await mkdtemp(join(tmpdir(), "polyask-release-"));
     const makeDir = join(root, "out", "make", "target");
-    const packageResources = join(root, "out", `PolyAsk-${item.platform}-${item.arch}`, "resources");
+    const packageRoot = join(root, "out", `PolyAsk-${item.platform}-${item.arch}`);
+    const packageResources = item.platform === "darwin"
+      ? join(packageRoot, "PolyAsk.app", "Contents", "Resources")
+      : join(packageRoot, "resources");
     const outputDir = join(root, "release");
     await mkdir(makeDir, { recursive: true });
     await mkdir(packageResources, { recursive: true });

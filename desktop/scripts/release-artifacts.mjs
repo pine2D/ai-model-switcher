@@ -27,7 +27,10 @@ async function verifyOAuthResource(outDir, platform, arch) {
   let valid = 0;
   for (const candidate of candidates) {
     try {
-      const resource = join(outDir, candidate.name, "resources", "oauth.json");
+      const packageRoot = join(outDir, candidate.name);
+      const resource = platform === "darwin"
+        ? join(packageRoot, "PolyAsk.app", "Contents", "Resources", "oauth.json")
+        : join(packageRoot, "resources", "oauth.json");
       const parsed = JSON.parse(await readFile(resource, "utf8"));
       if (typeof parsed.clientId === "string" && CLIENT_ID.test(parsed.clientId.trim())) valid += 1;
     } catch { /* This package candidate has no usable OAuth resource. */ }
