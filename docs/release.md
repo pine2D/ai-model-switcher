@@ -1,20 +1,43 @@
 # 发版与用户可见文案
 
-**Chrome 扩展的发版流程、打包白名单、脚本查不出的人工核查项、三语文案规范与 i18n 落点表、Git/CHANGELOG 惯例都在这里**；桌面端 M0 边界见 `docs/desktop-m0.md`。冲突以 `CLAUDE.md` 为准。
+**Chrome 扩展与 Desktop 预览包共用同一个版本号、tag 和 GitHub Release。** 本文记录发布门禁、两套打包边界、Desktop OAuth 注入、人工核查项、三语文案与 Git/CHANGELOG 惯例；桌面端验收边界见 `docs/desktop-m0.md`。冲突以 `CLAUDE.md` 为准。
 
 ## 流程
 
 ```bash
 # 0. 「未发布」段已记录所有用户可感知变更（发版前持续维护，不要临发版补）
-bash scripts/prepare-release.sh auto   # 按 Conventional Commits 推导语义版本，晋升 CHANGELOG、同步 manifest 与比较链接（只改文件，不 commit）
+bash scripts/prepare-release.sh auto   # 晋升 CHANGELOG，同步 manifest、Desktop package/lock 与比较链接（只改文件，不 commit）
 # 1. 人工审阅发版 diff，做下面的「脚本查不出的人工项」
 bash scripts/verify.sh
-bash scripts/release.sh --build-only   # 与 CI 共用的验包链路
+cd desktop && npm test && npm run typecheck && npm audit --omit=dev
+cd .. && bash scripts/release.sh --build-only   # 本机校验 Chrome ZIP 与 Release notes
 # 2. commit 并 push main
-bash scripts/release.sh --publish      # 推 v* tag；Release workflow 随后发布 ZIP、SHA-256 与本版 CHANGELOG 正文
+bash scripts/release.sh --publish      # 推 v* tag；Release workflow 构建并发布全部资产
 ```
 
-`--publish` 只在**工作区干净、分支为 main 且跟踪 origin/main、HEAD 已完整推送、exact-HEAD 的 CI 成功、tag 不存在**时才推 tag。**已发布 tag 不覆盖；要改内容必须升新版本。** 脚本用法跑 `-h`。
+`--publish` 只在**工作区干净、分支为 main 且跟踪 origin/main、HEAD 已完整推送、exact-HEAD 的 CI 成功、tag 不存在**时才推 tag。Release workflow 再校验同一提交确实位于 `origin/main` 且 CI 成功，之后并行构建各平台。**已发布 tag 不覆盖；要改内容必须升新版本。** 脚本用法跑 `-h`。
+
+每个 Release 应包含：
+
+- Chrome：`polyask-vX.Y.Z.zip` 及 SHA-256。
+- Windows x64：`polyask-desktop-vX.Y.Z-windows-x64.exe` 及 SHA-256。
+- Linux x64：`polyask-desktop-vX.Y.Z-linux-x64.deb` 及 SHA-256。
+- macOS：`polyask-desktop-vX.Y.Z-macos-x64.zip`、`polyask-desktop-vX.Y.Z-macos-arm64.zip` 及各自 SHA-256。
+- `CHANGELOG.md` 对应版本段作为 Release 正文。
+
+Desktop 当前按预览版发布，不签名、不公证、不自动更新。Windows、macOS、Linux 产物必须在对应原生 runner 上生成；不得从 Linux 交叉伪造 macOS 包。等证书和平台账号就绪后，再把签名与公证加入同一矩阵，不能在文案里提前声称已签名。
+
+## Desktop OAuth 与产物门禁
+
+GitHub Actions Repository Variable `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 必须保存 Google Cloud 的 `Desktop app` Client ID。它是公开标识，不是密码；仓库和 CI 均不接收 `client_secret`。可用以下命令配置：
+
+```bash
+gh variable set POLYASK_GOOGLE_DESKTOP_CLIENT_ID --body '<client-id>.apps.googleusercontent.com'
+```
+
+Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，生成被 Git 忽略的 `desktop/resources/oauth.json`。Forge 将其复制到应用 `resources`；`npm run collect-release` 会拒绝 OAuth 文件缺失或格式无效的产物，再统一命名并生成 SHA-256。Linux `.deb` 中该公开文件必须是普通用户可读的 `0644`，不能沿用凭据文件的 `0600`。
+
+`desktop/package.json`、`desktop/package-lock.json` 根版本和 `manifest.json` 必须一致。`scripts/prepare-release.sh` 同步更新三处；`scripts/test-release-flow.js` 和 Desktop release tests 负责阻止版本、maker、矩阵或 OAuth 产物契约静默漂移。
 
 ## 打包白名单（`scripts/package.sh`）
 
@@ -30,6 +53,9 @@ bash scripts/release.sh --publish      # 推 v* tag；Release workflow 随后发
 - 发版前跑 `node scripts/probe-drift.js`（后台标签冻结时加 `--activate`），要求**覆盖 9/9 站**且 `!` 警报逐条处置；复核用 `--dry`（警报会被本轮落盘的快照消费，直接复跑只会看到绿）。
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
 - 更新 `CLAUDE.md` 顶部的「最后与代码核对」日期与版本。
+- 确认 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 存在，OAuth consent screen 的 Audience/测试用户或 Production 状态符合本次发布对象；Client ID 已打包不等于公众账号一定能完成授权。
+- 在能取得原生机器时，至少安装一次本版 Windows `.exe`、Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
+- 核对 Release 资产恰好包含 5 个主包、5 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
 - **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。
 
 ## 用户可见文案

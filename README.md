@@ -1,20 +1,18 @@
 # PolyAsk · AI 众答
 
-PolyAsk 是一款 Chrome 扩展，可将同一问题发送到 9 个 AI 站点，并在独立窗口中并排比较回答。它也支持在单独访问站点时切换深度思考和快速模式。
-
-每个站点都在真实浏览器窗口中运行，沿用现有登录状态，不使用 iframe。
-
-仓库同时包含跨平台桌面端 M0。它用一个 Electron 窗口承载 9 个真实站点页面，提供九宫格与主次聚焦布局，当前用于验证集中管理、实时可见群发和站点登录兼容性，尚不是正式发布版本。
+PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实时可见。项目提供两种形态：Chrome 扩展用 9 个独立窗口沿用浏览器登录；跨平台 Desktop 预览版用一个 Electron 窗口集中承载全部站点，并使用独立登录会话。两者都不使用 iframe。
 
 ## 核心功能
 
+除特别标注外，下列能力同时适用于 Chrome 扩展和 Desktop 预览版。
+
 - 群发对比：选择多个 AI 站点，统一设置模型档位后发送问题。支持最多 4 张 PNG 或 JPEG 图片，总大小不超过 10 MiB。
-- 网页上下文：通过右键菜单将所选文字或页面正文带入提示词工作区，核对来源后再发送到所选 AI 站点。
+- 网页上下文（Chrome 扩展）：通过右键菜单将所选文字或页面正文带入提示词工作区，核对来源后再发送到所选 AI 站点。
 - 模型切换：通过悬浮控件、扩展弹窗或快捷键切换深度思考和快速模式。
 - 回答整理：将各站最新回答汇总为 Markdown 后复制或导出；保存到结果库后，可搜索、收藏、添加标签和备注，并标记最佳答案。
 - 辅助综合：从一条已保存结果中选择多个回答，预览组合提示词后交给指定 AI 在新会话中综合，再将综合结果采集回原记录。
-- 数据同步：通过 Google Drive 同步设置、模板、分组、提问历史和 AI 回答。结果库中的收藏、标签和备注，以及哪个回答被标为最佳，也会同步。支持迁移包导入与导出。
-- 本机数据控制：可分别清空提问历史或结果库，也可重置全部本机数据。重置会断开 Google Drive，但不会删除云端数据。
+- 数据同步：两端可通过 Google Drive 合并站点范围、分组、提问历史和结果库；扩展另同步设置与模板。
+- 迁移与本机数据控制（Chrome 扩展）：支持迁移包导入/导出，可分别清空提问历史或结果库，也可重置全部本机数据。重置会断开 Google Drive，但不会删除云端数据。
 
 ## 支持站点与映射
 
@@ -34,18 +32,28 @@ PolyAsk 是一款 Chrome 扩展，可将同一问题发送到 9 个 AI 站点，
 
 ## 安装
 
-### 从 Release 安装
+### 安装 Chrome 扩展
 
 1. 从 [Releases](https://github.com/pine2D/polyask/releases) 下载最新的 `polyask-vX.Y.Z.zip` 并解压。
 2. 打开 `chrome://extensions`，启用「开发者模式」。
 3. 点击「加载已解压的扩展程序」，选择解压后的目录。
 
-### 从源码目录安装
+也可以直接从源码目录安装：打开 `chrome://extensions`，启用「开发者模式」，点击「加载已解压的扩展程序」，选择本仓库目录。
 
-1. 打开 `chrome://extensions`，启用「开发者模式」。
-2. 点击「加载已解压的扩展程序」，选择本仓库目录。
+### 安装 Desktop 预览版
 
-### 运行桌面端 M0
+从 [Releases](https://github.com/pine2D/polyask/releases) 下载与系统和架构匹配的文件：
+
+| 系统 | 文件 | 安装方式 |
+| --- | --- | --- |
+| Windows x64 | `polyask-desktop-vX.Y.Z-windows-x64.exe` | 运行安装程序 |
+| Ubuntu/Debian x64 | `polyask-desktop-vX.Y.Z-linux-x64.deb` | 执行 `sudo apt install ./polyask-desktop-vX.Y.Z-linux-x64.deb` |
+| macOS Apple Silicon | `polyask-desktop-vX.Y.Z-macos-arm64.zip` | 解压后打开 `PolyAsk.app` |
+| macOS Intel | `polyask-desktop-vX.Y.Z-macos-x64.zip` | 解压后打开 `PolyAsk.app` |
+
+Desktop 当前是未签名预览包，不提供自动更新。Windows SmartScreen 或 macOS Gatekeeper 可能拦截首次启动；macOS 可在 Finder 中右键应用并选择「打开」。请先核对同名 `.sha256` 文件，再决定是否运行。
+
+### 从源码运行 Desktop
 
 桌面端使用独立登录会话，不会读取或复制 Chrome 的 Cookie。首次运行后，需要分别登录各个 AI 站点。
 
@@ -71,11 +79,11 @@ npm start
 
 桌面端设置页支持与扩展共用同一套 schema 1 Google Drive 数据：站点范围、分组、提问历史和结果库可在两种客户端之间合并，删除标记与新版本只读保护同样生效。断开连接只撤销授权并清理本机同步索引，不删除本机或云端记录；「删除云端数据」需输入 `DELETE`，且只删除 Drive 应用专属目录内标记为 PolyAsk 的文件。
 
-桌面开发版使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。先在 Google Cloud 启用 Drive API 并创建 Desktop app 客户端，然后复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId`；也可在启动或打包时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`。真实配置文件已被 Git 忽略，存在时会随当前平台产物放入 resources 目录。
+Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。Release 产物由 CI 从 GitHub Actions Repository Variable 注入 Client ID；Client ID 是公开标识，项目不使用也不需要 `client_secret`。本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId`，也可设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 后执行 `npm run configure-oauth`。
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
-执行 `npm run package` 可生成当前平台的未签名应用目录。CI 会在 Linux、Windows 和 macOS 上分别测试、检查类型并构建当前平台目录，Linux 另执行运行时冒烟；这不能替代各平台真实账号登录与人工 UI 验收。Gemini 已在 WSLg 中完成首次登录与群发；Google OAuth/Drive 仍需使用真实客户端完成联网回归，Windows、macOS 和原生 Ubuntu 的登录与安装包验证仍属于 M0 验收范围。详细边界见 `docs/desktop-m0.md`。
+执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64、Linux x64、macOS x64/arm64 预览包并生成独立 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

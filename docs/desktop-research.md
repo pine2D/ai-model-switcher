@@ -1,6 +1,6 @@
 # PolyAsk Desktop 技术调研与决策记录
 
-最后核对：2026-08-24。本文保存桌面端启动阶段的框架、安全、平台规范与自动化调研结论，并补充产品化阶段的数据与 Google Drive 方案。实现边界以 `docs/desktop-m0.md` 为准。
+最后核对：2026-08-25。本文保存桌面端启动阶段的框架、安全、平台规范与自动化调研结论，并补充产品化、OAuth 和发行决策。实现边界以 `docs/desktop-m0.md` 为准。
 
 ## 问题与目标
 
@@ -8,7 +8,7 @@ Chrome 扩展依靠 9 个独立 popup 展示真实 AI 页面，避开 iframe 对
 
 ## 调研保存情况
 
-- 受 Git 管理的结论：本文、`docs/desktop-m0.md`、`docs/desktop-density-plan.md`。
+- 受 Git 管理的结论：本文、`docs/desktop-m0.md`、`docs/desktop-density-plan.md`、`docs/desktop-productization-plan.md` 和 `docs/desktop-audit.md`。
 - 初始实施计划仍存在于 `docs/superpowers/plans/2026-08-24-desktop-m0.md`，但该目录被 `.gitignore` 排除，不能作为长期唯一凭据。
 - claude-mem 中的原始调研观察为 `#73318`—`#73329`，最终架构决定为 `#73331`。
 
@@ -63,7 +63,7 @@ Electron 43 携带 Node 24，能够直接使用 `node:sqlite`。桌面端采用 
 - 授权页面必须用系统默认浏览器打开，不在 Electron 内嵌页或任一 AI 站点 view 中打开。
 - 不使用已废弃的 OOB 手工复制验证码，也不使用容易被其他应用劫持的自定义 URI scheme。
 - access token 只驻留内存；refresh token 通过 `safeStorage` 保存，断开连接时撤销并删除。
-- 生产发行前需要单独创建 Google OAuth “Desktop app” client；Chrome Extension 类型 client 不能直接承担 loopback 回调。
+- 已单独创建 Google OAuth “Desktop app” Client ID；Chrome Extension 类型 client 不能承担 loopback 回调。Client ID 作为公开 Repository Variable 在发行 runner 上生成 `resources/oauth.json`，项目不保存或使用 `client_secret`。
 - Drive 中继续使用隐藏的 `appDataFolder`，用户主动断开不删除云端数据；“清空云端”必须二段确认。
 
 依据：[Google OAuth for Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app)、[Google OAuth Policies](https://developers.google.com/identity/protocols/oauth2/policies)、[Drive appDataFolder](https://developers.google.com/workspace/drive/api/guides/appdata)、[Drive Scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)。
@@ -80,4 +80,6 @@ Electron 的进程指标入口见 [`app.getAppMetrics()`](https://www.electronjs
 
 ## 当前结论
 
-Electron M0 的容器、九站登录、群发、安全基线、Grid/Focus 与密度布局已经成立。继续产品化的正确顺序是：先收敛命令栏和集成门禁，再迁移范围/分组、新会话、图片、汇总、归档、辅助综合和 Drive，最后进行全面缺陷与 UI/UX 审查。功能迁移不得重新引入 Chrome popup、九个外部 tab 或 iframe。
+Electron M0 的容器、九站登录、群发、安全基线、Grid/Focus 与密度布局已经成立。范围/分组、新会话、图片、汇总、归档、辅助综合和 Drive 已迁移；静态缺陷与 UI/UX 审查完成一轮。当前发行策略是在同一 GitHub Release 提供 Chrome 稳定包与未签名 Desktop 预览包，Desktop 包覆盖 Windows x64、Linux x64、macOS x64/arm64，并为每个主包生成 SHA-256。
+
+剩余工作集中在真实 OAuth/Drive 联网回归、Windows/macOS/原生 Ubuntu 验收、60 分钟稳定性、读屏与完整缩放矩阵，以及签名、公证和自动更新。后续改动不得重新引入 Chrome popup、九个外部 tab 或 iframe。

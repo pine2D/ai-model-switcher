@@ -565,7 +565,7 @@ git commit -m "feat(desktop): add assisted synthesis workflow"
 - Produces: `loadOAuthClientId()`；开发优先读取 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`，发行包读取构建时生成的 `resources/oauth.json`。`oauth.example.json` 只说明 `{ "clientId": "...apps.googleusercontent.com" }` 结构，不进入发行包。
 - Sync 状态：`idle | syncing | offline | auth | blocked | waiting | schema | error`；界面只显示本地化 code。
 
-- [ ] **Step 1: 写失败 PKCE 测试**
+- [x] **Step 1: 写失败 PKCE 测试**
 
 ```ts
 test("desktop OAuth uses system browser, S256 PKCE, state and loopback redirect", async () => {
@@ -576,21 +576,21 @@ test("desktop OAuth uses system browser, S256 PKCE, state and loopback redirect"
 });
 ```
 
-- [ ] **Step 2: RED → OAuth 与 token store GREEN**
+- [x] **Step 2: RED → OAuth 与 token store GREEN**
 
 授权 listener 只绑定 `127.0.0.1` 随机端口，校验 state，5 分钟超时后关闭；错误页不回显 token/code。系统浏览器由 `shell.openExternal` 打开。
 
 Run: `cd desktop && npx tsx --test test/oauth-pkce.test.ts test/token-store.test.ts`
 
-- [ ] **Step 3: 写失败 Drive transport 测试**
+- [x] **Step 3: 写失败 Drive transport 测试**
 
 覆盖 401 刷新一次、403 policy/quota 分类、404、410 page token 失效、429/5xx Retry-After、分页 list/changes、非法 JSON 与取消。
 
-- [ ] **Step 4: 写失败同步合并测试**
+- [x] **Step 4: 写失败同步合并测试**
 
 使用手工 fixtures 验证 state/history/archive 合并、deviceId 决胜、tombstone 胜出、future schema 只读、outbox revision、防旧上传覆盖新写入，以及“断开不删 Drive”。
 
-- [ ] **Step 5: 实现设置工作区**
+- [x] **Step 5: 实现设置工作区**
 
 设置表面提供连接、立即同步、断开、清空云端、状态、最近成功时间、待上传数和 Linux token backend 警示。清空云端必须输入明确确认文本；缺少 desktop OAuth client ID 时显示 `oauth_not_configured`，不回退 Chrome Extension client。
 
@@ -600,12 +600,14 @@ Run: `cd desktop && npm test && npm run typecheck && npm run smoke`
 
 使用测试 Google Cloud Desktop client 完成系统浏览器授权，验证扩展写入的 history/groups/archive 可被桌面读取，桌面 tombstone 可被扩展合并。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add desktop/src desktop/test desktop/resources desktop/forge.config.ts desktop/package.json desktop/package-lock.json README.md CHANGELOG.md
 git commit -m "feat(desktop): add secure Drive synchronization"
 ```
+
+实现记录（2026-08-25）：OAuth/PKCE、异步 `safeStorage` token store、Drive transport、schema 1 合并、设置工作区、增量同步、退避、未来格式只读和受保护的云端清理已落地。131 项桌面 TypeScript/React 测试与 4 项运行器测试通过。独立 Desktop Client ID 已通过 Repository Variable 注入发行构建，Linux `.deb` 内容审计确认 `resources/oauth.json` 可被普通用户读取。Step 6 的真实系统浏览器授权、扩展/桌面双向 Drive 联网合并仍未执行，保持未完成。
 
 ### Task 9: 全面缺陷排查与 UI/UX 优化升级
 
@@ -621,7 +623,7 @@ git commit -m "feat(desktop): add secure Drive synchronization"
 - Produces: 逐项证据化审查表，按 blocker/P0/P1/P2 记录现象、根因、修复、自动化与真机证据。
 - Preserves: 九站 webContents id、登录 session、绝对 deadline、epoch、tombstone、三语和安全边界。
 
-- [ ] **Step 1: 静态缺陷审查**
+- [x] **Step 1: 静态缺陷审查**
 
 检查所有 IPC parser、sender/frame 校验、导航与 popup 策略、文件/URL/图片边界、OAuth token 泄漏、SQLite 注入、错误码覆盖、取消竞态、renderer crash 恢复、单文件行数和未使用依赖。
 
@@ -629,11 +631,11 @@ git commit -m "feat(desktop): add secure Drive synchronization"
 
 覆盖：连续双击发送、发送中取消后立即新发、九站加载中切 Grid/Focus、抽屉与 archive 往返、图片上传中取消、归档并发写/删、Drive 离线/401/410/429、renderer crash、系统休眠恢复和 60 分钟 soak。
 
-- [ ] **Step 3: UI/UX 规范审查**
+- [x] **Step 3: UI/UX 规范审查**
 
 使用 `web-design-guidelines`、`claude-mem:design-is` 和 `frontend-design`：检查信息优先级、空白、控件分组、缩放、截断、键盘顺序、读屏、高对比度、粗指针、reduced motion、亮暗色和三语长度。只实施有证据的优化，不为了装饰增加 chrome。
 
-- [ ] **Step 4: 每个确认 bug 走 RED/GREEN**
+- [x] **Step 4: 每个确认 bug 走 RED/GREEN**
 
 每个问题先写能复现的失败测试或运行时脚本；若只能真机验证，在 `docs/desktop-audit.md` 记录精确步骤、截图和修复前后现象。
 
@@ -651,12 +653,14 @@ Run: `cd desktop && npm run soak -- --minutes=60`
 
 Expected: 全部退出码 0，soak 无 renderer crash/unresponsive；所有未完成原生平台项仍明确标注，不能用 WSLg 代替。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add desktop/src desktop/test docs/desktop-audit.md docs/desktop-m0.md README.md CHANGELOG.md
 git commit -m "fix(desktop): complete productization audit"
 ```
+
+阶段记录（2026-08-25）：完成一轮静态与 UI/UX 审查，并按 RED/GREEN 修复串行写入、删除确认时效、同步取消、安全存储降级、表单语义、键盘焦点、高对比度和本地化日期。发布 maker 实跑另修复可执行文件名与 OAuth 资源权限。Step 2 尚缺休眠恢复和正式 60 分钟压力证据；Step 5 尚缺原生平台、三语、主题和 100%—200% 缩放完整截图矩阵；因此 Step 6 仍未完成。
 
 ### Task 10: 跨平台完成审计与交付
 

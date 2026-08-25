@@ -5,8 +5,8 @@ usage() {
   cat <<'EOF'
 用法：bash scripts/release.sh [--build-only|--publish]
 
-  --build-only  本地/CI 共用：校验源码、打包、提取 Release notes、生成 SHA-256（默认）
-  --publish     额外校验干净 main、origin/main 与 exact-HEAD CI，然后推送不可变 tag
+  --build-only  本地/CI 共用：校验源码、打包 Chrome ZIP、提取 Release notes、生成 SHA-256（默认）
+  --publish     额外校验干净 main、origin/main 与 exact-HEAD CI，推 tag 后由 CI 构建全部 Desktop 包
 EOF
 }
 
@@ -101,5 +101,5 @@ if [ "$MODE" = "publish" ]; then
     echo "tag 推送失败；本地 $TAG 保留，请查明后重试 git push origin $TAG" >&2
     exit 1
   fi
-  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布 ZIP、校验和与 CHANGELOG 说明。"
+  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布 Chrome ZIP、四个 Desktop 预览包、校验和与 CHANGELOG 说明。"
 fi

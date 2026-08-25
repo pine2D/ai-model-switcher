@@ -4,7 +4,7 @@
 
 用 Electron 在 Windows、macOS、Linux 上提供一个系统窗口，窗口内同时承载 9 个真实 AI 站点页面，并验证登录持久化、实时可见群发、现有站点适配器复用、安全隔离和资源开销是否达到继续产品化的条件。
 
-M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不承诺在登录硬门槛通过前形成可发布产品。
+M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核心能力，并开始发布未签名跨平台预览包；“可下载”不代表已完成下述原生平台、签名和 60 分钟验收。
 
 ## 成功标准
 
@@ -135,7 +135,7 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 - 本机变更 3 秒防抖，应用启动时及每 15 分钟同步一次；429/5xx 指数退避，410 自动全量重扫，401 只刷新令牌重试一次。未来 schema 进入只读兼容模式，仍允许下载但禁止上传。
 - 断开连接会撤销 OAuth、清本机 Drive 索引并保留本机数据、云端数据与待同步 outbox。「删除云端数据」必须在设置页逐字输入 `DELETE`，完成后断开连接；中断时保留进度，可重新进入操作。
 
-开发时将 `resources/oauth.example.json` 复制为被 Git 忽略的 `resources/oauth.json` 并填入 Desktop client ID，或设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`。打包时若存在 `resources/oauth.json`，Forge 会把它作为独立资源复制到产物；未配置的构建仍可运行，但设置页会禁用连接并说明原因。
+开发时将 `resources/oauth.example.json` 复制为被 Git 忽略的 `resources/oauth.json` 并填入 Desktop Client ID，或设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 后执行 `npm run configure-oauth`。Release workflow 从同名 GitHub Actions Repository Variable 生成该文件；Forge 将其复制到产物，归档脚本会拒绝缺失或格式无效的发行包。未配置的本地构建仍可运行，但设置页会禁用连接并说明原因。
 
 ### 验收指标
 
@@ -167,9 +167,11 @@ M0 是可保留的技术基线，不包含扩展版全部功能迁移，也不�
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 130 项 TypeScript/React 测试与 1 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；远端矩阵结果不替代真机人工验收。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session、安全 webPreferences 和全部正尺寸视图。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。桌面端现有 131 项 TypeScript/React 测试与 4 项运行器测试通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64、Linux x64、macOS x64/arm64 原生 maker 和逐包 SHA-256。远端矩阵结果不替代真机人工验收。
 
-尚未完成 M0 退出验收：使用真实 Desktop OAuth 客户端的 Drive 联网同步、Windows/macOS/原生 Ubuntu 真机、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名安装包。
+2026-08-25 已创建独立 Desktop OAuth Client ID，并通过 Repository Variable 进入 Release 构建。实际 Linux x64 `.deb` 已通过 maker、文件名归一化和内容审计：包内存在普通用户可读的 `resources/oauth.json`，可执行文件与 `/usr/bin/polyask-desktop` 链接一致。该证据只覆盖 Client ID 入包，不等于系统浏览器授权、refresh token 或 Drive 联网同步已经通过。
+
+尚未完成 M0 退出验收：真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 真机安装、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名和 macOS 公证。
 
 运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞。完整 `npm audit` 仍报告 Electron Forge 构建链的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包不进入应用运行依赖，但正式发布前必须重新评估并清零或形成明确处置记录。
 
@@ -182,6 +184,7 @@ npm test
 npm run typecheck
 npm start
 npm run package
+npm run make
 npm run smoke
 npm run soak -- --minutes=60
 ```
