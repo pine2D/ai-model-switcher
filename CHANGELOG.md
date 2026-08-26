@@ -8,6 +8,12 @@
 
 ## [未发布]
 
+## [0.20.1] - 2026-08-26
+
+### 修复
+
+- 修复 Electron 生成的 `Local State` 文件导致便携版无法导入旧数据的问题
+
 ## [0.20.0] - 2026-08-26
 
 ### 新增
@@ -489,7 +495,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.20.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/pine2D/polyask/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/pine2D/polyask/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/pine2D/polyask/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/pine2D/polyask/compare/v0.17.1...v0.18.0

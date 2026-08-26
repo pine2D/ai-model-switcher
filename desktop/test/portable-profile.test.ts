@@ -98,6 +98,27 @@ test("portable initialization propagates marker I/O errors instead of treating t
   assert.throws(() => hasImportableLegacyData(profile, () => { throw denied; }), (error) => error === denied);
 });
 
+test("a staged import accepts Electron Local State created after its bootstrap marker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "polyask-portable-local-state-"));
+  const source = join(root, "legacy");
+  const target = join(root, "PolyAsk Data");
+  await mkdir(source, { recursive: true });
+  await writeFile(join(source, "Local State"), "legacy-state");
+  const profile = {
+    distribution: "portable",
+    version: "0.20.0",
+    portableRoot: root,
+    userDataPath: target,
+    legacyUserDataPath: source
+  } as const;
+
+  assert.equal(await initializePortableData(profile, async () => true), "import_staged");
+  await writeFile(join(target, "Local State"), "bootstrap-state");
+
+  assert.equal(finalizePortableDataImport(profile), true);
+  assert.equal(await readFile(join(target, "Local State"), "utf8"), "legacy-state");
+});
+
 test("an unrecognized portable data directory is never replaced by a staged import", async () => {
   const root = await mkdtemp(join(tmpdir(), "polyask-portable-conflict-"));
   const source = join(root, "legacy");

@@ -136,7 +136,7 @@ export function finalizePortableDataImport(profile: RuntimeProfile): boolean {
       const stagingBootstrap = readBootstrap(join(staging, BOOTSTRAP_MARKER));
       const entries = readdirSync(profile.userDataPath);
       if (!targetBootstrap || targetBootstrap !== stagingBootstrap
-        || entries.some((entry) => !isBootstrapRuntimeEntry(entry))) {
+        || entries.some((entry) => !isImportFinalizationEntry(entry))) {
         throw new Error("portable_data_unrecognized");
       }
     }
@@ -166,6 +166,10 @@ async function ensureBootstrapDirectory(path: string): Promise<string> {
 function isBootstrapRuntimeEntry(entry: string): boolean {
   return entry === BOOTSTRAP_MARKER || entry === "Crashpad"
     || entry === "lockfile" || entry.startsWith("Singleton");
+}
+
+function isImportFinalizationEntry(entry: string): boolean {
+  return entry === "Local State" || isBootstrapRuntimeEntry(entry);
 }
 
 function markerExists(path: string): boolean {

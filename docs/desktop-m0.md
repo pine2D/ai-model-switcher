@@ -42,7 +42,7 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 - 安装版沿用 Electron 的系统用户数据目录；Windows 便携版通过根目录 `portable.json` 识别发行形态，并将 `userData` 与 `sessionData` 都切换到同级 `PolyAsk Data`。已有便携数据时先切换目录再申请便携实例锁；首次复制旧数据时先临时占用旧 profile 的 Electron 实例锁，复制或完成暂存切换后释放，再申请便携实例锁，之后才打开 SQLite 和站点 Session。
 - 便携版根目录固定分为可替换的 `App` 和持久的 `PolyAsk Data`。升级替换整个 `App`；`portable.json` 与 `README.txt` 不含用户数据，可随新包覆盖。`app.asar` 随 `App` 更新，设置、SQLite、Cookie 和站点会话不进入发布 ZIP，也不随升级覆盖。
-- 首次运行真正的便携版时，只在系统默认用户数据目录中发现 SQLite 或 Chromium 会话资料后询问是否复制，空目录与实例锁元数据不算旧数据。复制期间 Electron 会临时创建或更新旧 profile 根级实例锁，但不改写其中的设置、Cookie、SQLite 等用户资料。确认后先复制到根目录旁路暂存区，过滤 Windows `lockfile` 与其他平台的 `Singleton*`，重启时在 Chromium 打开数据目录前完成切换；旧资料不清空，失败时保留旧资料并提示关闭全部 PolyAsk 进程后重试。路径探测只有 `ENOENT`/`ENOTDIR` 视为不存在，权限或 I/O 错误直接停止；`PolyAsk Data` 只有在含有与暂存区 nonce 一致的 bootstrap 标记，且其余内容仅为当前 Electron 提前生成的 `Crashpad` 与实例锁元数据时才可被暂存导入替换，未知文件一律保留并给出专用提示。复制出的 profile 会获得新的同步设备 ID，避免用户回退旧版后两个客户端覆盖同一 Drive 状态文件。
+- 首次运行真正的便携版时，只在系统默认用户数据目录中发现 SQLite 或 Chromium 会话资料后询问是否复制，空目录与实例锁元数据不算旧数据。复制期间 Electron 会临时创建或更新旧 profile 根级实例锁，但不改写其中的设置、Cookie、SQLite 等用户资料。确认后先复制到根目录旁路暂存区，过滤 Windows `lockfile` 与其他平台的 `Singleton*`，重启时在 Chromium 打开数据目录前完成切换；旧资料不清空，失败时保留旧资料并提示关闭全部 PolyAsk 进程后重试。路径探测只有 `ENOENT`/`ENOTDIR` 视为不存在，权限或 I/O 错误直接停止；`PolyAsk Data` 只有在含有与暂存区 nonce 一致的 bootstrap 标记，且其余内容仅为当前 Electron 提前生成的 `Crashpad`、根级 `Local State` 与实例锁元数据时才可被暂存导入替换，未知文件一律保留并给出专用提示。复制出的 profile 会获得新的同步设备 ID，避免用户回退旧版后两个客户端覆盖同一 Drive 状态文件。
 - 设置页只接收经过裁剪的版本号和发行形态，不向 Shell renderer 暴露本机用户数据路径。
 
 ### 适配器复用
