@@ -100,37 +100,76 @@ export class DriveClient {
   }
 
   private async json<T>(url: string, init: RequestInit): Promise<T> {
-    const response = await this.request(url, init);
-    try { return JSON.parse(await response.text()) as T; }
-    catch (error) {
-      if (init.signal?.aborted) throw error;
-      if ((error as { name?: string }).name === "AbortError") throw failure("network_timeout", response.status);
-      throw failure("invalid_response", response.status);
-    }
+    return this.withDeadline(init.signal, async (signal, deadline) => {
+      const response = await this.requestWithinDeadline(url, { ...init, signal }, init.signal, deadline);
+      try { return JSON.parse(await response.text()) as T; }
+      catch (error) {
+        throwCallerAbort(init.signal);
+        if (deadline.aborted || ["AbortError", "TimeoutError"].includes((error as { name?: string }).name || ""))
+          throw failure("network_timeout", response.status);
+        throw failure("invalid_response", response.status);
+      }
+    });
   }
 
-  private async request(url: string, init: RequestInit, retry401 = true): Promise<Response> {
-    if (init.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  private request(url: string, init: RequestInit): Promise<Response> {
+    return this.withDeadline(init.signal, (signal, deadline) =>
+      this.requestWithinDeadline(url, { ...init, signal }, init.signal, deadline));
+  }
+
+  private async withDeadline<T>(
+    callerSignal: AbortSignal | null | undefined,
+    run: (signal: AbortSignal, deadline: AbortSignal) => Promise<T>
+  ): Promise<T> {
+    throwCallerAbort(callerSignal);
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(new DOMException("Timed out", "TimeoutError")), this.requestTimeoutMs);
+    const signal = callerSignal ? AbortSignal.any([callerSignal, timeout.signal]) : timeout.signal;
+    try { return await run(signal, timeout.signal); }
+    finally { clearTimeout(timer); }
+  }
+
+  private async requestWithinDeadline(
+    url: string,
+    init: RequestInit,
+    callerSignal: AbortSignal | null | undefined,
+    deadline: AbortSignal,
+    retry401 = true
+  ): Promise<Response> {
+    if (init.signal?.aborted) {
+      throwCallerAbort(callerSignal);
+      if (deadline.aborted) throw failure("network_timeout", 0);
+      throw new DOMException("Aborted", "AbortError");
+    }
     const token = await this.tokens.accessToken(!retry401);
-    if (init.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    const deadline = AbortSignal.timeout(this.requestTimeoutMs);
-    const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+    if (init.signal?.aborted) {
+      throwCallerAbort(callerSignal);
+      if (deadline.aborted) throw failure("network_timeout", 0);
+      throw new DOMException("Aborted", "AbortError");
+    }
     let response: Response;
     try {
-      response = await this.fetch(url, { ...init, signal, headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${token}` } });
+      response = await this.fetch(url, { ...init, headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${token}` } });
     } catch (error) {
-      if (!init.signal?.aborted && deadline.aborted) throw failure("network_timeout", 0);
+      throwCallerAbort(callerSignal);
+      if (deadline.aborted) throw failure("network_timeout", 0);
       if ((error as { name?: string }).name === "AbortError") throw error;
       throw failure("network_error", 0);
     }
-    if (response.status === 401 && retry401) return this.request(url, init, false);
-    if (!response.ok) throw await responseFailure(response, init.signal, deadline);
+    if (response.status === 401 && retry401)
+      return this.requestWithinDeadline(url, init, callerSignal, deadline, false);
+    if (!response.ok) throw await responseFailure(response, callerSignal, deadline);
     return response;
   }
 }
 
 function failure(code: string, status: number, reason?: string, wait?: number): DriveFailure {
   return Object.assign(new Error(code), { code, status, ...(reason ? { reason } : {}), ...(wait !== undefined ? { retryAfter: wait } : {}) });
+}
+
+function throwCallerAbort(signal: AbortSignal | null | undefined): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
 }
 
 async function responseFailure(
@@ -143,7 +182,7 @@ async function responseFailure(
   try {
     text = await response.text();
   } catch (error) {
-    if (callerSignal?.aborted) throw error;
+    throwCallerAbort(callerSignal);
     if (deadline.aborted || (error as { name?: string }).name === "TimeoutError") {
       throw failure("network_timeout", response.status);
     }

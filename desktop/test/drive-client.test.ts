@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
 import { DriveClient, type AccessTokenProvider } from "../src/main/drive-client";
+
+test("Drive deadline uses a referenced timer so an isolated request cannot outlive the event loop", () => {
+  const source = fs.readFileSync("src/main/drive-client.ts", "utf8");
+  assert.doesNotMatch(source, /AbortSignal\.timeout/, "AbortSignal.timeout uses an unrefed Node timer");
+  assert.match(source, /setTimeout\(/);
+});
 
 test("Drive retries one 401 with a refreshed token and stays inside appDataFolder", async () => {
   const force: boolean[] = [];
