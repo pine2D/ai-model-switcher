@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseBroadcastRequest, parseCollectionRequest } from "../src/shared/protocol";
+import { parseBroadcastRequest, parseCollectionRequest, parsePageIndex } from "../src/shared/protocol";
 
 const png = {
   name: "x.png",
@@ -87,4 +87,13 @@ test("collection IPC accepts product sites and a bounded optional run id", () =>
   assert.equal(parseCollectionRequest({ sites: ["claude", "claude"] }), null);
   assert.equal(parseCollectionRequest({ sites: ["claude"], runId: " " }), null);
   assert.equal(parseCollectionRequest({ sites: ["claude"], runId: "x".repeat(129) }), null);
+});
+
+test("page IPC accepts only bounded non-negative integers", () => {
+  assert.equal(parsePageIndex(0), 0);
+  assert.equal(parsePageIndex(8), 8);
+  assert.equal(parsePageIndex(-1), null);
+  assert.equal(parsePageIndex(1.5), null);
+  assert.equal(parsePageIndex("1"), null);
+  assert.equal(parsePageIndex(10_000), null);
 });

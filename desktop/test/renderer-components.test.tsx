@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import React, { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
@@ -6,6 +7,7 @@ import test from "node:test";
 import { BootstrapStateView } from "../src/renderer/bootstrap-state";
 import { CommandBar } from "../src/renderer/command-bar";
 import { ImagePicker } from "../src/renderer/image-picker";
+import { PageTabs } from "../src/renderer/page-tabs";
 import { SiteFrames } from "../src/renderer/site-frames";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { WorkspaceActions } from "../src/renderer/workspace-actions";
@@ -81,6 +83,7 @@ test("command bar renders one compact command surface with stateful controls", (
       failureCount={0}
       cancelledCount={0}
       drawerOpen={false}
+      pageControl={<span data-test="pages" />}
       imageControl={<span data-test="images" />}
       sendBlockedReason={null}
       synthesisPending={false}
@@ -104,7 +107,7 @@ test("command bar renders one compact command surface with stateful controls", (
     />
   );
 
-  assert.match(html, /^<header class="command-bar"/);
+  assert.match(html, /^<header class="command-bar has-pages"/);
   assert.match(html, /aria-label="Broadcast prompt"/);
   assert.match(html, /<textarea[^>]*>Question<\/textarea>/);
   assert.match(html, /aria-pressed="true"/);
@@ -124,6 +127,7 @@ test("command bar renders one compact command surface with stateful controls", (
   assert.match(html, /aria-label="Collect and copy selected answers"/);
   assert.match(html, /aria-label="Open result library"/);
   assert.match(html, /data-test="images"/);
+  assert.match(html, /data-test="pages"/);
   assert.doesNotMatch(html, /sync-attention/);
 });
 
@@ -243,10 +247,17 @@ test("image picker stays icon-first and exposes removable previews and scope war
   assert.match(html, /role="alert"/);
 });
 
+test("a closing image tray is removed from focus and the accessibility tree", () => {
+  const source = readFileSync("src/renderer/image-picker.tsx", "utf8");
+  assert.match(source, /aria-hidden=\{trayOpen \? undefined : true\}/);
+  assert.match(source, /inert=\{!trayOpen\}/);
+});
+
 test("workspace drawer exposes compact presets, continuous selection and bound group deletion", () => {
   const copy = getCopy("en");
   const html = renderToStaticMarkup(
     <WorkspaceDrawer
+      open={true}
       copy={copy}
       sites={SITES}
       selected={new Set(["claude", "kimi"])}
@@ -275,8 +286,8 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
   assert.match(html, /group-save-hint/);
 });
 
-test("site frames keep all nine live placements and accessible actions", () => {
-  const placements: LayoutState["placements"] = SITES.map((site, index) => ({
+test("site frames render only the active selected page with accessible actions", () => {
+  const placements: LayoutState["placements"] = SITES.slice(0, 6).map((site, index) => ({
     key: site.key,
     bounds: { x: index * 10, y: index * 10, width: 100, height: 80 }
   }));
@@ -285,7 +296,7 @@ test("site frames keep all nine live placements and accessible actions", () => {
       copy={getCopy("en")}
       sites={SITES}
       statuses={{}}
-      layout={{ mode: "overview", focused: "claude", placements }}
+      layout={{ mode: "overview", focused: "claude", page: 0, pageCount: 2, placements }}
       selected={new Set(SITES.map((site) => site.key))}
       onToggle={noop}
       onFocus={noop}
@@ -293,8 +304,11 @@ test("site frames keep all nine live placements and accessible actions", () => {
     />
   );
 
-  assert.equal([...html.matchAll(/<article class="tile-frame/g)].length, 9);
-  assert.equal([...html.matchAll(/type="checkbox"/g)].length, 9);
+  assert.equal([...html.matchAll(/<article class="tile-frame/g)].length, 6);
+  assert.match(html, /^<section id="site-page-panel-0" class="tile-layer" role="tabpanel"/);
+  assert.match(html, /aria-labelledby="site-page-tab-0"/);
+  assert.match(html, /<section id="site-page-panel-1" role="tabpanel" aria-labelledby="site-page-tab-1" hidden=""><\/section>$/);
+  assert.equal([...html.matchAll(/type="checkbox"/g)].length, 6);
   assert.match(html, /aria-label="Focus Claude"/);
   assert.match(html, /aria-label="Reload Claude"/);
   assert.match(html, /class="tile-actions priority-p2"/);
@@ -315,7 +329,7 @@ test("site frames visibly distinguish stable failure codes and retain full title
         claude: { site: "claude", phase: "failed", code: "submit_unconfirmed" },
         gemini: { site: "gemini", phase: "failed", code: "composer_not_found" }
       }}
-      layout={{ mode: "overview", focused: "claude", placements }}
+      layout={{ mode: "overview", focused: "claude", page: 0, pageCount: 1, placements }}
       selected={new Set(["claude", "gemini"])}
       onToggle={noop}
       onFocus={noop}
@@ -332,4 +346,44 @@ test("site frames visibly distinguish stable failure codes and retain full title
     html,
     /<span class="site-state priority-p0" title="Prompt box not found">Prompt box not found<\/span>/
   );
+});
+
+test("page tabs expose compact ranges, manual activation, and off-page status", () => {
+  const html = renderToStaticMarkup(
+    <PageTabs
+      copy={getCopy("en")}
+      selectedSites={SITES.slice(0, 8).map((site) => site.key)}
+      statuses={{
+        qianwen: { site: "qianwen", phase: "sending" },
+        yuanbao: { site: "yuanbao", phase: "failed", code: "submit_unconfirmed" }
+      }}
+      page={0}
+      inputMethod="pointer"
+      onPageChange={noop}
+    />
+  );
+
+  assert.match(html, /^<div class="page-tabs" role="tablist" aria-label="Site pages"[^>]*>/);
+  assert.equal([...html.matchAll(/role="tab"/g)].length, 2);
+  assert.match(html, /aria-label="Page 1, sites 1–6, 1 sending"/);
+  assert.match(html, /aria-label="Page 2, sites 7–8, 1 failed"/);
+  assert.match(html, /aria-selected="true"[^>]*tabindex="0"/);
+  assert.match(html, /aria-selected="false"[^>]*tabindex="-1"/);
+  assert.match(html, /data-input-method="pointer"/);
+  assert.match(html, />1–6</);
+  assert.match(html, />7–8</);
+});
+
+test("page tabs stay hidden while selected-site state catches up with layout state", () => {
+  const html = renderToStaticMarkup(
+    <PageTabs
+      copy={getCopy("en")}
+      selectedSites={[]}
+      statuses={{}}
+      page={0}
+      inputMethod="pointer"
+      onPageChange={noop}
+    />
+  );
+  assert.equal(html, "");
 });

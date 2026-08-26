@@ -13,6 +13,7 @@ import { unsupportedImageSites } from "../shared/images";
 import {
   parseBroadcastRequest,
   parseCollectionRequest,
+  parsePageIndex,
   type SiteResponseEnvelope
 } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
@@ -75,6 +76,7 @@ const LISTENERS = [
   "polyask:set-drawer-open",
   "polyask:set-surface",
   "polyask:set-layout",
+  "polyask:set-page",
   "polyask:reload-site",
   "polyask:site-response"
 ] as const;
@@ -92,6 +94,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     isTrustedShellUrl(event.senderFrame.url, options.shellEntry);
   const publishWorkspace = () => {
     const state = workspace.getState();
+    manager.setSelection(state.selectedSites);
     if (!window.isDestroyed()) window.webContents.send("polyask:workspace-state", state);
     return state;
   };
@@ -239,6 +242,11 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (candidate.mode !== "overview" && candidate.mode !== "focus") return;
     if (typeof candidate.focused !== "string" || !SITE_KEYS.includes(candidate.focused as SiteKey)) return;
     manager.setLayout(candidate.mode, candidate.focused as SiteKey);
+  });
+  ipcMain.on("polyask:set-page", (event, value: unknown) => {
+    if (!trustedShell(event)) return;
+    const page = parsePageIndex(value);
+    if (page !== null) manager.setPage(page);
   });
   ipcMain.on("polyask:reload-site", (event, value: unknown) => {
     if (trustedShell(event) && typeof value === "string" && SITE_KEYS.includes(value as SiteKey)) {

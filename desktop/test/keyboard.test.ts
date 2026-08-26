@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { commandKeyAction } from "../src/renderer/keyboard";
+import { commandKeyAction, pageTabKeyAction } from "../src/renderer/keyboard";
 
 test("prompt shortcuts submit or collapse outside IME composition", () => {
   assert.equal(commandKeyAction({ key: "Enter", ctrlKey: true, metaKey: false, isComposing: false }), "submit");
@@ -23,4 +23,15 @@ test("prompt shortcut does not submit while another renderer action is locked", 
     ),
     null
   );
+});
+
+test("page tabs move focus without activating until Enter or Space", () => {
+  assert.deepEqual(pageTabKeyAction("ArrowRight", 0, 2), { focus: 1, activate: false });
+  assert.deepEqual(pageTabKeyAction("ArrowLeft", 0, 2), { focus: 1, activate: false });
+  assert.deepEqual(pageTabKeyAction("Home", 1, 2), { focus: 0, activate: false });
+  assert.deepEqual(pageTabKeyAction("End", 0, 2), { focus: 1, activate: false });
+  assert.deepEqual(pageTabKeyAction("Enter", 1, 2), { focus: 1, activate: true });
+  assert.deepEqual(pageTabKeyAction(" ", 0, 2), { focus: 0, activate: true });
+  assert.equal(pageTabKeyAction("ArrowRight", 0, 1), null);
+  assert.equal(pageTabKeyAction("Escape", 0, 2), null);
 });

@@ -53,6 +53,128 @@ function auth(): SyncAuth & { disconnected: boolean } {
   };
 }
 
+test("background sync stays idle while Drive is disconnected", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  let connectCalls = 0;
+  const session: SyncAuth = {
+    configured: () => true,
+    securePersistence: () => true,
+    connect: async () => { connectCalls += 1; },
+    disconnect: async () => undefined
+  };
+  const drive: SyncDrive = {
+    getStartToken: async () => { throw new Error("must_not_sync"); },
+    listFiles: async () => { throw new Error("must_not_sync"); },
+    listChanges: async () => { throw new Error("must_not_sync"); },
+    download: async () => { throw new Error("must_not_sync"); },
+    upsert: async () => { throw new Error("must_not_sync"); },
+    clearAll: async () => { throw new Error("must_not_sync"); }
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: session }).syncNow("periodic");
+    assert.equal(status.connected, false);
+    assert.equal(status.state, "idle");
+    assert.equal(connectCalls, 0);
+  } finally { database.close(); }
+});
+
+test("an explicit connection timeout stays disconnected and remains actionable", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const session: SyncAuth = {
+    configured: () => true,
+    securePersistence: () => true,
+    connect: async () => { throw new Error("network_timeout"); },
+    disconnect: async () => undefined
+  };
+  const drive = {} as SyncDrive;
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: session }).connect();
+    assert.equal(status.connected, false);
+    assert.equal(status.state, "offline");
+    assert.equal(status.reason, "network_timeout");
+  } finally { database.close(); }
+});
+
+test("Drive becomes connected only after the first authenticated handshake succeeds", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const published: string[] = [];
+  const drive: SyncDrive = {
+    getStartToken: async () => { throw Object.assign(new Error("network_timeout"), { code: "network_timeout" }); },
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => ({ id: "unused" }),
+    clearAll: async () => undefined
+  };
+  try {
+    const engine = new SyncEngine({
+      repository,
+      drive,
+      auth: auth(),
+      onStatus: (status) => { if (status.reason) published.push(status.reason); }
+    });
+    const status = await engine.connect();
+    assert.equal(status.connected, false);
+    assert.equal(repository.config().connected, false);
+    assert.equal(status.state, "offline");
+    assert.equal(status.reason, "network_timeout");
+    assert.deepEqual(published.slice(0, 2), ["oauth", "drive_check"]);
+  } finally { database.close(); }
+});
+
+test("a successful first Drive handshake commits the connected state", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async (_id, name, appProperties) => ({ id: `uploaded-${name}`, appProperties }),
+    clearAll: async () => undefined
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: auth(), now: () => 2_000 }).connect();
+    assert.equal(status.connected, true);
+    assert.equal(status.state, "idle");
+    assert.equal(status.reason, undefined);
+    assert.equal(status.lastSuccessAt, 2_000);
+  } finally { database.close(); }
+});
+
+test("startup clears stale disconnected OAuth and Drive-check phases", () => {
+  for (const reason of ["oauth", "drive_check"] as const) {
+    const database = DesktopDatabase.open(":memory:");
+    database.meta.put("deviceId", "desktop-device");
+    const repository = new SyncRepository(database);
+    repository.saveConfig({ connected: false, state: "syncing", reason });
+    const statuses: Array<{ state: string; reason?: string }> = [];
+    const engine = new SyncEngine({
+      repository,
+      drive: {} as SyncDrive,
+      auth: auth(),
+      onStatus: (status) => statuses.push(status)
+    });
+    try {
+      engine.start();
+      assert.equal(repository.config().state, "idle");
+      assert.equal(repository.config().reason, undefined);
+      assert.equal(statuses.at(-1)?.state, "idle");
+      assert.equal(statuses.at(-1)?.reason, undefined);
+    } finally {
+      engine.dispose();
+      database.close();
+    }
+  }
+});
+
 test("sync pulls a remote history tombstone and never lets an old upload revision clear a newer write", async () => {
   const database = DesktopDatabase.open(":memory:");
   database.meta.put("deviceId", "desktop-device");

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { COPY, getCopy } from "../src/shared/copy";
 import { describeCollectionCode, describeStatus, visibleStatus } from "../src/shared/status-copy";
+import { describeSync } from "../src/renderer/sync-status";
 
 test("desktop shell keeps complete English, Simplified Chinese and Traditional Chinese copy", () => {
   const sourceKeys = Object.keys(COPY.en).sort();
@@ -10,6 +11,21 @@ test("desktop shell keeps complete English, Simplified Chinese and Traditional C
   assert.deepEqual(Object.keys(COPY.zhTW).sort(), sourceKeys);
   assert.ok(sourceKeys.every((key) => COPY.en[key as keyof typeof COPY.en].length > 0));
   assert.equal(sourceKeys.includes("brandSub"), false);
+});
+
+test("site paging copy is concise, localized, and placeholder-compatible", () => {
+  assert.deepEqual(
+    [COPY.en.sitePages, COPY.zhCN.sitePages, COPY.zhTW.sitePages],
+    ["Site pages", "站点分页", "網站分頁"]
+  );
+  assert.deepEqual(
+    [COPY.en.sitePageLabel, COPY.zhCN.sitePageLabel, COPY.zhTW.sitePageLabel],
+    ["Page {page}, sites {range}", "第 {page} 页，站点 {range}", "第 {page} 頁，網站 {range}"]
+  );
+  for (const locale of Object.values(COPY)) {
+    assert.deepEqual([...locale.sitePageLabel.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{range}"]);
+    assert.deepEqual([...locale.sitePageChanged.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{total}"]);
+  }
 });
 
 test("Drive local-only state and settings close action stay precise in all locales", () => {
@@ -25,6 +41,41 @@ test("Drive local-only state and settings close action stay precise in all local
     assert.deepEqual([...locale.syncStateLocalOnly.matchAll(/\{[a-z]+\}/g)].map(String), []);
     assert.deepEqual([...locale.closeSettings.matchAll(/\{[a-z]+\}/g)].map(String), []);
   }
+});
+
+test("Drive timeout guidance is explicit and localized", () => {
+  assert.deepEqual(
+    [COPY.en.syncReasonTimeout, COPY.zhCN.syncReasonTimeout, COPY.zhTW.syncReasonTimeout],
+    [
+      "Connection timed out. Check your network or proxy, then try again.",
+      "连接超时。请检查网络或代理设置后重试。",
+      "連線逾時。請檢查網路或代理設定後再試一次。"
+    ]
+  );
+  const status = { state: "offline", connected: false, pending: 0, errorCount: 0, reason: "network_timeout", readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
+  assert.equal(describeSync(COPY.zhCN, status), COPY.zhCN.syncReasonTimeout);
+});
+
+test("Drive connection phases describe browser authorization and Drive verification honestly", () => {
+  assert.deepEqual(
+    [COPY.en.syncStateAuthorizing, COPY.zhCN.syncStateAuthorizing, COPY.zhTW.syncStateAuthorizing],
+    [
+      "Waiting for browser authorization…",
+      "正在等待浏览器完成授权……",
+      "正在等待瀏覽器完成授權……"
+    ]
+  );
+  assert.deepEqual(
+    [COPY.en.syncStateConnecting, COPY.zhCN.syncStateConnecting, COPY.zhTW.syncStateConnecting],
+    [
+      "Checking Google Drive access…",
+      "正在检查 Google Drive 访问权限……",
+      "正在檢查 Google Drive 存取權限……"
+    ]
+  );
+  const base = { state: "syncing", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
+  assert.equal(describeSync(COPY.zhCN, { ...base, reason: "oauth" }), COPY.zhCN.syncStateAuthorizing);
+  assert.equal(describeSync(COPY.zhCN, { ...base, reason: "drive_check" }), COPY.zhCN.syncStateConnecting);
 });
 
 test("result-library loading copy stays complete and localized", () => {

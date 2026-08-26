@@ -98,6 +98,8 @@ export interface SiteStatus {
 export interface LayoutState {
   readonly mode: "overview" | "focus";
   readonly focused: SiteKey;
+  readonly page: number;
+  readonly pageCount: number;
   readonly placements: readonly ViewPlacement[];
 }
 
@@ -125,6 +127,12 @@ const KNOWN_SITES = new Set<string>(SITE_KEYS);
 
 function boundedId(value: unknown): value is string {
   return typeof value === "string" && !!value.trim() && value.length <= 128;
+}
+
+export function parsePageIndex(value: unknown): number | null {
+  return Number.isInteger(value) && Number(value) >= 0 && Number(value) < 10_000
+    ? Number(value)
+    : null;
 }
 
 export function parseBroadcastRequest(value: unknown): BroadcastRequest | null {

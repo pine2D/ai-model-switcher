@@ -82,14 +82,23 @@
     // 豆包：composer 模式按钮(当前显示当前模式)，点开菜单含 快速/专家/超能模式([role=menuitem])
     "doubao.com": {
       _modeBtn: function () {
-        return [...document.querySelectorAll("button")]
-          .find((x) => { const t = (x.textContent || "").trim(); return /^(快速|专家|超能)/.test(t) && t.length < 14; });
+        const found = [...document.querySelectorAll("button")].filter((x) => {
+          const t = (x.textContent || "").trim();
+          return (/^豆包\s+\S/.test(t) || /^(快速|专家|超能)/.test(t)) && t.length < 30;
+        });
+        const composer = S.findComposer && S.findComposer();
+        if (!composer || !found.length) return found.pop() || null;
+        const cr = composer.getBoundingClientRect();
+        const near = found.map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 0 && r.height > 0)
+          .sort((a, b) => Math.abs(a.r.y - cr.y) - Math.abs(b.r.y - cr.y))[0];
+        return near && Math.abs(near.r.y - cr.y) < 240 ? near.el : null;
       },
-      _select: async function (re) {
+      _select: async function (re, expected) {
         for (let i = 0; i < 3; i++) {
+          if (this.state() === expected) return;
           const btn = this._modeBtn();
           if (!btn) throw new Error("豆包: 模式按钮未找到"); // 静默 return 会让 runMode 误报"已切到"
-          if (re.test((btn.textContent || "").trim())) return; // 已是目标，幂等返回
           if (!findByText('[role="menuitem"]', re)) openMenu(btn);
           const item = await waitFor(() => findByText('[role="menuitem"]', re), 1500);
           if (item) { item.click(); await sleep(500); } // 选项 onclick，用原生 click
@@ -106,10 +115,10 @@
       state: function () {
         const b = this._modeBtn();
         const t = b ? (b.textContent || "").trim() : "";
-        return /^专家/.test(t) ? "think" : /^快速/.test(t) ? "fast" : null;
+        return (/专家$/.test(t) || /^豆包\s+[\d.]/.test(t)) ? "think" : /快速$/.test(t) ? "fast" : null;
       },
-      think: async function () { await this._select(/^专家/); },
-      fast: async function () { await this._select(/^快速/); },
+      think: async function () { await this._select(/专家$/, "think"); },
+      fast: async function () { await this._select(/快速$/, "fast"); },
       attach: function (files, el, deadline) {
         return S.setInputFiles(document.querySelector('input[type="file"][accept*="png"]'), files, el, deadline);
       },

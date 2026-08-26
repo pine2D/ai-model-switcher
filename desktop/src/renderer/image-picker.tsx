@@ -8,6 +8,7 @@ import {
   type ImageInputError
 } from "../shared/images";
 import { CloseIcon, ImagePlusIcon, WarningIcon } from "./icons";
+import { usePresence } from "./presence";
 
 interface ImagePickerProps {
   readonly copy: DesktopCopy;
@@ -56,6 +57,8 @@ export async function readDesktopImages(files: readonly File[]): Promise<ImageRe
 export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const count = props.images.length;
+  const trayOpen = props.open && count > 0;
+  const trayPresent = usePresence(trayOpen, 140);
   const manageLabel = formatCopy(props.copy.manageImages, { count });
   useEffect(() => {
     if (!props.open) return;
@@ -111,8 +114,8 @@ export function ImagePicker(props: ImagePickerProps): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      {props.open && count ? (
-        <div id="image-tray" className="image-tray" role="group" aria-label={manageLabel}>
+      {trayPresent ? (
+        <div id="image-tray" className="image-tray" role="group" aria-label={manageLabel} aria-hidden={trayOpen ? undefined : true} inert={!trayOpen} data-state={trayOpen ? "open" : "closed"}>
           <div className="image-tray-heading">
             <span>{manageLabel}</span>
             <button type="button" title={props.copy.replaceImages} aria-label={props.copy.replaceImages} onClick={choose}><ImagePlusIcon /></button>

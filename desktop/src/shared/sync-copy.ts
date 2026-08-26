@@ -20,6 +20,8 @@ export const SYNC_COPY = {
     syncReadOnly: "A newer device wrote an unsupported sync format. Downloads remain available; uploads are paused to protect cloud data.",
     syncStateIdle: "Up to date",
     syncStateLocalOnly: "Local only",
+    syncStateAuthorizing: "Waiting for browser authorization…",
+    syncStateConnecting: "Checking Google Drive access…",
     syncStateSyncing: "Syncing…",
     syncStateOffline: "Offline; local changes are queued",
     syncStateAuth: "Sign in again to continue",
@@ -31,6 +33,7 @@ export const SYNC_COPY = {
     syncReasonQuota: "Google Drive quota or rate limit reached",
     syncReasonPolicy: "Google policy denied Drive access",
     syncReasonOauthMissing: "OAuth is not configured",
+    syncReasonTimeout: "Connection timed out. Check your network or proxy, then try again.",
     syncPrivacy: "Cloud records are plain JSON and are not end-to-end encrypted. PolyAsk requests only drive.appdata access.",
     syncActionFailed: "Sync action failed"
   },
@@ -55,6 +58,8 @@ export const SYNC_COPY = {
     syncReadOnly: "其他设备写入了当前版本不支持的同步格式。仍可下载，已暂停上传以保护云端数据。",
     syncStateIdle: "已是最新",
     syncStateLocalOnly: "仅保存在本机",
+    syncStateAuthorizing: "正在等待浏览器完成授权……",
+    syncStateConnecting: "正在检查 Google Drive 访问权限……",
     syncStateSyncing: "正在同步…",
     syncStateOffline: "当前离线，本机变更已排队",
     syncStateAuth: "请重新登录后继续",
@@ -66,6 +71,7 @@ export const SYNC_COPY = {
     syncReasonQuota: "已达到 Google Drive 配额或请求限制",
     syncReasonPolicy: "Google 策略拒绝了 Drive 访问",
     syncReasonOauthMissing: "尚未配置 OAuth",
+    syncReasonTimeout: "连接超时。请检查网络或代理设置后重试。",
     syncPrivacy: "云端记录为明文 JSON，不提供端到端加密；PolyAsk 仅申请 drive.appdata 权限。",
     syncActionFailed: "同步操作失败"
   },
@@ -90,6 +96,8 @@ export const SYNC_COPY = {
     syncReadOnly: "其他裝置寫入了目前版本不支援的同步格式。仍可下載，已暫停上傳以保護雲端資料。",
     syncStateIdle: "已是最新",
     syncStateLocalOnly: "僅儲存在本機",
+    syncStateAuthorizing: "正在等待瀏覽器完成授權……",
+    syncStateConnecting: "正在檢查 Google Drive 存取權限……",
     syncStateSyncing: "正在同步…",
     syncStateOffline: "目前離線，本機變更已排入佇列",
     syncStateAuth: "請重新登入後繼續",
@@ -101,6 +109,7 @@ export const SYNC_COPY = {
     syncReasonQuota: "已達 Google Drive 配額或要求限制",
     syncReasonPolicy: "Google 政策拒絕了 Drive 存取",
     syncReasonOauthMissing: "尚未設定 OAuth",
+    syncReasonTimeout: "連線逾時。請檢查網路或代理設定後再試一次。",
     syncPrivacy: "雲端記錄為純文字 JSON，不提供端對端加密；PolyAsk 僅要求 drive.appdata 權限。",
     syncActionFailed: "同步操作失敗"
   }

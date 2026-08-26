@@ -37,6 +37,27 @@ test("DeepSeek 图片档切到 Vision，且无正文时不返回用户消息", a
   assert.equal(deepseek.answer(), null);
 });
 
+test("豆包识别带品牌和版本前缀的模式文案", async () => {
+  let selected = "豆包 快速", menuOpen = false;
+  const modeButton = {
+    textContent: selected,
+    children: [],
+    getBoundingClientRect: () => ({ x: 700, y: 800, width: 100, height: 32 }),
+  };
+  const expert = { textContent: "豆包 2.1 Turbo 专家", click() { selected = "豆包 2.1 Turbo"; modeButton.textContent = selected; } };
+  const document = { querySelectorAll(selector) {
+    if (selector === "button") return [modeButton];
+    if (selector === '[role="menuitem"]') return menuOpen ? [expert] : [];
+    return [];
+  } };
+  const context = helpers(document, { openMenu() { menuOpen = true; } });
+  vm.runInNewContext(source("content/adapters-cn.js"), context);
+  const doubao = context.window.__AMS.adapters["doubao.com"];
+  assert.equal(doubao.state(), "fast");
+  await doubao.think();
+  assert.equal(doubao.state(), "think");
+});
+
 test("Kimi 使用工具菜单生成的 file input，并能确认最后一条用户消息", async () => {
   let input = null, attached = null;
   const toolkit = { click() { input = { className: "hidden-input" }; } };
@@ -60,6 +81,38 @@ test("Kimi 使用工具菜单生成的 file input，并能确认最后一条用�
   assert.equal(attached.found, input);
   assert.equal(kimi.submitted("新问题 第二行"), true);
   assert.equal(kimi.submitted("别的问题"), false);
+});
+
+test("元宝新模式菜单映射 Instant 与 Thinking，并使用语义发送键", async () => {
+  let selected = "Instant", menuOpen = false, sent = false;
+  const trigger = {
+    textContent: selected,
+    click() { menuOpen = true; },
+    getAttribute(name) { return name === "aria-label" ? "Switch model" : null; },
+  };
+  const item = (text) => ({
+    textContent: text,
+    getAttribute(name) { return name === "aria-checked" ? String(selected === text) : null; },
+    click() { selected = text; trigger.textContent = text; menuOpen = false; },
+  });
+  const items = [item("Instant"), item("Thinking"), item("Expert")];
+  const send = { className: "SendButton_sendButton", getAttribute: () => null, click() { sent = true; } };
+  const document = {
+    querySelector(selector) {
+      if (selector === 'button[aria-label="Switch model"], button[aria-label="切换模型"]') return trigger;
+      if (selector === '[aria-label="Send"], [aria-label="发送"]') return send;
+      return null;
+    },
+    querySelectorAll(selector) { return selector === '[role="menuitemradio"]' && menuOpen ? items : []; },
+  };
+  const context = helpers(document, { openMenu: (el) => el.click(), dropFiles: () => Promise.resolve(true) });
+  vm.runInNewContext(source("content/adapters-cn2.js"), context);
+  const yuanbao = context.window.__AMS.adapters["yuanbao.tencent.com"];
+  assert.equal(yuanbao.state(), "fast");
+  await yuanbao.think();
+  assert.equal(yuanbao.state(), "think");
+  yuanbao.submit();
+  assert.equal(sent, true);
 });
 
 test("千问新模式按钮可读，think 与 fast 使用当前可用模型", async () => {

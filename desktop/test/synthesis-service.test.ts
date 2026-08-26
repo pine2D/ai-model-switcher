@@ -99,6 +99,28 @@ test("synthesis invalidates a completed run after validation and before navigati
   }
 });
 
+test("synthesis rejects a target outside the current selected-site scope", async () => {
+  const { database, archives, record } = fixture();
+  let navigated = false;
+  try {
+    const service = new SynthesisService({
+      sites: SITES,
+      archives,
+      targetAvailable: (site) => site === "claude",
+      navigate: async () => { navigated = true; },
+      send: async () => [{ site: "gemini", ok: true }],
+      collect: async () => [],
+      showTarget: () => undefined,
+      recordHistory: () => undefined
+    });
+    await assert.rejects(
+      () => service.send({ archiveId: record.id, targetSite: "gemini", tier: null, selectedHosts: ["claude.ai", "chatgpt.com"], instruction: "" }),
+      /target_not_selected/
+    );
+    assert.equal(navigated, false);
+  } finally { database.close(); }
+});
+
 test("uncertain synthesis submit is exposed once and never creates pending state", async () => {
   const { database, archives, record } = fixture();
   let sends = 0;

@@ -35,7 +35,8 @@ function retryAfter(value: string | null): number | undefined {
 export class DriveClient {
   constructor(
     private readonly tokens: AccessTokenProvider,
-    private readonly fetch: Fetch = globalThis.fetch
+    private readonly fetch: Fetch = globalThis.fetch,
+    private readonly requestTimeoutMs = 30_000
   ) {}
 
   async listFiles(signal?: AbortSignal): Promise<DriveFile[]> {
@@ -101,21 +102,29 @@ export class DriveClient {
   private async json<T>(url: string, init: RequestInit): Promise<T> {
     const response = await this.request(url, init);
     try { return JSON.parse(await response.text()) as T; }
-    catch { throw failure("invalid_response", response.status); }
+    catch (error) {
+      if (init.signal?.aborted) throw error;
+      if ((error as { name?: string }).name === "AbortError") throw failure("network_timeout", response.status);
+      throw failure("invalid_response", response.status);
+    }
   }
 
   private async request(url: string, init: RequestInit, retry401 = true): Promise<Response> {
     if (init.signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const token = await this.tokens.accessToken(!retry401);
+    if (init.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const deadline = AbortSignal.timeout(this.requestTimeoutMs);
+    const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
     let response: Response;
     try {
-      response = await this.fetch(url, { ...init, headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${token}` } });
+      response = await this.fetch(url, { ...init, signal, headers: { ...Object.fromEntries(new Headers(init.headers)), Authorization: `Bearer ${token}` } });
     } catch (error) {
+      if (!init.signal?.aborted && deadline.aborted) throw failure("network_timeout", 0);
       if ((error as { name?: string }).name === "AbortError") throw error;
       throw failure("network_error", 0);
     }
     if (response.status === 401 && retry401) return this.request(url, init, false);
-    if (!response.ok) throw await responseFailure(response);
+    if (!response.ok) throw await responseFailure(response, init.signal, deadline);
     return response;
   }
 }
@@ -124,10 +133,24 @@ function failure(code: string, status: number, reason?: string, wait?: number): 
   return Object.assign(new Error(code), { code, status, ...(reason ? { reason } : {}), ...(wait !== undefined ? { retryAfter: wait } : {}) });
 }
 
-async function responseFailure(response: Response): Promise<DriveFailure> {
+async function responseFailure(
+  response: Response,
+  callerSignal: AbortSignal | null | undefined,
+  deadline: AbortSignal
+): Promise<DriveFailure> {
   let reason: string | undefined;
+  let text: string;
   try {
-    const body = JSON.parse(await response.text()) as { error?: { errors?: { reason?: string }[]; message?: string } };
+    text = await response.text();
+  } catch (error) {
+    if (callerSignal?.aborted) throw error;
+    if (deadline.aborted || (error as { name?: string }).name === "TimeoutError") {
+      throw failure("network_timeout", response.status);
+    }
+    throw error;
+  }
+  try {
+    const body = JSON.parse(text) as { error?: { errors?: { reason?: string }[]; message?: string } };
     reason = body.error?.errors?.[0]?.reason ?? body.error?.message;
   } catch { /* Non-JSON error bodies are valid. */ }
   const code = response.status === 401 ? "unauthorized" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : response.status === 410 ? "page_token_expired" : response.status === 429 ? "rate_limited" : response.status >= 500 ? "server_error" : "request_failed";

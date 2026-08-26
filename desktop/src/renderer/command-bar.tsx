@@ -23,6 +23,7 @@ interface CommandBarProps {
   readonly failureCount: number;
   readonly cancelledCount: number;
   readonly drawerOpen: boolean;
+  readonly pageControl?: ReactNode;
   readonly imageControl: ReactNode;
   readonly sendBlockedReason: string | null;
   readonly synthesisPending: boolean;
@@ -60,6 +61,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
     failureCount,
     cancelledCount,
     drawerOpen,
+    pageControl,
     imageControl,
     sendBlockedReason,
     synthesisPending,
@@ -87,7 +89,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
   ] as const;
 
   return (
-    <header className={expanded ? "command-bar is-expanded" : "command-bar"} aria-label={copy.broadcastLabel}>
+    <header className={`command-bar${pageControl ? " has-pages" : ""}${expanded ? " is-expanded" : ""}`} aria-label={copy.broadcastLabel}>
       <div className="mode-switch priority-p0" aria-label={copy.layoutLabel}>
         <button type="button" title={copy.overview} aria-pressed={layoutMode === "overview"} className={layoutMode === "overview" ? "active" : ""} onClick={() => onLayoutChange("overview")}>
           <GridIcon /><span className="priority-p1">{copy.overview}</span>
@@ -96,6 +98,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
           <FocusIcon /><span className="priority-p1">{copy.focus}</span>
         </button>
       </div>
+      {pageControl}
       <textarea
         className="priority-p0"
         name="prompt"

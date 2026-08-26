@@ -15,6 +15,7 @@ interface ArchiveSurfaceProps {
   readonly onClose: () => void;
   readonly onCapture: () => Promise<ArchiveRecord>;
   readonly sites: readonly SiteDefinition[];
+  readonly synthesisSites: readonly SiteDefinition[];
   readonly defaultTier: Tier;
   readonly preferredId: string | null;
   readonly pendingSynthesis: PendingSynthesis | null;
@@ -213,7 +214,7 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
       onOpenSource={(url) => { void run(() => window.polyask.openExternal(url), props.copy.archiveLoadFailed); }}
       pendingSynthesis={props.pendingSynthesis}
       synthesisCandidate={props.synthesisCandidate}
-      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.sites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => synthesisSendError(props.copy, error)); }} /> : undefined}
+      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.synthesisSites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => synthesisSendError(props.copy, error)); }} /> : undefined}
       onSynthesize={() => { if (selected) setSynthesisId(selected.id); }}
       onCollectSynthesis={() => { void run(props.onCollectSynthesis, props.copy.synthesisCollectFailed); }}
       onSaveSynthesis={(replaceExisting) => { void run(async () => {
@@ -234,5 +235,6 @@ function synthesisSendError(copy: DesktopCopy, error: unknown): string {
   if (code === "timeout") return copy.timedOut;
   if (code === "cancelled") return copy.cancelledStatus;
   if (code === "inject_failed") return copy.injectFailed;
+  if (code === "target_not_selected") return copy.synthesisTargetNotSelected;
   return copy.synthesisSendFailed;
 }

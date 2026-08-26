@@ -15,3 +15,17 @@ export function commandKeyAction(
   }
   return event.key === "Escape" ? "collapse" : null;
 }
+
+export function pageTabKeyAction(
+  key: string,
+  current: number,
+  count: number
+): { readonly focus: number; readonly activate: boolean } | null {
+  if (count <= 1) return null;
+  if (key === "Enter" || key === " ") return { focus: current, activate: true };
+  if (key === "Home") return { focus: 0, activate: false };
+  if (key === "End") return { focus: count - 1, activate: false };
+  if (key !== "ArrowLeft" && key !== "ArrowRight") return null;
+  const offset = key === "ArrowRight" ? 1 : -1;
+  return { focus: (current + offset + count) % count, activate: false };
+}

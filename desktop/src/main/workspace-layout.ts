@@ -68,7 +68,8 @@ export function computeWorkspaceLayout(input: WorkspaceLayoutInput): WorkspaceLa
     baseArea,
     drawerWidthForDensity(input.density, input.drawerOpen)
   );
-  const mode = resolveLayoutMode(input.requestedMode, area, metrics.viewGap);
+  const requestedKeys = input.requestedMode === "focus" ? input.focusOrder : input.overviewOrder;
+  const mode = resolveLayoutMode(input.requestedMode, area, metrics.viewGap, requestedKeys.length);
   const keys = mode === "focus" ? input.focusOrder : input.overviewOrder;
   return {
     mode,

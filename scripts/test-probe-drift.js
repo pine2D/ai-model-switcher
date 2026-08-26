@@ -68,6 +68,7 @@ test("dpr 变化是环境参考，不入警报", () => {
 });
 
 test("LABEL_PROBES 登记对账：九站 host 全覆盖，探针方法名在适配器源码里真实存在", () => {
+  assert.match(LABEL_PROBES["yuanbao.tencent.com"], /a\._mode\(\)/, "元宝新版探针必须优先读取模式按钮");
   for (const host of manifestHosts())
     assert.ok(Object.keys(LABEL_PROBES).some((k) => host.includes(k)), host + " 没有标签探针（加站要同步 LABEL_PROBES）");
   const adapters = ["content/adapters-intl.js", "content/adapters-cn.js", "content/adapters-cn2.js"]

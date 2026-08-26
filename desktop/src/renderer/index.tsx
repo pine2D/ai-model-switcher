@@ -19,6 +19,8 @@ import {
   loadDisplayPreferences,
 } from "./display-preferences";
 import { ImagePicker } from "./image-picker";
+import { PageTabs } from "./page-tabs";
+import { usePresence } from "./presence";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
 import { WorkspaceDrawer } from "./workspace-drawer";
@@ -34,6 +36,8 @@ import "./accessibility.css";
 const INITIAL_LAYOUT: LayoutState = {
   mode: "overview",
   focused: "claude",
+  page: 0,
+  pageCount: 1,
   placements: []
 };
 
@@ -52,6 +56,8 @@ function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const bootstrapStarted = useRef(false);
+  const layoutPage = useRef(0);
+  const requestedPage = useRef<{ readonly page: number; readonly inputMethod: "keyboard" | "pointer" } | null>(null);
   const actionLock = useRef<ExclusiveActionLock | null>(null);
   if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
@@ -65,6 +71,8 @@ function App(): React.JSX.Element {
   const [surface, setSurface] = useState<DesktopSurface>("sites");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [announcement, setAnnouncement] = useState("");
+  const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
+  const drawerPresent = usePresence(drawerOpen, 180);
   const workspaceFlow = useWorkspaceFlow(sites, copy.workspaceActionFailed, setAnnouncement);
   const { workspace, selected } = workspaceFlow;
   const changeDrawerOpen = (value: boolean): void => {
@@ -93,6 +101,7 @@ function App(): React.JSX.Element {
   const acceptBootstrap = (state: BootstrapState): void => {
     setSites(state.sites);
     setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
+    layoutPage.current = state.layout.page;
     setLayout(state.layout);
     workspaceFlow.accept(state.workspace);
     synthesis.acceptPending(state.pendingSynthesis);
@@ -115,7 +124,18 @@ function App(): React.JSX.Element {
       setStatuses((current) => ({ ...current, [status.site]: status }));
       setAnnouncement(`${status.site}: ${describeStatus(copy, status)}`);
     });
-    const offLayout = window.polyask.onLayout(setLayout);
+    const offLayout = window.polyask.onLayout((next) => {
+      if (next.page !== layoutPage.current) {
+        const request = requestedPage.current?.page === next.page ? requestedPage.current : null;
+        setPageInputMethod(request?.inputMethod ?? "keyboard");
+        if (!request) {
+          setAnnouncement(formatCopy(copy.sitePageChanged, { page: next.page + 1, total: next.pageCount }));
+        }
+        requestedPage.current = null;
+        layoutPage.current = next.page;
+      }
+      setLayout(next);
+    });
     const offDisplay = window.polyask.onDisplayPreferences(acceptDisplayPreferences);
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
     const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
@@ -236,10 +256,10 @@ function App(): React.JSX.Element {
   }
 
   if (surface === "archive") {
-    return <ArchiveSurface copy={copy} locale={navigator.language} sites={sites} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} />;
+    return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <SettingsWorkspace copy={copy} locale={navigator.language} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} />;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
   }
 
   return (
@@ -258,6 +278,21 @@ function App(): React.JSX.Element {
         failureCount={broadcast.failureCount}
         cancelledCount={broadcast.cancelledCount}
         drawerOpen={drawerOpen}
+        pageControl={layout.pageCount > 1 ? (
+          <PageTabs
+            copy={copy}
+            selectedSites={workspace.selectedSites}
+            statuses={statuses}
+            page={layout.page}
+            inputMethod={pageInputMethod}
+            onPageChange={(page, inputMethod) => {
+              requestedPage.current = { page, inputMethod };
+              setPageInputMethod(inputMethod);
+              setAnnouncement(formatCopy(copy.sitePageChanged, { page: page + 1, total: layout.pageCount }));
+              window.polyask.setPage(page);
+            }}
+          />
+        ) : null}
         imageControl={(
           <ImagePicker
             copy={copy}
@@ -296,12 +331,13 @@ function App(): React.JSX.Element {
         onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>
-      {drawerOpen ? (
+      {drawerPresent ? (
         <WorkspaceDrawer
           copy={copy}
           sites={sites}
           selected={selected}
           groups={workspace.groups}
+          open={drawerOpen}
           onClose={() => changeDrawerOpen(false)}
           onSelectionChange={workspaceFlow.changeSelection}
           onSaveGroup={workspaceFlow.saveGroup}

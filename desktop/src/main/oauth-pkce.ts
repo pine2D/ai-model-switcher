@@ -32,6 +32,12 @@ export interface TokenSet {
 
 const CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
 const encode = (value: Buffer) => value.toString("base64url");
+const NETWORK_TIMEOUT_MS = 30_000;
+
+export const OAUTH_CALLBACK_HTML = `<!doctype html><meta charset="utf-8"><title>PolyAsk</title>
+<p>Authorization received. PolyAsk is verifying the connection; return to PolyAsk to see the result.</p>
+<p lang="zh-CN">已收到授权。PolyAsk 正在验证连接，请返回应用查看结果。</p>
+<p lang="zh-TW">已收到授權。PolyAsk 正在驗證連線，請返回應用程式查看結果。</p>`;
 
 export async function buildAuthorizationRequest(input: BuildAuthorizationInput): Promise<AuthorizationRequest> {
   if (!CLIENT_ID.test(input.clientId) || !Number.isInteger(input.port) || input.port < 1 || input.port > 65_535) {
@@ -81,8 +87,8 @@ export async function listenLoopback(): Promise<LoopbackReceiver> {
     const state = url.searchParams.get("state") ?? undefined;
     const error = url.searchParams.get("error") ?? undefined;
     if (!code && !error) { response.writeHead(404).end(); return; }
-    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-    response.end("<!doctype html><meta charset=utf-8><title>PolyAsk</title><p>You can close this browser window and return to PolyAsk.</p>");
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", Connection: "close" });
+    response.end(OAUTH_CALLBACK_HTML);
     resolve({ code, state, error });
   });
   await new Promise<void>((resolveReady, reject) => {
@@ -138,6 +144,7 @@ interface ExchangeInput {
   readonly redirectUri: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
+  readonly timeoutMs?: number;
 }
 
 export async function exchangeAuthorizationCode(input: ExchangeInput): Promise<TokenSet> {
@@ -148,39 +155,47 @@ export async function exchangeAuthorizationCode(input: ExchangeInput): Promise<T
     redirect_uri: input.redirectUri,
     grant_type: "authorization_code"
   });
-  return tokenRequest(body, input.fetch ?? globalThis.fetch, input.now ?? Date.now);
+  return tokenRequest(body, input.fetch ?? globalThis.fetch, input.now ?? Date.now, input.timeoutMs);
 }
 
 export async function refreshAccessToken(
   clientId: string,
   refreshToken: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  timeoutMs?: number
 ): Promise<TokenSet> {
-  return tokenRequest(new URLSearchParams({ client_id: clientId, refresh_token: refreshToken, grant_type: "refresh_token" }), fetch, now);
+  return tokenRequest(new URLSearchParams({ client_id: clientId, refresh_token: refreshToken, grant_type: "refresh_token" }), fetch, now, timeoutMs);
 }
 
-export async function revokeGoogleToken(token: string, fetch: typeof globalThis.fetch = globalThis.fetch): Promise<void> {
-  const response = await fetch("https://oauth2.googleapis.com/revoke", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ token })
-  });
+export async function revokeGoogleToken(token: string, fetch: typeof globalThis.fetch = globalThis.fetch, timeoutMs?: number): Promise<void> {
+  const signal = AbortSignal.timeout(timeoutMs ?? NETWORK_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token }),
+      signal
+    });
+  } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
   if (!response.ok && response.status !== 400) throw new Error("oauth_revoke_failed");
 }
 
-async function tokenRequest(body: URLSearchParams, fetch: typeof globalThis.fetch, now: () => number): Promise<TokenSet> {
+async function tokenRequest(body: URLSearchParams, fetch: typeof globalThis.fetch, now: () => number, timeoutMs = NETWORK_TIMEOUT_MS): Promise<TokenSet> {
+  const signal = AbortSignal.timeout(timeoutMs);
   let response: Response;
   try {
     response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body
+      body,
+      signal
     });
-  } catch { throw new Error("network_error"); }
+  } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
   let value: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
   try { value = JSON.parse(await response.text()); }
-  catch { throw new Error("oauth_invalid_response"); }
+  catch { throw new Error(signal.aborted ? "network_timeout" : "oauth_invalid_response"); }
   if (!response.ok) throw new Error(response.status === 400 ? "auth_failed" : "oauth_token_failed");
   if (typeof value.access_token !== "string" || !value.access_token || !Number.isFinite(Number(value.expires_in))) {
     throw new Error("oauth_invalid_response");

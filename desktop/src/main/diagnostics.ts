@@ -17,6 +17,7 @@ export interface DiagnosticSiteInput {
   readonly sandbox: boolean;
   readonly contextIsolation: boolean;
   readonly nodeIntegration: boolean;
+  readonly attached: boolean;
   readonly bounds: ViewBounds;
 }
 
@@ -57,9 +58,18 @@ export function buildDiagnosticSnapshot(input: DiagnosticInput): DiagnosticSnaps
     if (!site.sandbox || !site.contextIsolation || site.nodeIntegration) {
       violations.push(`insecure_site:${site.site}`);
     }
-    if (!hasPositiveBounds(site.bounds)) violations.push(`site_bounds:${site.site}`);
+    if (site.attached && !hasPositiveBounds(site.bounds)) violations.push(`site_bounds:${site.site}`);
   }
-  if (input.layout.placements.length !== SITE_KEYS.length) violations.push("layout_count");
+  const attached = input.sites.filter((site) => site.attached).map((site) => site.site);
+  const placed = input.layout.placements.map((placement) => placement.key);
+  if (placed.length !== attached.length || placed.length > 6) violations.push("layout_count");
+  if (new Set([...attached, ...placed]).size !== attached.length ||
+      !attached.every((site) => placed.includes(site))) {
+    violations.push("attached_layout");
+  }
+  for (const placement of input.layout.placements) {
+    if (!hasPositiveBounds(placement.bounds)) violations.push(`layout_bounds:${placement.key}`);
+  }
 
   return {
     schema: 1,

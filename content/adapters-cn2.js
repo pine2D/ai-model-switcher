@@ -119,25 +119,46 @@
       },
     },
 
-    // 元宝：composer 的 Deep Thinking/深度思考 为 toggle（CSS-module 类 ThinkSelector_selected=开），原生 click
+    // 元宝：新版 composer 用 Instant / Thinking / Expert 模式菜单；旧版 Deep Thinking toggle 作为 A/B 回退。
     "yuanbao.tencent.com": {
+      _modeBtn: function () { return document.querySelector('button[aria-label="Switch model"], button[aria-label="切换模型"]'); },
+      _mode: function () { const b = this._modeBtn(); return b ? (b.textContent || "").trim() : ""; },
       _toggle: function () { return document.querySelector('[class*="ThinkSelector"]'); },
       _isOn: function () {
         const t = this._toggle();
         return !!t && /ThinkSelector_selected/.test((t.className || "").toString());
       },
+      _selectMode: async function (re) {
+        const b = this._modeBtn();
+        if (!b) throw new Error("元宝: 模式按钮未找到");
+        if (re.test(this._mode())) return;
+        openMenu(b);
+        const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((el) =>
+          re.test((el.textContent || "").trim())), 1500);
+        if (!item) { escMenus(); throw new Error("元宝: 目标模式未找到"); }
+        item.click(); await sleep(500); escMenus();
+        if (!re.test(this._mode())) throw new Error("元宝: 目标模式未生效");
+      },
       _set: async function (on) {
+        if (this._modeBtn()) {
+          await this._selectMode(on ? /^(Thinking|思考|深度思考)/i : /^(Instant|即时|快速)/i);
+          return;
+        }
         const t = this._toggle();
         if (!t) throw new Error("元宝: Deep Thinking 控件未找到");
         if (this._isOn() !== on) { t.click(); await sleep(500); }
       },
       diagnose: function () {
         return [
-          { name: t("diag_deepThinking"), ok: !!this._toggle() },
+          { name: t("diag_modeBtn"), ok: !!(this._modeBtn() || this._toggle()) },
           { name: t("diag_tierReadable"), ok: this.state() != null },
         ];
       },
-      state: function () { return this._toggle() ? (this._isOn() ? "think" : "fast") : null; },
+      state: function () {
+        const mode = this._mode();
+        if (mode) return /^(Thinking|思考|深度思考)/i.test(mode) ? "think" : /^(Instant|即时|快速)/i.test(mode) ? "fast" : null;
+        return this._toggle() ? (this._isOn() ? "think" : "fast") : null;
+      },
       think: async function () { await this._set(true); },
       fast: async function () { await this._set(false); },
       attach: function (files, el, deadline) { return S.dropFiles(el, files, el, deadline); },
@@ -151,13 +172,13 @@
         const pick = mds[mds.length - 1] || host;
         return pick;
       },
-      // 发送键是 icon-font span（chrome-dbg 真机审计 2026-07：点击后 composer 清空实证可发）；
-      // 没找到落回 Enter+校验兜底。注入侧真机实证：元宝 beforeinput 不生效、execCommand 生效（既有回退链覆盖）
-      sendSel: ".icon-send", // 供 diag.js 巡检，与 submit 同步维护
+      // 新版发送键是 aria-label=Send 的 div；旧版 icon-font 已下线。不可用时落回 Enter+校验兜底。
+      // 注入侧真机实证：元宝 beforeinput 不生效、execCommand 生效（既有回退链覆盖）
+      sendSel: '[aria-label="Send"], [aria-label="发送"]', // 供 diag.js 巡检，与 submit 同步维护
       submit: function () {
-        const b = document.querySelector(".icon-send");
-        if (!b) return false;
-        b.click();
+        const b = document.querySelector('[aria-label="Send"], [aria-label="发送"]');
+        if (!b || /disabled/i.test((b.className || "").toString()) || b.getAttribute("aria-disabled") === "true") return false;
+        clickEl(b);
       },
     },
 

@@ -32,13 +32,13 @@
 | `attach(files, el, deadline)` | | `async` | 真值 = 已确认附件；`false` = 失败（按是否已过 deadline 归 `attachment_timeout` / `attachment_failed`）；**返回字符串 = 直接当错误码用**；抛异常 = `attachment_failed`。不实现就整个不写（core 如实报 `attachment_unsupported`），不要写半吊子上传 |
 | `thinkImage()` / `fastImage()` | | `async` | 有图时替代 `think`/`fast`（仅 DeepSeek，走 Vision 模式） |
 | `stop()` | | `async` | 仅 ChatGPT。**全仓无调用方，当前是死代码**——要么补 UI（如控制台「停止全部」），要么删 |
-| `sendSel` | | 字符串 | 发送键选择子，**仅 DeepSeek/Kimi/元宝 3 站声明**（发送键无 send/发送 标签且常驻），供 `content/diag.js` 巡检做只读存在性检查。**与本站 `submit` 的选择子同步维护**——`scripts/test-diag-runtime.js` 按字面量对账，脱钩会红。豆包**有意不声明**：其发送键空输入框时不在 DOM（非常驻，真机 2026-08-18），列进巡检会恒红 |
+| `sendSel` | | 字符串 | 发送键选择子，**仅 DeepSeek/Kimi/元宝 3 站声明**（都需要站点级点击且锚点常驻），供 `content/diag.js` 巡检做只读存在性检查。**与本站 `submit` 的选择子同步维护**——`scripts/test-diag-runtime.js` 按字面量对账，脱钩会红。豆包**有意不声明**：其发送键空输入框时不在 DOM（非常驻，真机 2026-08-18），列进巡检会恒红 |
 
 **能力由钩子决定，不由清单决定**：`answer()` 决定该站能否进「汇总复制」（九站全实现）；`attach()` 决定能否收图（6 站实现：Claude / ChatGPT / DeepSeek / 豆包 / Kimi 走 `S.setInputFiles`，元宝走 `S.dropFiles`；Gemini / 千问 / 智谱**有意不实现**，真机实测三站都拒绝合成 drop/paste/change，报 `attachment_unsupported` 是正确行为）。这 6 站必须与 `console/sites.js` 里带 `image:true` 的 6 站完全一致。
 
 **巡检通用检查（`content/diag.js`）**：在全部适配器分卷之后注入，按已填充的注册表统一包装每站 `diagnose()`，前置两条只读检查——「输入框」（`findComposer()`，九站全部）与「发送键」（仅声明了 `sendSel` 的站）。新站/新分卷自动获得，无需自己写这两条；**有意不做全站发送键检查**：ChatGPT 等站空输入框时发送键被语音键替换，通用检查会在巡检（输入框常为空）时恒红误报。新开适配器分卷（如 `adapters-cn3.js`）挂 manifest 时**必须排在 `content/diag.js` 之前**，否则该卷站点拿不到通用检查（注册晚于包装，静默缺席不报错）。
 
-**什么时候才写 `submit`**：群发的发送/切档复用 `content/core.js` 的通用 `submitPrompt`/`runMode`，多数站点无需写 `submit`；**仅当发送键不带 `send`/`发送` 标签、且 Enter 提交不灵时**才加。当前实现分布：`submit` 4 站（DeepSeek / 豆包 / Kimi / 元宝）、`inject` 1 站（Kimi）、`submitted` 1 站（Kimi）、`stop` 1 站（ChatGPT）、`thinkImage`/`fastImage` 1 站（DeepSeek）。
+**什么时候才写 `submit`**：群发的发送/切档复用 `content/core.js` 的通用 `submitPrompt`/`runMode`，多数站点无需写 `submit`；**仅当通用 button 选择子或 Enter 提交覆盖不了本站时**才加。当前实现分布：`submit` 4 站（DeepSeek / 豆包 / Kimi / 元宝）、`inject` 1 站（Kimi）、`submitted` 1 站（Kimi）、`stop` 1 站（ChatGPT）、`thinkImage`/`fastImage` 1 站（DeepSeek）。
 
 ## 九站发送路径
 
@@ -51,7 +51,7 @@
 | 豆包 | `submit()` | `#flow-end-msg-send`；缺失或 disabled/aria-disabled/data-disabled 为真时返回 false 落回通用链（textarea Enter 可发） |
 | 千问 | core 通用链 | 无 `submit`；受控编辑器靠合成 `beforeinput` 注入 |
 | Kimi | `submit()` | `.send-button-container`（无 role 的 div，Enter 只插换行）；用 `clickEl(b)` 合成 pointer 序列 + `detail:1` 拟真，**不是原生 `click()`** |
-| 元宝 | `submit()` | `.icon-send`（icon-font span，选择子不限标签），原生 `click()` |
+| 元宝 | `submit()` | `[aria-label="Send"], [aria-label="发送"]`（非 button），排除 disabled 后用 `clickEl()` |
 | 智谱 | core 通用链 / Enter | 无 `submit`；通用链先试 `send`/`发送` 标签按钮，点不动才发 Enter（textarea 可发） |
 
 Claude / ChatGPT / Gemini / 千问 究竟命中通用链的哪一步（原生点按钮 vs 合成 Enter），只有 Claude 有真机结论；其余三站代码里没有站点级证据，别断言。
@@ -172,7 +172,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 ### 豆包（`www.doubao.com` / 键 `doubao.com`，`content/adapters-cn.js`）
 
 - 档位：think = `_select(/^专家/)`、fast = `_select(/^快速/)`。**只切 composer 模式按钮的菜单项，无独立思考开关、无模型选择。** `state()` 读模式按钮文本：`^专家`→think、`^快速`→fast、**其余（含「超能模式」）→ null**——超能档下 HUD 不亮、`switchTier` 会一直重试到超时。
-- 模式按钮 `_modeBtn()`：文本以 `快速|专家|超能` 开头且长度 < 14 的 button。`_select` 最多 3 轮，先读后点（已是目标幂等返回），`openMenu` 展开后对 `[role="menuitem"]` 用**原生 `item.click()`**，每轮 `escMenus()`；按钮缺失或 3 轮未选中都抛异常。
+- 模式按钮 `_modeBtn()`：按钮与菜单项现在可能带品牌和版本前缀（实测菜单项 `豆包 2.1 Turbo 专家`，选中后按钮只显示 `豆包 2.1 Turbo`，2026-08-26）。`state()` 因此把 `豆包 + 数字版本` 判为 think、末尾「快速」判为 fast；`_modeBtn()` 从候选中取离 composer 最近者，避免撞到侧栏标题。`_select` 最多 3 轮，按 `state()` 先读后点，`openMenu` 展开后对 `[role="menuitem"]` 用**原生 `item.click()`**，每轮 `escMenus()`；按钮缺失或 3 轮未选中都抛异常。
 - `answer()` 从 `[data-message-id]` 中过滤掉自身或子节点带 `justify-end` 的用户消息（AI 消息无右对齐），取末条 → `.md-box-root`。`attach` 走 `input[type="file"][accept*="png"]`。
 - 渲染会**在中英文与数字之间插空格**——marker 匹配先去空白再比。
 
@@ -196,7 +196,8 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 
 ### 元宝（`yuanbao.tencent.com`，`content/adapters-cn2.js`）
 
-- 档位：think = `_set(true)`、fast = `_set(false)`，**只切 composer 常驻的深度思考 toggle**（`[class*="ThinkSelector"]`，开态判据是 className 含 `ThinkSelector_selected`），原生 `t.click()` 且先读后点；控件缺失抛「元宝: Deep Thinking 控件未找到」。**无模型选择。** `state()`：toggle 在 → 按 `_isOn()` 返回 think/fast；toggle 不在 → null。
+- 档位（2026-08-26 新版）：composer 的 `button[aria-label="Switch model"]` 菜单包含 Instant / Thinking / Expert，映射 **think = Thinking、fast = Instant**；Expert 属工具执行档，`state()` 有意返回 null。`_selectMode` 先读后点，经 `[role="menuitemradio"]` 选择并复读按钮确认，关键控件缺失或切换未生效均抛异常。中文的「切换模型 / 思考 / 深度思考 / 即时 / 快速」只作双语兼容候选，英文标签已真机确认。
+- 旧版 `[class*="ThinkSelector"]` 深度思考 toggle 仍作为 A/B 回退，开态判据为 className 含 `ThinkSelector_selected`。新版发送键是非 button 的 `[aria-label="Send"]`（中文回退 `[aria-label="发送"]`），disabled 时返回 false；旧 `.icon-send` 已下线。
 - `inject` 无（真机实证 `beforeinput` 不生效、`execCommand` 生效，由 core 既有回退链覆盖）。`answer()` 取末个 `.agent-chat__conv--ai__speech_show` 内、排除 `[class*="cot__think"]` 后的最后一个 `.hyc-common-markdown`（**不排除就把思考全文混进汇总复制**）。`attach` 是九站唯一走 `S.dropFiles(el, files, el, deadline)` 拖放路径的站。
 
 ### 智谱（`chatglm.cn`，UI 标签「智谱」，站点全名智谱清言，`content/adapters-cn2.js`）

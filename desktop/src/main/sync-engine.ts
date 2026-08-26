@@ -51,6 +51,10 @@ export class SyncEngine {
 
   start(): void {
     if (this.disposeOutbox) return;
+    const config = this.options.repository.config();
+    if (!config.connected && config.state === "syncing") {
+      this.options.repository.saveConfig({ state: "idle", reason: undefined });
+    }
     this.disposeOutbox = this.options.repository.onLocalChange(() => this.scheduleLocal());
     this.periodicTimer = setInterval(() => { void this.syncNow("periodic"); }, 15 * 60_000);
     this.periodicTimer.unref?.();
@@ -86,16 +90,16 @@ export class SyncEngine {
     return this.serialize(async () => {
       if (!this.options.auth.configured()) return this.setStatus("blocked", { reason: "oauth_not_configured" });
       try {
+        this.setStatus("syncing", { reason: "oauth" });
         await this.options.auth.connect();
-        this.options.repository.saveConfig({ connected: true, reason: undefined });
         this.options.repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
-        return await this.run("connect");
+        return await this.run("drive_check", true);
       } catch (error) { return this.fail(error); }
     });
   }
 
   syncNow(reason = "manual"): Promise<SyncStatus> {
-    if (!this.options.repository.config().connected) return this.connect();
+    if (!this.options.repository.config().connected) return Promise.resolve(this.publish());
     return this.serialize(() => this.run(reason));
   }
 
@@ -132,9 +136,9 @@ export class SyncEngine {
     });
   }
 
-  private async run(reason: string): Promise<SyncStatus> {
+  private async run(reason: string, establishingConnection = false): Promise<SyncStatus> {
     const config = this.options.repository.config();
-    if (!config.connected || config.clearRunning) return this.status();
+    if ((!config.connected && !establishingConnection) || config.clearRunning) return this.status();
     this.activeController?.abort();
     const controller = new AbortController();
     this.activeController = controller;
@@ -149,7 +153,7 @@ export class SyncEngine {
       const waiting = await this.flush(controller.signal);
       const next = this.options.repository.config();
       return this.setStatus(next.readOnly ? "schema" : waiting ? "waiting" : "idle", {
-        lastSuccessAt: this.now(), reason: undefined
+        connected: true, lastSuccessAt: this.now(), reason: undefined
       });
     } catch (error) { return this.fail(error); }
     finally { if (this.activeController === controller) this.activeController = null; }
@@ -208,15 +212,16 @@ export class SyncEngine {
 
   private fail(error: unknown): SyncStatus {
     const code = (error as { code?: string; message?: string }).code ?? (error as { message?: string }).message;
-    if (code === "network_error" || error instanceof TypeError) return this.setStatus("offline");
-    if (code === "unauthorized" || code === "auth_failed" || code === "refresh_token_missing") return this.setStatus("auth");
+    if (code === "network_timeout" || code === "oauth_timeout") return this.setStatus("offline", { reason: "network_timeout" });
+    if (code === "network_error" || error instanceof TypeError) return this.setStatus("offline", { reason: undefined });
+    if (code === "unauthorized" || code === "auth_failed" || code === "refresh_token_missing") return this.setStatus("auth", { reason: undefined });
     if (code === "oauth_not_configured") return this.setStatus("blocked", { reason: code });
     if (code === "forbidden") {
       const reason = String((error as { reason?: string }).reason ?? "").toLowerCase();
       return this.setStatus("blocked", { reason: /notconfigured|disabled/.test(reason) ? "drive_disabled" : /quota|limit|rate/.test(reason) ? "quota" : "policy" });
     }
-    if (code === "rate_limited" || code === "server_error") return this.setStatus("waiting");
-    return this.setStatus("error");
+    if (code === "rate_limited" || code === "server_error") return this.setStatus("waiting", { reason: undefined });
+    return this.setStatus("error", { reason: undefined });
   }
 
   private setStatus(state: SyncStatus["state"], patch: Record<string, unknown> = {}): SyncStatus {

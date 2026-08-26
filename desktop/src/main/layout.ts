@@ -4,25 +4,30 @@ import type {
   ViewBounds,
   ViewPlacement
 } from "../shared/contracts";
+import { SITE_PAGE_SIZE } from "../shared/site-pages";
+export { paginateSiteKeys, resolveSitePage, SITE_PAGE_SIZE } from "../shared/site-pages";
 
 interface Track {
   readonly start: number;
   readonly size: number;
 }
 
-const WIDE_FOCUS_MIN = 1_440;
 const GRID_TILE_MIN_WIDTH = 380;
 const GRID_TILE_MIN_HEIGHT = 210;
 
 export function resolveLayoutMode(
   requested: "overview" | "focus",
   area: ViewBounds,
-  gap = 4
+  gap = 4,
+  count = SITE_PAGE_SIZE
 ): "overview" | "focus" {
   if (requested === "focus") return "focus";
   const safeGap = Math.max(0, Math.floor(gap));
-  const tileWidth = (area.width - safeGap * 2) / 3;
-  const tileHeight = (area.height - safeGap * 2) / 3;
+  const safeCount = Math.max(1, Math.min(SITE_PAGE_SIZE, Math.floor(count)));
+  const columns = safeCount <= 3 ? safeCount : safeCount === 4 ? 2 : 3;
+  const rows = Math.ceil(safeCount / columns);
+  const tileWidth = (area.width - safeGap * (columns - 1)) / columns;
+  const tileHeight = (area.height - safeGap * (rows - 1)) / rows;
   return tileWidth < GRID_TILE_MIN_WIDTH || tileHeight < GRID_TILE_MIN_HEIGHT
     ? "focus"
     : "overview";
@@ -90,6 +95,34 @@ function grid(
   });
 }
 
+function overview(
+  keys: readonly SiteKey[],
+  area: ViewBounds,
+  gap: number
+): ViewPlacement[] {
+  if (keys.length <= 3) return grid(keys, area, keys.length, gap);
+  if (keys.length === 4) return grid(keys, area, 2, gap);
+  if (keys.length === 6) return grid(keys, area, 3, gap);
+
+  const yTracks = splitAxis(area.y, area.height, 2, gap);
+  const top = splitAxis(area.x, area.width, 2, gap);
+  const bottom = splitAxis(area.x, area.width, 3, gap);
+  return keys.map((key, index) => {
+    const tracks = index < 2 ? top : bottom;
+    const column = index < 2 ? index : index - 2;
+    const row = index < 2 ? 0 : 1;
+    return {
+      key,
+      bounds: {
+        x: tracks[column].start,
+        y: yTracks[row].start,
+        width: tracks[column].size,
+        height: yTracks[row].size
+      }
+    };
+  });
+}
+
 function trackBounds(
   xTracks: readonly Track[],
   yTracks: readonly Track[],
@@ -117,27 +150,49 @@ export function computeViewLayout(
 ): ViewPlacement[] {
   if (keys.length === 0) return [];
   const gap = Math.max(0, Math.floor(options.gap ?? 8));
+  const active = keys.slice(0, SITE_PAGE_SIZE);
 
-  if (options.mode === "overview") return grid(keys, area, 3, gap);
+  if (options.mode === "overview") return overview(active, area, gap);
 
-  const focused = keys.includes(options.focused) ? options.focused : keys[0];
-  const secondary = keys.filter((key) => key !== focused);
-  const wide = area.width >= WIDE_FOCUS_MIN;
-  const columns = wide ? 4 : 3;
-  const rows = wide ? 3 : 4;
-  const xTracks = splitAxis(area.x, area.width, columns, gap);
+  const focused = active.includes(options.focused) ? options.focused : active[0];
+  const secondary = active.filter((key) => key !== focused);
+  if (active.length === 1) return [{ key: focused, bounds: area }];
+
+  const xTracks = splitAxis(area.x, area.width, 3, gap);
+  const fullHeight = [{ start: area.y, size: area.height }];
+  const primaryWidth = trackBounds(xTracks, fullHeight, 0, 0, 2);
+  if (active.length === 2) {
+    return [
+      { key: focused, bounds: primaryWidth },
+      { key: secondary[0], bounds: trackBounds(xTracks, fullHeight, 2, 0) }
+    ];
+  }
+
+  const rows = active.length === 3 ? 2 : 3;
   const yTracks = splitAxis(area.y, area.height, rows, gap);
-  const secondarySlots: readonly [number, number][] = wide
-    ? [[2, 0], [3, 0], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]]
-    : [[2, 0], [2, 1], [0, 2], [1, 2], [2, 2], [0, 3], [1, 3], [2, 3]];
   const primary: ViewPlacement = {
     key: focused,
     bounds: trackBounds(xTracks, yTracks, 0, 0, 2, 2)
   };
-  const rail = secondary.map((key, index) => {
-    const [column, row] = secondarySlots[index];
-    return { key, bounds: trackBounds(xTracks, yTracks, column, row) };
-  });
+  const rail = secondary.slice(0, 2).map((key, index) => ({
+    key,
+    bounds: trackBounds(xTracks, yTracks, 2, index)
+  }));
+  const bottomKeys = secondary.slice(2);
+  if (bottomKeys.length) {
+    const bottomTracks = splitAxis(area.x, area.width, bottomKeys.length, gap);
+    for (const [index, key] of bottomKeys.entries()) {
+      rail.push({
+        key,
+        bounds: {
+          x: bottomTracks[index].start,
+          y: yTracks[2].start,
+          width: bottomTracks[index].size,
+          height: yTracks[2].size
+        }
+      });
+    }
+  }
 
   return [primary, ...rail];
 }

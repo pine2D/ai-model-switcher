@@ -29,6 +29,9 @@ test("application menu offers a keyboard route back to the prompt", () => {
   assert.match(main, /polyask:focus-prompt/);
   assert.match(main, /CmdOrCtrl\+Shift\+P/);
   assert.match(renderer, /onFocusPrompt/);
+  assert.match(main, /CmdOrCtrl\+Shift\+PageDown/);
+  assert.match(main, /CmdOrCtrl\+Shift\+PageUp/);
+  assert.match(main, /pageRelative/);
 });
 
 test("CI tests and packages desktop on Linux, Windows and macOS", () => {
@@ -92,6 +95,15 @@ test("workspace mutations cross the trusted shell bridge and the drawer reserves
   assert.match(workspaceLayout, /reserveWorkspaceArea/);
 });
 
+test("selected-site paging crosses a validated shell bridge", () => {
+  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  assert.match(main, /polyask:set-page/);
+  assert.match(main, /parsePageIndex/);
+  assert.match(main, /manager\.setSelection/);
+  assert.match(preload, /setPage/);
+});
+
 test("image IPC rejects unsupported sites before native view dispatch", () => {
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   assert.match(ipc, /unsupportedImageSites/);
@@ -113,8 +125,10 @@ test("archive surface detaches site views without destroying their web contents"
   const start = manager.indexOf("setSurface(");
   const end = manager.indexOf("\n  focusRelative", start);
   const implementation = manager.slice(start, end);
-  assert.match(implementation, /removeChildView/);
-  assert.match(implementation, /addChildView/);
+  const detach = manager.slice(manager.indexOf("private detach("), manager.indexOf("\n  private dispose"));
+  assert.match(implementation, /this\.detach/);
+  assert.match(implementation, /this\.reconcileViews/);
+  assert.match(detach, /removeChildView/);
   assert.doesNotMatch(implementation, /webContents\.close/);
 });
 

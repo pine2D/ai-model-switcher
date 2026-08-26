@@ -137,6 +137,16 @@ function createMenu(): void {
           }
         },
         {
+          label: copy.nextPageMenu,
+          accelerator: "CmdOrCtrl+Shift+PageDown",
+          click: () => viewManager?.pageRelative(1)
+        },
+        {
+          label: copy.previousPageMenu,
+          accelerator: "CmdOrCtrl+Shift+PageUp",
+          click: () => viewManager?.pageRelative(-1)
+        },
+        {
           label: copy.nextSiteMenu,
           accelerator: "CmdOrCtrl+PageDown",
           click: () => viewManager?.focusRelative(1)
@@ -202,6 +212,7 @@ async function createWindow(): Promise<void> {
     (site, url) => manager.navigate(site, url),
     { onNewSession: () => collection.clearRun() }
   );
+  manager.setSelection(workspace.getState().selectedSites);
   const deviceId = () => {
     const stored = desktopDatabase?.meta.get<unknown>("deviceId");
     if (typeof stored === "string" && stored) return stored;
@@ -225,6 +236,7 @@ async function createWindow(): Promise<void> {
       );
     },
     collect: (sites, runId) => collection.collect(sites, runId),
+    targetAvailable: (site) => workspace.getState().selectedSites.includes(site),
     beforeSend: () => collection.clearRun(),
     showTarget: (site) => {
       manager.setSurface("sites");
@@ -236,7 +248,10 @@ async function createWindow(): Promise<void> {
     database: desktopDatabase,
     workspace: () => workspace.getState(),
     onStatus: (status) => sendToShell("polyask:sync-status", status),
-    onWorkspace: (state) => sendToShell("polyask:workspace-state", state)
+    onWorkspace: (state) => {
+      manager.setSelection(state.selectedSites);
+      sendToShell("polyask:workspace-state", state);
+    }
   });
   createMenu();
   const disposeIpc = registerShellIpc({

@@ -67,3 +67,65 @@ test("Drive clear removes only PolyAsk files and honors cancellation", async () 
   controller.abort();
   await assert.rejects(() => client.listFiles(controller.signal), (error: unknown) => (error as { name?: string }).name === "AbortError");
 });
+
+test("Drive requests time out without masking caller cancellation", async () => {
+  const provider: AccessTokenProvider = { accessToken: async () => "token" };
+  let receivedSignal = false;
+  const fetchWithDeadline: typeof globalThis.fetch = async (_input, init) => new Promise((_resolve, reject) => {
+    receivedSignal = !!init?.signal;
+    const fallback = setTimeout(() => reject(new Error("test_deadline_missing")), 80);
+    init?.signal?.addEventListener("abort", () => {
+      clearTimeout(fallback);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+  const timed = new DriveClient(provider, fetchWithDeadline, 10);
+  await assert.rejects(() => timed.listFiles(), (error: unknown) => (error as { code?: string }).code === "network_timeout");
+  assert.equal(receivedSignal, true);
+
+  const stalledBody: typeof globalThis.fetch = async (_input, init) => new Response(new ReadableStream({
+    start(controller) {
+      init?.signal?.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")), { once: true });
+    }
+  }), { status: 200 });
+  await assert.rejects(
+    () => new DriveClient(provider, stalledBody, 10).listFiles(),
+    (error: unknown) => (error as { code?: string }).code === "network_timeout"
+  );
+
+  const controller = new AbortController();
+  const cancelled = new DriveClient(provider, fetchWithDeadline, 1_000);
+  const request = cancelled.listFiles(controller.signal);
+  controller.abort();
+  await assert.rejects(() => request, (error: unknown) => (error as { name?: string }).name === "AbortError");
+});
+
+test("Drive preserves timeout and caller cancellation while reading an error body", async () => {
+  const provider: AccessTokenProvider = { accessToken: async () => "token" };
+  const stalledError = (started?: () => void): typeof globalThis.fetch => async (_input, init) =>
+    new Response(new ReadableStream({
+      start(controller) {
+        started?.();
+        init?.signal?.addEventListener("abort", () => {
+          controller.error(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+      }
+    }), { status: 500 });
+
+  await assert.rejects(
+    () => new DriveClient(provider, stalledError(), 10).listFiles(),
+    (error: unknown) => (error as { code?: string }).code === "network_timeout"
+  );
+
+  let bodyStarted!: () => void;
+  const started = new Promise<void>((resolve) => { bodyStarted = resolve; });
+  const controller = new AbortController();
+  const request = new DriveClient(provider, stalledError(bodyStarted), 1_000)
+    .listFiles(controller.signal);
+  await started;
+  controller.abort();
+  await assert.rejects(
+    () => request,
+    (error: unknown) => (error as { name?: string }).name === "AbortError"
+  );
+});

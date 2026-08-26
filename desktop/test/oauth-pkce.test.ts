@@ -7,7 +7,9 @@ import test from "node:test";
 
 import {
   buildAuthorizationRequest,
+  exchangeAuthorizationCode,
   loadOAuthClientId,
+  OAUTH_CALLBACK_HTML,
   type RandomBytes
 } from "../src/main/oauth-pkce";
 
@@ -43,6 +45,50 @@ test("desktop OAuth client id never falls back to a Chrome extension client", as
     readText: async () => JSON.stringify({ clientId: "packaged.apps.googleusercontent.com" })
   }), "packaged.apps.googleusercontent.com");
   assert.equal(await loadOAuthClientId({ environment: {}, resourcePath: "/missing/oauth.json", readText: async () => "{}" }), null);
+});
+
+test("the loopback page reports receipt without claiming Drive is connected", () => {
+  assert.match(OAUTH_CALLBACK_HTML, /Authorization received/);
+  assert.match(OAUTH_CALLBACK_HTML, /已收到授权/);
+  assert.match(OAUTH_CALLBACK_HTML, /已收到授權/);
+  assert.match(OAUTH_CALLBACK_HTML, /return to PolyAsk to see the result/i);
+  assert.doesNotMatch(OAUTH_CALLBACK_HTML, /successfully connected/i);
+});
+
+test("OAuth token exchange has a bounded network deadline", async () => {
+  let receivedSignal = false;
+  const fetchWithDeadline: typeof globalThis.fetch = async (_input, init) => new Promise((_resolve, reject) => {
+    receivedSignal = !!init?.signal;
+    const fallback = setTimeout(() => reject(new Error("test_deadline_missing")), 80);
+    init?.signal?.addEventListener("abort", () => {
+      clearTimeout(fallback);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+
+  await assert.rejects(() => exchangeAuthorizationCode({
+    clientId: "client.apps.googleusercontent.com",
+    code: "code",
+    verifier: "verifier",
+    redirectUri: "http://127.0.0.1:43123",
+    fetch: fetchWithDeadline,
+    timeoutMs: 10
+  }), (error: unknown) => (error as Error).message === "network_timeout");
+  assert.equal(receivedSignal, true);
+
+  const responseWithStalledBody: typeof globalThis.fetch = async (_input, init) => new Response(new ReadableStream({
+    start(controller) {
+      init?.signal?.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")), { once: true });
+    }
+  }), { status: 200 });
+  await assert.rejects(() => exchangeAuthorizationCode({
+    clientId: "client.apps.googleusercontent.com",
+    code: "code",
+    verifier: "verifier",
+    redirectUri: "http://127.0.0.1:43123",
+    fetch: responseWithStalledBody,
+    timeoutMs: 10
+  }), (error: unknown) => (error as Error).message === "network_timeout");
 });
 
 test("authorization owns token exchange rejection while delayed receiver close runs", async () => {

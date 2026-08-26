@@ -14,6 +14,7 @@ interface WorkspaceDrawerProps {
   readonly sites: readonly SiteDefinition[];
   readonly selected: ReadonlySet<SiteKey>;
   readonly groups: readonly ActiveWorkspaceGroup[];
+  readonly open: boolean;
   readonly onClose: () => void;
   readonly onSelectionChange: (sites: readonly SiteKey[]) => void;
   readonly onSaveGroup: (name: string) => Promise<boolean>;
@@ -58,7 +59,14 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
   }, [props.onClose]);
 
   return (
-    <aside id="workspace-drawer" className="workspace-drawer" aria-label={props.copy.scope}>
+    <aside
+      id="workspace-drawer"
+      className="workspace-drawer"
+      aria-label={props.copy.scope}
+      aria-hidden={props.open ? undefined : true}
+      inert={!props.open}
+      data-state={props.open ? "open" : "closed"}
+    >
       <div className="drawer-heading">
         <strong>{props.copy.scope}</strong>
         <button type="button" title={props.copy.closeScope} aria-label={props.copy.closeScope} onClick={props.onClose}><CloseIcon /></button>

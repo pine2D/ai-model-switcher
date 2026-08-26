@@ -8,6 +8,33 @@
 
 ## [未发布]
 
+## [0.19.0] - 2026-08-26
+
+### 新增
+
+- Desktop 支持站点分页，每页最多显示 6 个站点
+- Desktop 页签显示后台页的发送和失败状态
+- Desktop 新增 Gemini 验证返回后的一次性重载机制
+
+### 变更
+
+- Desktop 仅显示已选站点，并按站点数量动态布局
+- 换页和切换布局时保留站点会话与每页焦点
+- 优化 Desktop 页签、抽屉和工作区切换动效
+- 辅助综合仅允许选择当前已勾选的目标站点
+- Gemini 恢复与 Drive 联网仍待 Windows 真机复测
+- Desktop 仍为未签名预览版，Windows 和 macOS 原生验收尚未完成
+
+### 修复
+
+- 修复未连接 Drive 时后台任务擅自打开授权页的问题
+- 修复 Google 授权回调页提前显示连接成功的问题
+- 修复 OAuth 和 Drive 请求可能长期无响应的问题
+- 修复授权中断后设置页可能无法再次连接的问题
+- 修复菜单切换站点页时读屏器没有播报的问题
+- 修复豆包模式文案加上品牌或版本前缀后无法识别档位的问题
+- 修复元宝新版模式菜单和发送键无法识别的问题
+
 ## [0.18.0] - 2026-08-26
 
 ### 新增
@@ -442,7 +469,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.18.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/pine2D/polyask/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/pine2D/polyask/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/pine2D/polyask/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/pine2D/polyask/compare/v0.16.0...v0.17.0

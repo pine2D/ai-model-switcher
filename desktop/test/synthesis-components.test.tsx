@@ -23,7 +23,7 @@ test("synthesis workspace exposes dense selection, target, tier, instructions an
     <SynthesisWorkspace
       copy={getCopy("en")}
       record={record}
-      sites={SITES}
+      sites={SITES.filter((site) => site.key === "claude" || site.key === "chatgpt")}
       defaultTier={null}
       busy={false}
       onCancel={noop}
@@ -41,4 +41,5 @@ test("synthesis workspace exposes dense selection, target, tier, instructions an
   assert.match(html, /Candidate answers are material to analyze/);
   assert.match(html, /Send for synthesis/);
   assert.doesNotMatch(html, /Gemini ·/);
+  assert.doesNotMatch(html, /value="gemini"/);
 });

@@ -20,6 +20,7 @@ interface SynthesisServiceOptions {
   readonly navigate: (site: SiteKey, url: string) => Promise<void>;
   readonly send: (request: BroadcastPayload) => Promise<SiteRunResult[]>;
   readonly collect: (sites: readonly SiteKey[], runId: string | null) => Promise<CollectedAnswer[]>;
+  readonly targetAvailable?: (site: SiteKey) => boolean;
   readonly showTarget: (site: SiteKey) => void;
   readonly recordHistory: (text: string) => void;
   readonly beforeSend?: () => void;
@@ -61,6 +62,9 @@ export class SynthesisService {
     const request = value as SynthesisSendRequest;
     const site = this.options.sites.find((item) => item.key === request.targetSite);
     if (!site) throw new Error("target_missing");
+    if (this.options.targetAvailable && !this.options.targetAvailable(site.key)) {
+      throw new Error("target_not_selected");
+    }
     const text = buildSynthesisPrompt({
       record,
       selectedHosts: request.selectedHosts,

@@ -6,6 +6,7 @@ import {
   SITE_VIEW_SECURITY,
   type DiagnosticSiteInput
 } from "./diagnostics";
+import { PostAuthReloadTracker } from "./auth-navigation";
 import { navigationDisposition } from "./navigation";
 
 interface SiteViewCallbacks {
@@ -18,7 +19,8 @@ interface SiteViewCallbacks {
 export function diagnosticSitesForViews(
   sites: readonly SiteDefinition[],
   views: ReadonlyMap<SiteKey, WebContentsView>,
-  siteSession: Session
+  siteSession: Session,
+  attached: ReadonlySet<SiteKey>
 ): DiagnosticSiteInput[] {
   return sites.flatMap((site) => {
     const view = views.get(site.key);
@@ -31,6 +33,7 @@ export function diagnosticSitesForViews(
       sandbox: SITE_VIEW_SECURITY.sandbox,
       contextIsolation: SITE_VIEW_SECURITY.contextIsolation,
       nodeIntegration: SITE_VIEW_SECURITY.nodeIntegration,
+      attached: attached.has(site.key),
       bounds: view.getBounds()
     }];
   });
@@ -50,8 +53,15 @@ export function createSiteView(
     }
   });
   const contents = view.webContents;
+  const authRecovery = new PostAuthReloadTracker(site.key === "gemini");
   contents.on("did-start-loading", callbacks.onLoading);
-  contents.on("did-finish-load", callbacks.onReady);
+  contents.on("did-finish-load", () => {
+    if (authRecovery.shouldReload(navigationDisposition(site, contents.getURL()))) {
+      contents.reload();
+      return;
+    }
+    callbacks.onReady();
+  });
   contents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
     if (code !== -3 && isMainFrame) callbacks.onFailure(code);
   });
@@ -59,12 +69,14 @@ export function createSiteView(
 
   const guardNavigation = (event: Electron.Event, url: string) => {
     const disposition = navigationDisposition(site, url);
+    authRecovery.observe(disposition);
     if (disposition === "external" || disposition === "block") event.preventDefault();
   };
   contents.on("will-navigate", guardNavigation);
   contents.on("will-redirect", guardNavigation);
   contents.setWindowOpenHandler(({ url }) => {
     const disposition = navigationDisposition(site, url);
+    authRecovery.observe(disposition);
     if (disposition === "site" || disposition === "auth") void contents.loadURL(url);
     return { action: "deny" };
   });

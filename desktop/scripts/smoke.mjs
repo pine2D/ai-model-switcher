@@ -29,8 +29,15 @@ try {
   assert.ok(snapshot.sites.every((site) => site.partition === "persist:polyask-sites"));
   assert.ok(snapshot.sites.every((site) => site.sameSession));
   assert.ok(snapshot.sites.every((site) => site.sandbox && site.contextIsolation && !site.nodeIntegration));
-  assert.ok(snapshot.sites.every((site) => site.bounds.width > 0 && site.bounds.height > 0));
-  console.log(`smoke passed: shell=${snapshot.shellCount}, sites=${snapshot.sites.length}`);
+  const attached = snapshot.sites.filter((site) => site.attached);
+  assert.equal(attached.length, snapshot.layout.placements.length);
+  assert.ok(attached.length > 0 && attached.length <= 6);
+  assert.ok(attached.every((site) => site.bounds.width > 0 && site.bounds.height > 0));
+  assert.deepEqual(
+    new Set(attached.map((site) => site.site)),
+    new Set(snapshot.layout.placements.map((placement) => placement.key))
+  );
+  console.log(`smoke passed: shell=${snapshot.shellCount}, sites=${snapshot.sites.length}, attached=${attached.length}`);
 } catch (error) {
   if (runtime?.logs()) console.error(runtime.logs());
   throw error;

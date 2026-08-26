@@ -33,7 +33,7 @@ const LABEL_PROBES = {
   "doubao.com": '((a._modeBtn()||{}).textContent||"").trim()',
   "qianwen.com": '(function(){var m=a._trigger(),b=a._thinkBtn();return (m?m.textContent.trim():"∅")+" | "+(b?((b.getAttribute("aria-label")||b.textContent)||"").trim():"∅")})()',
   "kimi.com": 'a._model()+" / "+a._effort()',
-  "yuanbao.tencent.com": '(function(){var g=a._toggle();return g?"deepthink="+a._isOn():null})()',
+  "yuanbao.tencent.com": '(function(){var m=a._mode();if(m)return m;var g=a._toggle();return g?"deepthink="+a._isOn():null})()',
   "chatglm.cn": '(function(){var g=a._trigger();return g?g.textContent.trim():null})()',
 };
 
