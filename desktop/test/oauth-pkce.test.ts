@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -89,6 +90,12 @@ test("OAuth token exchange has a bounded network deadline", async () => {
     fetch: responseWithStalledBody,
     timeoutMs: 10
   }), (error: unknown) => (error as Error).message === "network_timeout");
+});
+
+test("OAuth deadlines keep the Node.js event loop alive", async () => {
+  const source = await readFile(resolve(__dirname, "../src/main/oauth-pkce.ts"), "utf8");
+  assert.doesNotMatch(source, /AbortSignal\.timeout/);
+  assert.match(source, /setTimeout/);
 });
 
 test("authorization owns token exchange rejection while delayed receiver close runs", async () => {

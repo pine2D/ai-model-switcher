@@ -169,42 +169,51 @@ export async function refreshAccessToken(
 }
 
 export async function revokeGoogleToken(token: string, fetch: typeof globalThis.fetch = globalThis.fetch, timeoutMs?: number): Promise<void> {
-  const signal = AbortSignal.timeout(timeoutMs ?? NETWORK_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch("https://oauth2.googleapis.com/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token }),
-      signal
-    });
-  } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
-  if (!response.ok && response.status !== 400) throw new Error("oauth_revoke_failed");
+  return withNetworkDeadline(timeoutMs ?? NETWORK_TIMEOUT_MS, async (signal) => {
+    let response: Response;
+    try {
+      response = await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token }),
+        signal
+      });
+    } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
+    if (!response.ok && response.status !== 400) throw new Error("oauth_revoke_failed");
+  });
 }
 
 async function tokenRequest(body: URLSearchParams, fetch: typeof globalThis.fetch, now: () => number, timeoutMs = NETWORK_TIMEOUT_MS): Promise<TokenSet> {
-  const signal = AbortSignal.timeout(timeoutMs);
-  let response: Response;
-  try {
-    response = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      signal
-    });
-  } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
-  let value: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
-  try { value = JSON.parse(await response.text()); }
-  catch { throw new Error(signal.aborted ? "network_timeout" : "oauth_invalid_response"); }
-  if (!response.ok) throw new Error(response.status === 400 ? "auth_failed" : "oauth_token_failed");
-  if (typeof value.access_token !== "string" || !value.access_token || !Number.isFinite(Number(value.expires_in))) {
-    throw new Error("oauth_invalid_response");
-  }
-  return {
-    accessToken: value.access_token,
-    refreshToken: typeof value.refresh_token === "string" && value.refresh_token ? value.refresh_token : null,
-    expiresAt: now() + Math.max(1, Number(value.expires_in)) * 1_000
-  };
+  return withNetworkDeadline(timeoutMs, async (signal) => {
+    let response: Response;
+    try {
+      response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        signal
+      });
+    } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
+    let value: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
+    try { value = JSON.parse(await response.text()); }
+    catch { throw new Error(signal.aborted ? "network_timeout" : "oauth_invalid_response"); }
+    if (!response.ok) throw new Error(response.status === 400 ? "auth_failed" : "oauth_token_failed");
+    if (typeof value.access_token !== "string" || !value.access_token || !Number.isFinite(Number(value.expires_in))) {
+      throw new Error("oauth_invalid_response");
+    }
+    return {
+      accessToken: value.access_token,
+      refreshToken: typeof value.refresh_token === "string" && value.refresh_token ? value.refresh_token : null,
+      expiresAt: now() + Math.max(1, Number(value.expires_in)) * 1_000
+    };
+  });
+}
+
+async function withNetworkDeadline<T>(timeoutMs: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await run(controller.signal); }
+  finally { clearTimeout(timer); }
 }
 
 function closeServer(server: Server): Promise<void> {
