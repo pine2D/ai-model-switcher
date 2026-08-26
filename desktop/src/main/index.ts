@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -17,12 +18,21 @@ import {
 } from "../shared/display";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
 import type { SyncStatus } from "../shared/sync";
+import type { RuntimeInfo } from "../shared/runtime";
 import type { WorkspaceState } from "../shared/workspace";
 import { ArchiveService } from "./archive-service";
 import { BroadcastCoordinator } from "./broadcast";
 import { CollectionService } from "./collection-service";
 import { DesktopDatabase } from "./database";
 import { HistoryService } from "./history-service";
+import {
+  applyPortableImportIdentity,
+  finalizePortableDataImport,
+  hasImportableLegacyData,
+  initializePortableData,
+  isPortableDataInitialized,
+  resolveRuntimeProfile
+} from "./portable-profile";
 import { isTrustedShellUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
@@ -35,7 +45,74 @@ import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
 
 if (squirrelStartup) app.quit();
-if (process.platform === "win32") app.setAppUserModelId("com.squirrel.PolyAsk.PolyAsk");
+const startupLocale = (): string => {
+  try { return app.getPreferredSystemLanguages()[0] ?? "en"; }
+  catch { return "en"; }
+};
+const runtimeProfile = resolveRuntimeProfile({
+  isPackaged: app.isPackaged,
+  execPath: process.execPath,
+  defaultUserDataPath: app.getPath("userData"),
+  version: app.getVersion()
+});
+const runtimeInfo: RuntimeInfo = {
+  distribution: runtimeProfile.distribution,
+  version: runtimeProfile.version
+};
+let profileReady = true;
+let instanceLockHeld = false;
+let legacyProfileLock = false;
+let legacyDataAvailable = false;
+if (runtimeProfile.distribution === "portable") {
+  try {
+    const portableDataInitialized = isPortableDataInitialized(runtimeProfile);
+    if (!portableDataInitialized) legacyDataAvailable = hasImportableLegacyData(runtimeProfile);
+    if (portableDataInitialized) {
+      mkdirSync(runtimeProfile.userDataPath, { recursive: true });
+      app.setPath("userData", runtimeProfile.userDataPath);
+      app.setPath("sessionData", runtimeProfile.userDataPath);
+      instanceLockHeld = app.requestSingleInstanceLock();
+      if (instanceLockHeld) finalizePortableDataImport(runtimeProfile);
+    } else if (legacyDataAvailable) {
+      legacyProfileLock = app.requestSingleInstanceLock();
+      instanceLockHeld = legacyProfileLock;
+      if (!legacyProfileLock) throw new Error("portable_legacy_in_use");
+      finalizePortableDataImport(runtimeProfile);
+      mkdirSync(runtimeProfile.userDataPath, { recursive: true });
+      app.setPath("userData", runtimeProfile.userDataPath);
+      app.setPath("sessionData", runtimeProfile.userDataPath);
+      if (isPortableDataInitialized(runtimeProfile)) {
+        app.releaseSingleInstanceLock();
+        legacyProfileLock = false;
+        instanceLockHeld = app.requestSingleInstanceLock();
+      }
+    } else {
+      mkdirSync(runtimeProfile.userDataPath, { recursive: true });
+      app.setPath("userData", runtimeProfile.userDataPath);
+      app.setPath("sessionData", runtimeProfile.userDataPath);
+      instanceLockHeld = app.requestSingleInstanceLock();
+      if (instanceLockHeld) finalizePortableDataImport(runtimeProfile);
+    }
+  } catch (error) {
+    profileReady = false;
+    const copy = getCopy(startupLocale());
+    const code = (error as { message?: string }).message;
+    const failure = code === "portable_import_failed"
+      ? [copy.portableImportFailedTitle, copy.portableImportFailedMessage]
+      : code === "portable_data_unrecognized"
+        ? [copy.portableDataConflictTitle, copy.portableDataConflictMessage]
+        : code === "portable_legacy_in_use"
+          ? [copy.portableLegacyInUseTitle, copy.portableLegacyInUseMessage]
+          : [copy.portableStorageFailedTitle, copy.portableStorageFailedMessage];
+    dialog.showErrorBox(failure[0], failure[1]);
+    app.quit();
+  }
+}
+if (process.platform === "win32") {
+  app.setAppUserModelId(runtimeProfile.distribution === "portable"
+    ? "com.pine2d.polyask.portable"
+    : "com.squirrel.PolyAsk.PolyAsk");
+}
 
 const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
@@ -255,6 +332,7 @@ async function createWindow(): Promise<void> {
   });
   createMenu();
   const disposeIpc = registerShellIpc({
+    runtime: runtimeInfo,
     window,
     manager,
     workspace,
@@ -288,13 +366,29 @@ function failStartup(error: unknown): void {
       // Continue to the visible failure path if diagnostic output is unavailable.
     }
     const copy = getCopy(app.getLocale());
-    dialog.showErrorBox(copy.startupFailedTitle, copy.startupFailedMessage);
+    const code = (error as { message?: string }).message;
+    const systemCode = (error as NodeJS.ErrnoException).code;
+    const portableStorageFailed = runtimeProfile.distribution === "portable"
+      && ["EACCES", "EPERM", "EROFS", "EIO"].includes(systemCode ?? "");
+    const failure = code === "portable_import_failed"
+      ? [copy.portableImportFailedTitle, copy.portableImportFailedMessage]
+      : code === "portable_data_unrecognized"
+        ? [copy.portableDataConflictTitle, copy.portableDataConflictMessage]
+        : portableStorageFailed
+          ? [copy.portableStorageFailedTitle, copy.portableStorageFailedMessage]
+          : [copy.startupFailedTitle, copy.startupFailedMessage];
+    dialog.showErrorBox(
+      failure[0],
+      failure[1]
+    );
   } finally {
     app.quit();
   }
 }
 
-const gotLock = app.requestSingleInstanceLock();
+const gotLock = profileReady && (runtimeProfile.distribution === "portable"
+  ? instanceLockHeld
+  : app.requestSingleInstanceLock());
 if (!gotLock) app.quit();
 else {
   app.on("second-instance", () => {
@@ -309,7 +403,37 @@ else {
     if (!mainWindow) void runStartup(createWindow, failStartup);
   });
   void app.whenReady().then(() => runStartup(async () => {
+    const profileState = await initializePortableData(runtimeProfile, async () => {
+      const copy = getCopy(app.getLocale());
+      const result = await dialog.showMessageBox({
+        type: "question",
+        title: copy.portableImportTitle,
+        message: copy.portableImportMessage,
+        buttons: [copy.portableImport, copy.portableStartFresh],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+      });
+      return result.response === 0;
+    }, legacyDataAvailable);
+    if (profileState === "import_staged") {
+      app.relaunch();
+      app.exit(0);
+      return;
+    }
+    if (legacyProfileLock) {
+      app.releaseSingleInstanceLock();
+      legacyProfileLock = false;
+      instanceLockHeld = app.requestSingleInstanceLock();
+      if (!instanceLockHeld) {
+        app.quit();
+        return;
+      }
+    }
     desktopDatabase = DesktopDatabase.open(join(app.getPath("userData"), "polyask.sqlite"));
+    applyPortableImportIdentity(runtimeProfile, (deviceId) => {
+      desktopDatabase!.adoptImportedProfile(deviceId);
+    });
     createMenu();
     await createWindow();
   }, failStartup));

@@ -13,6 +13,25 @@ test("desktop shell keeps complete English, Simplified Chinese and Traditional C
   assert.equal(sourceKeys.includes("brandSub"), false);
 });
 
+test("portable migration copy preserves the import choice and recovery action", () => {
+  const messages = Object.values(COPY).map((copy) => copy as unknown as Record<string, string>);
+  assert.deepEqual(messages.map((copy) => copy.portableImport), ["Import data", "导入数据", "匯入資料"]);
+  assert.deepEqual(messages.map((copy) => copy.portableStartFresh), ["Start fresh", "全新开始", "全新開始"]);
+  assert.deepEqual(messages.map((copy) => copy.portableImportMessage), [
+    "PolyAsk found existing settings and site sign-ins. Copy them into this portable version? The originals will stay where they are.",
+    "检测到现有 PolyAsk 的设置和站点登录状态。是否复制到当前便携版？原有数据仍会保留在原位置。",
+    "偵測到現有 PolyAsk 的設定與網站登入狀態。是否複製到目前的可攜版？原有資料仍會保留在原位置。"
+  ]);
+  assert.ok(messages.every((copy) => copy.portableImportFailedMessage.length > 20));
+  assert.deepEqual(messages.map((copy) => copy.portableLegacyInUseTitle), [
+    "Close PolyAsk before continuing",
+    "请先完全退出 PolyAsk",
+    "請先完全結束 PolyAsk"
+  ]);
+  assert.ok(messages.every((copy) => copy.portableLegacyInUseMessage.includes("polyask-desktop.exe")));
+  assert.ok(messages.every((copy) => copy.portableDataConflictMessage.includes("polyask-desktop.exe")));
+});
+
 test("site paging copy is concise, localized, and placeholder-compatible", () => {
   assert.deepEqual(
     [COPY.en.sitePages, COPY.zhCN.sitePages, COPY.zhTW.sitePages],

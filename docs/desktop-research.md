@@ -80,6 +80,6 @@ Electron 的进程指标入口见 [`app.getAppMetrics()`](https://www.electronjs
 
 ## 当前结论
 
-Electron M0 的容器、九站登录、群发、安全基线、Grid/Focus 与密度布局已经成立。范围/分组、新会话、图片、汇总、归档、辅助综合和 Drive 已迁移；静态缺陷与 UI/UX 审查完成一轮。当前发行策略是在同一 GitHub Release 提供 Chrome 稳定包与未签名 Desktop 预览包，包括 Windows x64 安装版和免安装 ZIP、Linux x64、macOS x64/arm64，并为每个主包生成 SHA-256。
+Electron M0 的容器、九站登录、群发、安全基线、Grid/Focus 与密度布局已经成立。范围/分组、新会话、图片、汇总、归档、辅助综合和 Drive 已迁移；静态缺陷与 UI/UX 审查完成一轮。当前发行策略是在同一 GitHub Release 提供 Chrome 稳定包与未签名 Desktop 预览包，包括 Windows x64 安装版、程序与数据分目录的便携 ZIP、Linux x64、macOS x64/arm64，并为每个主包生成 SHA-256。
 
 剩余工作集中在真实 OAuth/Drive 联网回归、Windows/macOS/原生 Ubuntu 验收、60 分钟稳定性、读屏与完整缩放矩阵，以及签名、公证和自动更新。后续改动不得重新引入 Chrome popup、九个外部 tab 或 iframe。

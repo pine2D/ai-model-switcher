@@ -92,3 +92,9 @@ jobs:
       - name: 构建当前平台应用目录
         working-directory: desktop
         run: npm run package
+
+      - name: 构建并解包校验 Windows 便携版
+        if: runner.os == 'Windows'
+        working-directory: desktop
+        shell: pwsh
+        run: ./scripts/archive-portable.ps1 -Arch "x64" -DestinationPath "out/ci/PolyAsk-windows-x64-portable.zip"

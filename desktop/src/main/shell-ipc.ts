@@ -9,6 +9,7 @@ import {
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import type { ArchiveFilters, ArchiveInput, ArchivePatch } from "../shared/archive";
 import { parseDisplayPreferences, type DisplayPreferences } from "../shared/display";
+import type { RuntimeInfo } from "../shared/runtime";
 import { unsupportedImageSites } from "../shared/images";
 import {
   parseBroadcastRequest,
@@ -35,6 +36,7 @@ interface ShellIpcEvent {
 }
 
 interface ShellIpcOptions {
+  readonly runtime: RuntimeInfo;
   readonly window: BrowserWindow;
   readonly manager: ViewManager;
   readonly workspace: WorkspaceService;
@@ -103,6 +105,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   ipcMain.handle("polyask:bootstrap", (event) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
     return {
+      runtime: options.runtime,
       sites: SITES,
       statuses: manager.getStatuses(),
       layout: manager.getLayout(),

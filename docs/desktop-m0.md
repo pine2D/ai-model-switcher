@@ -38,6 +38,13 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 - Shell 与远程站点使用不同 Session。9 个站点共享 `persist:polyask-sites`，让跨域登录各自持久化在同一个应用用户数据目录。
 - 站点视图始终 `nodeIntegration: false`、`contextIsolation: true`、`sandbox: true`、`webSecurity: true`。
 
+### 发行形态与数据目录
+
+- 安装版沿用 Electron 的系统用户数据目录；Windows 便携版通过根目录 `portable.json` 识别发行形态，并将 `userData` 与 `sessionData` 都切换到同级 `PolyAsk Data`。已有便携数据时先切换目录再申请便携实例锁；首次复制旧数据时先临时占用旧 profile 的 Electron 实例锁，复制或完成暂存切换后释放，再申请便携实例锁，之后才打开 SQLite 和站点 Session。
+- 便携版根目录固定分为可替换的 `App` 和持久的 `PolyAsk Data`。升级替换整个 `App`；`portable.json` 与 `README.txt` 不含用户数据，可随新包覆盖。`app.asar` 随 `App` 更新，设置、SQLite、Cookie 和站点会话不进入发布 ZIP，也不随升级覆盖。
+- 首次运行真正的便携版时，只在系统默认用户数据目录中发现 SQLite 或 Chromium 会话资料后询问是否复制，空目录与实例锁元数据不算旧数据。复制期间 Electron 会临时创建或更新旧 profile 根级实例锁，但不改写其中的设置、Cookie、SQLite 等用户资料。确认后先复制到根目录旁路暂存区，过滤 Windows `lockfile` 与其他平台的 `Singleton*`，重启时在 Chromium 打开数据目录前完成切换；旧资料不清空，失败时保留旧资料并提示关闭全部 PolyAsk 进程后重试。路径探测只有 `ENOENT`/`ENOTDIR` 视为不存在，权限或 I/O 错误直接停止；`PolyAsk Data` 只有在含有与暂存区 nonce 一致的 bootstrap 标记，且其余内容仅为当前 Electron 提前生成的 `Crashpad` 与实例锁元数据时才可被暂存导入替换，未知文件一律保留并给出专用提示。复制出的 profile 会获得新的同步设备 ID，避免用户回退旧版后两个客户端覆盖同一 Drive 状态文件。
+- 设置页只接收经过裁剪的版本号和发行形态，不向 Shell renderer 暴露本机用户数据路径。
+
 ### 适配器复用
 
 - `i18n.js` 显式暴露只读的 `globalThis.__AMS_I18N__`。
@@ -173,7 +180,7 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session 和安全 webPreferences；当前页最多 6 个视图已挂载且均有正尺寸，后台页会话保持存活但不占用视图树。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版和免安装 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
+打包产物的自动 smoke 已证明 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session 和安全 webPreferences；当前页最多 6 个视图已挂载且均有正尺寸，后台页会话保持存活但不占用视图树。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版、程序/数据分离的便携 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
 
 2026-08-25 已创建独立 Desktop OAuth Client ID，并通过 Repository Variable 进入 Release 构建。实际 Linux x64 `.deb` 已通过 maker、文件名归一化和内容审计：包内存在普通用户可读的 `resources/oauth.json`，可执行文件与 `/usr/bin/polyask-desktop` 链接一致。该证据只覆盖 Client ID 入包，不等于系统浏览器授权、refresh token 或 Drive 联网同步已经通过。
 

@@ -149,6 +149,59 @@ test("a successful first Drive handshake commits the connected state", async () 
   } finally { database.close(); }
 });
 
+test("an imported pending history flushes as the portable device without overwriting the old file", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "device-old");
+  database.history.put({
+    schema: 1,
+    id: "history-a",
+    textHash: "history-a",
+    text: "Question",
+    preview: "Question",
+    createdAt: 1_000,
+    lastUsedAt: 1_000,
+    updatedAt: 1_000,
+    deviceId: "device-old"
+  });
+  database.driveFiles.put({
+    id: "drive-old",
+    name: "history-history-a-device-old.json",
+    appProperties: { kind: "history", device: "device-old" },
+    logicalKey: "history:history-a:device-old",
+    seenAt: 1_000
+  });
+  database.adoptImportedProfile("device-portable");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true, pageToken: "current" });
+  const uploads: Array<{ fileId: string | null; name: string; device?: string; bodyDevice?: string }> = [];
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async (fileId, name, appProperties, body) => {
+      uploads.push({
+        fileId,
+        name,
+        device: appProperties.device,
+        bodyDevice: (body as { deviceId?: string }).deviceId
+      });
+      return { id: `uploaded-${name}`, appProperties };
+    },
+    clearAll: async () => undefined
+  };
+  try {
+    assert.equal((await new SyncEngine({ repository, drive, auth: auth() }).syncNow()).state, "idle");
+    assert.deepEqual(uploads, [{
+      fileId: null,
+      name: "history-history-a-device-portable.json",
+      device: "device-portable",
+      bodyDevice: "device-portable"
+    }]);
+    assert.equal(database.driveFiles.find("history:history-a:device-old")?.id, "drive-old");
+  } finally { database.close(); }
+});
+
 test("startup clears stale disconnected OAuth and Drive-check phases", () => {
   for (const reason of ["oauth", "drive_check"] as const) {
     const database = DesktopDatabase.open(":memory:");

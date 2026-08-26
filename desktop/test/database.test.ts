@@ -85,3 +85,39 @@ test("state repository lists a prefix without folding distinct outbox operations
     database.close();
   }
 });
+
+test("a copied profile rekeys pending history without taking over the old Drive file", () => {
+  const database = DesktopDatabase.open(":memory:");
+  try {
+    database.meta.put("deviceId", "device-old");
+    database.history.put({
+      id: "history-a",
+      textHash: "history-a",
+      text: "Question",
+      preview: "Question",
+      createdAt: 1_000,
+      lastUsedAt: 1_000,
+      updatedAt: 1_000,
+      deviceId: "device-old",
+      schema: 1
+    });
+    database.driveFiles.put({
+      id: "drive-old",
+      name: "history-history-a-device-old.json",
+      appProperties: { kind: "history" },
+      logicalKey: "history:history-a:device-old",
+      seenAt: 1_000
+    });
+
+    database.adoptImportedProfile("device-new");
+
+    assert.equal(database.meta.get("deviceId"), "device-new");
+    assert.deepEqual(database.outbox.ready(Number.MAX_SAFE_INTEGER).map((entry) => entry.key), [
+      "history:history-a:device-new"
+    ]);
+    assert.equal(database.driveFiles.find("history:history-a:device-new"), null);
+    assert.equal(database.driveFiles.find("history:history-a:device-old")?.id, "drive-old");
+  } finally {
+    database.close();
+  }
+});

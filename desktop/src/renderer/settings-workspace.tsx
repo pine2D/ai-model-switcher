@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { DesktopCopy } from "../shared/copy";
 import { formatCopy } from "../shared/copy";
 import { CLEAR_REMOTE_CONFIRMATION, type SyncStatus } from "../shared/sync";
+import type { RuntimeInfo } from "../shared/runtime";
 import { CloseIcon } from "./icons";
 import { describeSync } from "./sync-status";
 
@@ -10,6 +11,7 @@ interface SettingsWorkspaceProps {
   readonly copy: DesktopCopy;
   readonly locale: string;
   readonly status: SyncStatus;
+  readonly runtime: RuntimeInfo;
   readonly onStatus: (value: SyncStatus) => void;
   readonly onAnnounce: (value: string) => void;
   readonly onClose: () => void;
@@ -54,7 +56,13 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
   return (
     <main className="settings-workspace" aria-busy={busy}>
       <header className="settings-toolbar">
-        <strong>{props.copy.settings}</strong>
+        <div className="settings-product">
+          <strong>{props.copy.settings}</strong>
+          <span>{formatCopy(props.copy.appVersion, {
+            version: props.runtime.version,
+            mode: props.runtime.distribution === "portable" ? props.copy.portableMode : props.copy.installedMode
+          })}</span>
+        </div>
         <button type="button" title={props.copy.closeSettings} aria-label={props.copy.closeSettings} disabled={busy} onClick={props.onClose}><CloseIcon /></button>
       </header>
       <div className="settings-body">

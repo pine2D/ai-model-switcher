@@ -47,12 +47,32 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 | 系统 | 文件 | 安装方式 |
 | --- | --- | --- |
 | Windows x64 | `polyask-desktop-vX.Y.Z-windows-x64.exe` | 运行安装程序 |
-| Windows x64（免安装） | `polyask-desktop-vX.Y.Z-windows-x64-portable.zip` | 解压后运行 `polyask-desktop.exe` |
+| Windows x64（便携版） | `polyask-desktop-vX.Y.Z-windows-x64-portable.zip` | 完整解压后运行 `PolyAsk Portable/App/polyask-desktop.exe` |
 | Ubuntu/Debian x64 | `polyask-desktop-vX.Y.Z-linux-x64.deb` | 执行 `sudo apt install ./polyask-desktop-vX.Y.Z-linux-x64.deb` |
 | macOS Apple Silicon | `polyask-desktop-vX.Y.Z-macos-arm64.zip` | 解压后打开 `PolyAsk.app` |
 | macOS Intel | `polyask-desktop-vX.Y.Z-macos-x64.zip` | 解压后打开 `PolyAsk.app` |
 
 Desktop 当前是未签名预览包，不提供自动更新。Windows SmartScreen 或 macOS Gatekeeper 可能拦截首次启动；macOS 可在 Finder 中右键应用并选择「打开」。请先核对同名 `.sha256` 文件，再决定是否运行。
+
+#### Windows 便携版
+
+Windows 便携版将程序与用户数据分开存放：
+
+```text
+PolyAsk Portable/
+├─ App/               # 程序文件
+├─ PolyAsk Data/      # 首次运行后创建；设置、登录状态和本机数据
+├─ README.txt         # 三语启动与升级说明
+└─ portable.json      # 便携版标记
+```
+
+升级步骤：
+
+1. 完全退出 PolyAsk。
+2. 用新压缩包中的整个 `App` 目录替换旧 `App`。旧 `app.asar` 会随之替换；`portable.json` 和 `README.txt` 不含用户数据，可直接覆盖。
+3. 保留 `PolyAsk Data`。其中的设置和各站登录状态会继续使用。
+
+首次从 v0.19.0 或更早的免安装包切换时，请先完全退出 PolyAsk，再解压为上述完整结构并启动 `App/polyask-desktop.exe`。应用会询问是否复制现有 PolyAsk 数据；原有设置和登录状态仍保留在原位置，需要时可以继续使用旧版。若 `PolyAsk Data` 中已有无法确认用途的文件，应用会保留该目录并提示先移动或备份，不会直接覆盖。设置页会显示当前版本及「安装版」或「便携版」。
 
 ### 从源码运行 Desktop
 
@@ -86,7 +106,7 @@ Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
-执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和免安装 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
+执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和便携 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

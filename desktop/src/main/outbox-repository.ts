@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { OutboxOperation } from "../shared/sync";
-import { readJson } from "./repository-utils";
+import { inTransaction, readJson } from "./repository-utils";
 
 export class OutboxRepository {
   private readonly listeners = new Set<() => void>();
@@ -35,6 +35,34 @@ export class OutboxRepository {
   count(): number {
     const row = this.database.prepare("SELECT COUNT(*) AS count FROM outbox").get() as { count?: unknown } | undefined;
     return Number(row?.count) || 0;
+  }
+
+  rekeyPendingHistory(deviceId: string): void {
+    if (!deviceId) throw new Error("invalid_device_id");
+    const rows = this.database.prepare(
+      "SELECT key, body, revision FROM outbox WHERE kind = 'history' ORDER BY key"
+    ).all() as { key?: unknown; body?: unknown; revision?: unknown }[];
+    const remove = this.database.prepare("DELETE FROM outbox WHERE key = ?");
+    const insert = this.database.prepare(`
+      INSERT INTO outbox (key, kind, entity_id, body, next_at, revision)
+      VALUES (?, 'history', ?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        body = excluded.body,
+        next_at = MIN(outbox.next_at, excluded.next_at),
+        revision = MAX(outbox.revision, excluded.revision) + 1
+    `);
+    inTransaction(this.database, () => {
+      for (const row of rows) {
+        const operation = readJson<OutboxOperation>(row);
+        if (!operation?.entityId || typeof row.key !== "string") continue;
+        const key = `history:${operation.entityId}:${deviceId}`;
+        if (key === row.key) continue;
+        remove.run(row.key);
+        const rewritten = { ...operation, key };
+        insert.run(key, operation.entityId, JSON.stringify(rewritten), operation.nextAt, Number(row.revision) || 1);
+      }
+    });
+    if (rows.length) for (const listener of this.listeners) listener();
   }
 
   ready(now: number, limit = 100): (OutboxOperation & { readonly revision: number })[] {

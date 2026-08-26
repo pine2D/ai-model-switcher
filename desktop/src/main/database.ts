@@ -97,6 +97,11 @@ export class DesktopDatabase {
     };
   }
 
+  adoptImportedProfile(deviceId: string): void {
+    this.outbox.rekeyPendingHistory(deviceId);
+    this.meta.put("deviceId", deviceId);
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;

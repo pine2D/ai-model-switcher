@@ -42,6 +42,7 @@ test("CI tests and packages desktop on Linux, Windows and macOS", () => {
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /macos-latest/);
   assert.match(workflow, /npm run package/);
+  assert.match(workflow, /archive-portable\.ps1/);
   assert.match(workflow, /chown root:root "out\/PolyAsk-linux-x64\/chrome-sandbox"/);
   assert.match(workflow, /chmod 4755 "out\/PolyAsk-linux-x64\/chrome-sandbox"/);
   assert.doesNotMatch(workflow, /--no-sandbox/);
@@ -53,6 +54,41 @@ test("shell navigation and IPC trust both lock to the local top frame", () => {
   assert.match(main, /will-navigate/);
   assert.match(main, /setWindowOpenHandler/);
   assert.match(main, /removeSwitch\("remote-debugging-port"\)/);
+});
+
+test("shell bootstrap exposes only sanitized runtime metadata", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  assert.match(main, /const runtimeInfo: RuntimeInfo/);
+  assert.match(main, /runtime: runtimeInfo/);
+  assert.match(ipc, /runtime: options\.runtime/);
+});
+
+test("a copied profile receives a distinct sync device identity before services start", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const databaseOpen = main.indexOf("DesktopDatabase.open");
+  const resetIdentity = main.indexOf("applyPortableImportIdentity", databaseOpen);
+  const createWindow = main.indexOf("await createWindow()", databaseOpen);
+  assert.ok(databaseOpen >= 0 && databaseOpen < resetIdentity && resetIdentity < createWindow);
+  assert.match(main, /desktopDatabase!\.adoptImportedProfile\(deviceId\)/);
+});
+
+test("portable setup failures localize without calling app.getLocale before ready", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  assert.match(main, /getPreferredSystemLanguages\(\)\[0\]/);
+  const setup = main.slice(main.indexOf("let profileReady"), main.indexOf("const coordinator"));
+  assert.ok(setup.indexOf("isPortableDataInitialized(runtimeProfile)")
+    < setup.indexOf("hasImportableLegacyData(runtimeProfile)"));
+  const legacyBranch = setup.slice(setup.indexOf("else if (legacyDataAvailable)"), setup.indexOf("} catch"));
+  const legacyLock = legacyBranch.indexOf("legacyProfileLock = app.requestSingleInstanceLock()");
+  const finalize = legacyBranch.indexOf("finalizePortableDataImport(runtimeProfile)");
+  const portablePath = legacyBranch.indexOf('app.setPath("userData"');
+  assert.ok(legacyLock >= 0 && legacyLock < finalize && finalize < portablePath);
+  assert.doesNotMatch(setup, /app\.getLocale\(\)/);
+  assert.match(setup, /legacyDataAvailable = hasImportableLegacyData\(runtimeProfile\)/);
+  assert.match(main, /app\.releaseSingleInstanceLock\(\)/);
+  assert.match(main, /instanceLockHeld = app\.requestSingleInstanceLock\(\)/);
+  assert.match(main, /\["EACCES", "EPERM", "EROFS", "EIO"\]/);
 });
 
 test("display preferences cross only the trusted shell bridge", () => {
@@ -172,6 +208,7 @@ test("Drive sync uses a trusted typed bridge and protects destructive cloud clea
   assert.match(ipc, /CLEAR_REMOTE_CONFIRMATION/);
   assert.match(preload, /onSyncStatus/);
   assert.match(protocol, /readonly sync: SyncStatus/);
+  assert.match(protocol, /readonly runtime: RuntimeInfo/);
 });
 
 test("windows and linux auto-hide the native menu bar", () => {

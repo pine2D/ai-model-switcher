@@ -67,16 +67,19 @@ export function createSiteView(
   });
   contents.on("render-process-gone", (_event, details) => callbacks.onCrash(details.reason));
 
-  const guardNavigation = (event: Electron.Event, url: string) => {
-    const disposition = navigationDisposition(site, url);
-    authRecovery.observe(disposition);
+  const guardNavigation = (event: Electron.Event<{
+    readonly url: string;
+    readonly isMainFrame: boolean;
+  }>) => {
+    const disposition = navigationDisposition(site, event.url);
+    authRecovery.observe(disposition, event.isMainFrame);
     if (disposition === "external" || disposition === "block") event.preventDefault();
   };
   contents.on("will-navigate", guardNavigation);
   contents.on("will-redirect", guardNavigation);
   contents.setWindowOpenHandler(({ url }) => {
     const disposition = navigationDisposition(site, url);
-    authRecovery.observe(disposition);
+    authRecovery.observe(disposition, true);
     if (disposition === "site" || disposition === "auth") void contents.loadURL(url);
     return { action: "deny" };
   });

@@ -5,8 +5,8 @@ export class PostAuthReloadTracker {
 
   constructor(private readonly enabled: boolean) {}
 
-  observe(disposition: NavigationDisposition): void {
-    if (this.enabled && disposition === "auth") this.armed = true;
+  observe(disposition: NavigationDisposition, isMainFrame: boolean): void {
+    if (this.enabled && isMainFrame && disposition === "auth") this.armed = true;
   }
 
   shouldReload(disposition: NavigationDisposition): boolean {

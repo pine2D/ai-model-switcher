@@ -7,6 +7,7 @@ import {
 import type { DisplayPreferences } from "./display";
 import { validateImages, type DesktopImage } from "./images";
 import type { PendingSynthesis } from "./synthesis";
+import type { RuntimeInfo } from "./runtime";
 import type { SyncStatus } from "./sync";
 import type { WorkspaceState } from "./workspace";
 
@@ -104,6 +105,7 @@ export interface LayoutState {
 }
 
 export interface BootstrapState {
+  readonly runtime: RuntimeInfo;
   readonly sites: readonly SiteDefinition[];
   readonly statuses: readonly SiteStatus[];
   readonly layout: LayoutState;

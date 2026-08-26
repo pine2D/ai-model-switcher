@@ -8,6 +8,7 @@ import { getCopy } from "../src/shared/copy";
 import type { SyncStatus } from "../src/shared/sync";
 
 const noop = () => undefined;
+const runtime = { version: "0.19.0", distribution: "installed" } as const;
 const status = (patch: Partial<SyncStatus> = {}): SyncStatus => ({
   state: "idle",
   connected: false,
@@ -23,12 +24,28 @@ const renderSettings = (value: SyncStatus): string => renderToStaticMarkup(
   <SettingsWorkspace
     copy={getCopy("en")}
     locale="en"
+    runtime={runtime}
     status={value}
     onStatus={noop}
     onAnnounce={noop}
     onClose={noop}
   />
 );
+
+test("settings identify the running version and portable profile", () => {
+  const html = renderToStaticMarkup(
+    <SettingsWorkspace
+      copy={getCopy("zh-CN")}
+      locale="zh-CN"
+      runtime={{ version: "0.20.0", distribution: "portable" }}
+      status={status()}
+      onStatus={noop}
+      onAnnounce={noop}
+      onClose={noop}
+    />
+  );
+  assert.match(html, /PolyAsk 0\.20\.0 · 便携版/);
+});
 
 test("idle Drive status distinguishes local-only data from an up-to-date connection", () => {
   const disconnected = renderSettings(status({ connected: false, state: "idle" }));
@@ -80,6 +97,7 @@ test("sync settings expose compact connection state and protected cloud deletion
     <SettingsWorkspace
       copy={getCopy("zh-CN")}
       locale="zh-CN"
+      runtime={runtime}
       status={status({ connected: true, state: "waiting" })}
       onStatus={noop}
       onAnnounce={noop}
@@ -101,6 +119,7 @@ test("sync settings surfaces missing OAuth without irrelevant storage warnings",
     <SettingsWorkspace
       copy={getCopy("en")}
       locale="en"
+      runtime={runtime}
       status={status({ oauthConfigured: false, secureTokenStorage: false })}
       onStatus={noop}
       onAnnounce={noop}
@@ -114,7 +133,7 @@ test("sync settings surfaces missing OAuth without irrelevant storage warnings",
 
 test("a configured Linux build reports insecure token storage", () => {
   const html = renderToStaticMarkup(
-    <SettingsWorkspace copy={getCopy("en")} locale="en" status={status({ secureTokenStorage: false })} onStatus={noop} onAnnounce={noop} onClose={noop} />
+    <SettingsWorkspace copy={getCopy("en")} locale="en" runtime={runtime} status={status({ secureTokenStorage: false })} onStatus={noop} onAnnounce={noop} onClose={noop} />
   );
   assert.match(html, /Linux keyring is unavailable/);
 });
@@ -124,6 +143,7 @@ test("an expired connected session offers reauthentication instead of a dead-end
     <SettingsWorkspace
       copy={getCopy("en")}
       locale="en"
+      runtime={runtime}
       status={status({ connected: true, state: "auth" })}
       onStatus={noop}
       onAnnounce={noop}

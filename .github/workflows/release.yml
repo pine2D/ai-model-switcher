@@ -72,7 +72,7 @@ jobs:
           - os: windows-latest
             platform: win32
             arch: x64
-            maker: "@electron-forge/maker-squirrel,@electron-forge/maker-zip"
+            maker: "@electron-forge/maker-squirrel"
             asset: windows-x64
           - os: ubuntu-latest
             platform: linux
@@ -118,6 +118,16 @@ jobs:
       - name: 构建当前平台可分发包
         working-directory: desktop
         run: npm run make -- --platform="${{ matrix.platform }}" --arch="${{ matrix.arch }}" --targets="${{ matrix.maker }}"
+
+      - name: 构建并解包校验 Windows 便携版
+        if: matrix.platform == 'win32'
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $version = (Get-Content "package.json" | ConvertFrom-Json).version
+          $zipDirectory = "out/make/zip/win32/${{ matrix.arch }}"
+          $zipPath = "$zipDirectory/PolyAsk-win32-${{ matrix.arch }}-$version.zip"
+          ./scripts/archive-portable.ps1 -Arch "${{ matrix.arch }}" -DestinationPath $zipPath
 
       - name: 规范化文件名并生成 SHA-256
         working-directory: desktop

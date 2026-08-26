@@ -11,6 +11,8 @@
   border: 0; border-radius: 6px; color: var(--muted); background: transparent;
 }
 .settings-toolbar button:hover { color: var(--accent); background: var(--accent-soft); }
+.settings-product { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.settings-product span { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .settings-body {
   min-height: 0; padding: 12px; display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
   align-content: start; gap: 8px; overflow: auto;

@@ -8,6 +8,7 @@ import { unsupportedImageSites } from "../shared/images";
 import type { BootstrapState, DesktopSurface, LayoutState, SiteStatus } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
+import type { RuntimeInfo } from "../shared/runtime";
 import { ArchiveSurface } from "./archive-surface";
 import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
@@ -49,6 +50,7 @@ const INITIAL_SYNC: SyncStatus = {
   state: "idle", connected: false, pending: 0, errorCount: 0,
   readOnly: false, oauthConfigured: false, secureTokenStorage: true
 };
+const INITIAL_RUNTIME: RuntimeInfo = { version: "", distribution: "installed" };
 
 applyDisplayDensity(document.documentElement, INITIAL_DISPLAY);
 
@@ -70,6 +72,7 @@ function App(): React.JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [surface, setSurface] = useState<DesktopSurface>("sites");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
+  const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
   const [announcement, setAnnouncement] = useState("");
   const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
   const drawerPresent = usePresence(drawerOpen, 180);
@@ -99,6 +102,7 @@ function App(): React.JSX.Element {
   };
 
   const acceptBootstrap = (state: BootstrapState): void => {
+    setRuntime(state.runtime);
     setSites(state.sites);
     setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
     layoutPage.current = state.layout.page;
@@ -259,7 +263,7 @@ function App(): React.JSX.Element {
     return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
   }
 
   return (

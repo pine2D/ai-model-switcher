@@ -1,6 +1,6 @@
 {
   "name": "polyask-desktop",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "productName": "PolyAsk",
   "private": true,
   "description": "PolyAsk cross-platform desktop shell",
@@ -13,6 +13,7 @@
     "make": "electron-forge make",
     "configure-oauth": "node scripts/configure-oauth.mjs",
     "collect-release": "node scripts/release-artifacts.mjs",
+    "prepare-portable": "node scripts/prepare-portable.mjs",
     "smoke": "node scripts/smoke.mjs",
     "soak": "node scripts/soak.mjs",
     "test": "tsx --test test/**/*.test.ts test/**/*.test.tsx && node --test scripts/*.test.mjs",

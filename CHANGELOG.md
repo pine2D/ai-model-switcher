@@ -8,6 +8,26 @@
 
 ## [未发布]
 
+## [0.20.0] - 2026-08-26
+
+### 新增
+
+- 设置页显示 Desktop 版本与发行形态
+
+### 变更
+
+- Windows 便携版将程序与数据分目录存放
+- 升级时只替换 `App`，保留 `PolyAsk Data`
+- 首次启动可导入旧版设置与站点登录状态
+- 旧版资料保留在原位置
+- 便携副本使用独立的同步设备身份
+
+### 修复
+
+- 修复 Gemini 登录后站点区域持续空白的问题
+- 便携版导入遇到权限错误时中止操作
+- 便携版导入发现未知数据时保留原目录
+
 ## [0.19.0] - 2026-08-26
 
 ### 新增
@@ -469,7 +489,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.19.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/pine2D/polyask/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/pine2D/polyask/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/pine2D/polyask/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/pine2D/polyask/compare/v0.17.0...v0.17.1

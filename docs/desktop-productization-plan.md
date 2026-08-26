@@ -677,7 +677,7 @@ git commit -m "fix(desktop): complete productization audit"
 
 - [ ] **Step 1: Windows 原生验收**
 
-验证 100%/125%/150%/200% 缩放、Alt 菜单、中文 IME、Narrator、高对比度、系统浏览器 OAuth、DPAPI token、安装/升级/卸载和 60 分钟稳定性。
+验证 100%/125%/150%/200% 缩放、Alt 菜单、中文 IME、Narrator、高对比度、系统浏览器 OAuth、DPAPI token、安装/升级/卸载和 60 分钟稳定性。便携版另需覆盖旧数据复制、只替换 `App` 的升级路径，以及升级后设置和站点登录状态保持。
 
 - [ ] **Step 2: macOS 原生验收**
 

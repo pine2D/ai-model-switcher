@@ -23,12 +23,23 @@ bash scripts/release.sh --publish      # 推 v* tag；Release workflow 构建并
 
 - Chrome：`polyask-vX.Y.Z.zip` 及 SHA-256。
 - Windows x64：`polyask-desktop-vX.Y.Z-windows-x64.exe` 及 SHA-256。
-- Windows x64 免安装版：`polyask-desktop-vX.Y.Z-windows-x64-portable.zip` 及 SHA-256。
+- Windows x64 便携版：`polyask-desktop-vX.Y.Z-windows-x64-portable.zip` 及 SHA-256。
 - Linux x64：`polyask-desktop-vX.Y.Z-linux-x64.deb` 及 SHA-256。
 - macOS：`polyask-desktop-vX.Y.Z-macos-x64.zip`、`polyask-desktop-vX.Y.Z-macos-arm64.zip` 及各自 SHA-256。
 - `CHANGELOG.md` 对应版本段作为 Release 正文。
 
 Desktop 当前按预览版发布，不签名、不公证、不自动更新。Windows、macOS、Linux 产物必须在对应原生 runner 上生成；不得从 Linux 交叉伪造 macOS 包。等证书和平台账号就绪后，再把签名与公证加入同一矩阵，不能在文案里提前声称已签名。
+
+Windows 便携 ZIP 不使用 Forge 的扁平 `maker-zip` 结果。Release workflow 必须将原生 Windows package 放入以下结构，再压缩最外层 `PolyAsk Portable`：
+
+```text
+PolyAsk Portable/
+├─ App/
+├─ README.txt
+└─ portable.json
+```
+
+发布包不得包含 `PolyAsk Data`。应用首次运行后在同级创建该目录；后续升级替换整个 `App`，避免旧 `app.asar` 残留，同时保留设置、Cookie、站点登录状态和 SQLite 数据。`portable.json` 与 `README.txt` 不含用户数据，可以随新包覆盖；`README.txt` 用 English、简体中文和繁體中文说明启动入口与升级边界。CI 与 Release 都调用 `desktop/scripts/archive-portable.ps1`：先从真实 Windows package 准备目录，再压缩并解包，确认 `portable.json`、`README.txt`、`App/polyask-desktop.exe` 和 `App/resources/app.asar` 均存在且 `PolyAsk Data` 不存在，最后交给归档脚本统一命名并生成 SHA-256。
 
 ## Desktop OAuth 与产物门禁
 
@@ -57,7 +68,7 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
 - 更新 `CLAUDE.md` 顶部的「最后与代码核对」日期与版本。
 - 确认 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 存在，OAuth consent screen 的 Audience/测试用户或 Production 状态符合本次发布对象；Client ID 已打包不等于公众账号一定能完成授权。
-- 在能取得原生机器时，至少运行一次本版 Windows `.exe` 安装包和免安装 ZIP，并安装 Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
+- 在能取得原生机器时，至少运行一次本版 Windows `.exe` 安装包和便携 ZIP，并安装 Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
 - 核对 Release 资产恰好包含 6 个主包、6 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
 - **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。
 
