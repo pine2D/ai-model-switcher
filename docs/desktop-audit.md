@@ -29,7 +29,7 @@
 
 当前自动化基线包括桌面 TypeScript/React 与运行器测试、TypeScript 检查、Linux x64 package、运行依赖审计和扩展 `scripts/verify.sh`。打包产物 smoke 进一步证明 1 个 Shell、9 个唯一且同 Session 的安全站点视图；3 分钟短时 soak 完成 4 次采样且无 renderer crash/unresponsive。SQLite schema 1、WAL、事务 outbox、历史/归档 tombstone 与重开持久化已有自动化证据。站点范围、图片群发、回答采集、结果库、辅助综合和 Drive schema 1 同步均已迁移；归档 detach/reattach 不销毁站点视图，Drive 对 401、429/5xx、410、未来 schema、远端身份和断开竞态均有测试。
 
-发行基线包括 Windows Squirrel 安装包和程序/数据分离的便携 ZIP、Linux deb、macOS x64/arm64 ZIP maker，扩展和 Desktop 共用版本。便携版固定使用 `App` 与 `PolyAsk Data` 分目录，首次可复制旧版设置和站点会话，升级只替换 `App`。实际 Linux x64 `.deb` 已生成并检查包元数据、可执行链接和 OAuth 资源；归档脚本会验证 OAuth Client ID、统一文件名并生成 SHA-256。只有对应 tag 的 Release workflow 成功后，原生 runner 产物才算发布证据。
+发行基线包括 Windows Squirrel 安装包和程序/数据分离的便携 ZIP、Linux deb、macOS x64/arm64 ZIP maker，扩展和 Desktop 共用版本。便携版固定使用 `App` 与 `PolyAsk Data` 分目录，首次可复制旧版设置和站点会话，升级只替换 `App`。实际 Linux x64 `.deb` 已生成并检查包元数据、可执行链接和 OAuth 资源；归档脚本会验证完整的 Desktop OAuth 凭据、统一文件名并生成 SHA-256。只有对应 tag 的 Release workflow 成功后，原生 runner 产物才算发布证据。
 
 ## 已知未完成证据
 

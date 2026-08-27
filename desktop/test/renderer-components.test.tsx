@@ -287,7 +287,7 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
 });
 
 test("site frames render only the active selected page with accessible actions", () => {
-  const placements: LayoutState["placements"] = SITES.slice(0, 6).map((site, index) => ({
+  const placements: LayoutState["placements"] = SITES.slice(0, 4).map((site, index) => ({
     key: site.key,
     bounds: { x: index * 10, y: index * 10, width: 100, height: 80 }
   }));
@@ -296,7 +296,7 @@ test("site frames render only the active selected page with accessible actions",
       copy={getCopy("en")}
       sites={SITES}
       statuses={{}}
-      layout={{ mode: "overview", focused: "claude", page: 0, pageCount: 2, placements }}
+      layout={{ mode: "overview", focused: "claude", page: 0, pageCount: 3, placements }}
       selected={new Set(SITES.map((site) => site.key))}
       onToggle={noop}
       onFocus={noop}
@@ -304,11 +304,12 @@ test("site frames render only the active selected page with accessible actions",
     />
   );
 
-  assert.equal([...html.matchAll(/<article class="tile-frame/g)].length, 6);
+  assert.equal([...html.matchAll(/<article class="tile-frame/g)].length, 4);
   assert.match(html, /^<section id="site-page-panel-0" class="tile-layer" role="tabpanel"/);
   assert.match(html, /aria-labelledby="site-page-tab-0"/);
-  assert.match(html, /<section id="site-page-panel-1" role="tabpanel" aria-labelledby="site-page-tab-1" hidden=""><\/section>$/);
-  assert.equal([...html.matchAll(/type="checkbox"/g)].length, 6);
+  assert.match(html, /<section id="site-page-panel-1" role="tabpanel" aria-labelledby="site-page-tab-1" hidden=""><\/section>/);
+  assert.match(html, /<section id="site-page-panel-2" role="tabpanel" aria-labelledby="site-page-tab-2" hidden=""><\/section>$/);
+  assert.equal([...html.matchAll(/type="checkbox"/g)].length, 4);
   assert.match(html, /aria-label="Focus Claude"/);
   assert.match(html, /aria-label="Reload Claude"/);
   assert.match(html, /class="tile-actions priority-p2"/);
@@ -354,7 +355,7 @@ test("page tabs expose compact ranges, manual activation, and off-page status", 
       copy={getCopy("en")}
       selectedSites={SITES.slice(0, 8).map((site) => site.key)}
       statuses={{
-        qianwen: { site: "qianwen", phase: "sending" },
+        gemini: { site: "gemini", phase: "sending" },
         yuanbao: { site: "yuanbao", phase: "failed", code: "submit_unconfirmed" }
       }}
       page={0}
@@ -365,13 +366,13 @@ test("page tabs expose compact ranges, manual activation, and off-page status", 
 
   assert.match(html, /^<div class="page-tabs" role="tablist" aria-label="Site pages"[^>]*>/);
   assert.equal([...html.matchAll(/role="tab"/g)].length, 2);
-  assert.match(html, /aria-label="Page 1, sites 1–6, 1 sending"/);
-  assert.match(html, /aria-label="Page 2, sites 7–8, 1 failed"/);
+  assert.match(html, /aria-label="Page 1, sites 1–4, 1 sending"/);
+  assert.match(html, /aria-label="Page 2, sites 5–8, 1 failed"/);
   assert.match(html, /aria-selected="true"[^>]*tabindex="0"/);
   assert.match(html, /aria-selected="false"[^>]*tabindex="-1"/);
   assert.match(html, /data-input-method="pointer"/);
-  assert.match(html, />1–6</);
-  assert.match(html, />7–8</);
+  assert.match(html, />1–4</);
+  assert.match(html, />5–8</);
 });
 
 test("page tabs stay hidden while selected-site state catches up with layout state", () => {

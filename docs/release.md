@@ -43,13 +43,16 @@ PolyAsk Portable/
 
 ## Desktop OAuth 与产物门禁
 
-GitHub Actions Repository Variable `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 必须保存 Google Cloud 的 `Desktop app` Client ID。它是公开标识，不是密码；仓库和 CI 均不接收 `client_secret`。可用以下命令配置：
+GitHub Actions Repository Variable `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 与 Repository Secret `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 必须来自 Google Cloud 中同一个 `Desktop app` 客户端。Desktop 应用无法真正保密嵌入的 Client Secret，因此它不作为安全边界；仍用 Actions Secret 管理，避免进入仓库、命令行参数和构建日志。可用以下命令配置：
 
 ```bash
 gh variable set POLYASK_GOOGLE_DESKTOP_CLIENT_ID --body '<client-id>.apps.googleusercontent.com'
+gh secret set POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET
 ```
 
-Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，生成被 Git 忽略的 `desktop/resources/oauth.json`。Forge 将其复制到应用 `resources`；`npm run collect-release` 会拒绝 OAuth 文件缺失或格式无效的产物，再统一命名并生成 SHA-256。Linux `.deb` 中该公开文件必须是普通用户可读的 `0644`，不能沿用凭据文件的 `0600`。
+Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，生成被 Git 忽略的 `desktop/resources/oauth.json`。Forge 将其复制到应用 `resources`；`npm run collect-release` 会拒绝缺少 Client ID、Client Secret 或格式无效的产物，再统一命名并生成 SHA-256。Linux `.deb` 中该文件必须是普通用户可读的 `0644`；这是桌面客户端随包分发的凭据，不应被误述为发行包能够保密的服务端密钥。
+
+正式 Release 只使用 Production Desktop Client；本地开发和测试使用独立的 Development Desktop Client，不得复用 Production Secret。Secret 出现在正式 Desktop 包中属于公开客户端的预期行为，不写入用户界面或 README；监控基线、异常判定和轮换步骤见 `docs/desktop-oauth-security.md`。
 
 `desktop/package.json`、`desktop/package-lock.json` 根版本和 `manifest.json` 必须一致。`scripts/prepare-release.sh` 同步更新三处；`scripts/test-release-flow.js` 和 Desktop release tests 负责阻止版本、maker、矩阵或 OAuth 产物契约静默漂移。
 
@@ -67,7 +70,8 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 - 发版前跑 `node scripts/probe-drift.js`（后台标签冻结时加 `--activate`），要求**覆盖 9/9 站**且 `!` 警报逐条处置；复核用 `--dry`（警报会被本轮落盘的快照消费，直接复跑只会看到绿）。
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
 - 更新 `CLAUDE.md` 顶部的「最后与代码核对」日期与版本。
-- 确认 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 存在，OAuth consent screen 的 Audience/测试用户或 Production 状态符合本次发布对象；Client ID 已打包不等于公众账号一定能完成授权。
+- 确认 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 与 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 来自同一个 Desktop 客户端，OAuth consent screen 的 Audience/测试用户或 Production 状态符合本次发布对象；凭据已打包不等于公众账号一定能完成授权。
+- 按 `docs/desktop-oauth-security.md` 检查 Google Auth Platform 与 Drive API 指标；无法由发版、用户增长或集中测试解释的异常先调查再发布。
 - 在能取得原生机器时，至少运行一次本版 Windows `.exe` 安装包和便携 ZIP，并安装 Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
 - 核对 Release 资产恰好包含 6 个主包、6 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
 - **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。

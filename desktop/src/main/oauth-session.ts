@@ -3,12 +3,13 @@ import {
   authorizeWithPkce,
   refreshAccessToken,
   revokeGoogleToken,
+  type OAuthClientCredentials,
   type TokenSet
 } from "./oauth-pkce";
 import type { TokenStore } from "./token-store";
 
 interface OAuthSessionOptions {
-  readonly clientId: string | null;
+  readonly credentials: OAuthClientCredentials | null;
   readonly scope: string;
   readonly tokenStore: TokenStore;
   readonly openExternal: (url: string) => Promise<void>;
@@ -28,7 +29,7 @@ export class OAuthSession implements AccessTokenProvider {
   }
 
   configured(): boolean {
-    return !!this.options.clientId;
+    return !!this.options.credentials;
   }
 
   securePersistence(): boolean {
@@ -36,16 +37,21 @@ export class OAuthSession implements AccessTokenProvider {
   }
 
   async connect(): Promise<void> {
-    const clientId = this.requireClient();
+    const credentials = this.requireClient();
     const token = await (this.options.authorize ?? authorizeWithPkce)({
-      clientId,
+      ...credentials,
       scope: this.options.scope,
       openExternal: this.options.openExternal,
       fetch: this.options.fetch
     });
-    const refreshToken = token.refreshToken ?? await this.options.tokenStore.load();
+    let refreshToken = token.refreshToken;
+    if (!refreshToken) {
+      try { refreshToken = await this.options.tokenStore.load(); }
+      catch { throw new Error("token_store_failed"); }
+    }
     if (!refreshToken) throw new Error("refresh_token_missing");
-    await this.options.tokenStore.save(refreshToken);
+    try { await this.options.tokenStore.save(refreshToken); }
+    catch { throw new Error("token_store_failed"); }
     this.token = { ...token, refreshToken };
   }
 
@@ -70,8 +76,8 @@ export class OAuthSession implements AccessTokenProvider {
     finally { await this.options.tokenStore.clear(); }
   }
 
-  private requireClient(): string {
-    if (!this.options.clientId) throw new Error("oauth_not_configured");
-    return this.options.clientId;
+  private requireClient(): OAuthClientCredentials {
+    if (!this.options.credentials) throw new Error("oauth_not_configured");
+    return this.options.credentials;
   }
 }

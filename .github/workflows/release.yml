@@ -109,10 +109,11 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      - name: 写入 Desktop OAuth 公共客户端 ID
+      - name: 写入 Desktop OAuth 客户端凭据
         working-directory: desktop
         env:
           POLYASK_GOOGLE_DESKTOP_CLIENT_ID: ${{ vars.POLYASK_GOOGLE_DESKTOP_CLIENT_ID }}
+          POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: npm run configure-oauth
 
       - name: 构建当前平台可分发包

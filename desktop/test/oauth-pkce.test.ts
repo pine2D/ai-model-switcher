@@ -7,15 +7,22 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 import {
+  authorizeWithPkce,
   buildAuthorizationRequest,
   exchangeAuthorizationCode,
-  loadOAuthClientId,
+  loadOAuthClientCredentials,
   OAUTH_CALLBACK_HTML,
+  refreshAccessToken,
   type RandomBytes
 } from "../src/main/oauth-pkce";
+import { OAuthSession } from "../src/main/oauth-session";
+import type { TokenStore } from "../src/main/token-store";
 
 const fixedRandom: RandomBytes = (size) => Buffer.alloc(size, 7);
 const execFileAsync = promisify(execFile);
+const ENVIRONMENT_CLIENT_SECRET = "test-environment-client-secret";
+const PACKAGED_CLIENT_SECRET = "test-packaged-client-secret";
+const DESKTOP_CLIENT_SECRET = "test-desktop-client-secret";
 
 test("desktop OAuth uses S256 PKCE, state and an exact loopback redirect", async () => {
   const request = await buildAuthorizationRequest({
@@ -34,18 +41,34 @@ test("desktop OAuth uses S256 PKCE, state and an exact loopback redirect", async
   assert.notEqual(request.url.searchParams.get("code_challenge"), request.verifier);
 });
 
-test("desktop OAuth client id never falls back to a Chrome extension client", async () => {
-  assert.equal(await loadOAuthClientId({
-    environment: { POLYASK_GOOGLE_DESKTOP_CLIENT_ID: "desktop.apps.googleusercontent.com" },
+test("desktop OAuth loads only a complete generated credential pair", async () => {
+  assert.deepEqual(await loadOAuthClientCredentials({
+    environment: {
+      POLYASK_GOOGLE_DESKTOP_CLIENT_ID: "environment.apps.googleusercontent.com",
+      POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET: ENVIRONMENT_CLIENT_SECRET
+    },
     resourcePath: "/missing/oauth.json",
     readText: async () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); }
-  }), "desktop.apps.googleusercontent.com");
-  assert.equal(await loadOAuthClientId({
+  }), {
+    clientId: "environment.apps.googleusercontent.com",
+    clientSecret: ENVIRONMENT_CLIENT_SECRET
+  });
+  assert.deepEqual(await loadOAuthClientCredentials({
     environment: {},
     resourcePath: "/app/oauth.json",
-    readText: async () => JSON.stringify({ clientId: "packaged.apps.googleusercontent.com" })
-  }), "packaged.apps.googleusercontent.com");
-  assert.equal(await loadOAuthClientId({ environment: {}, resourcePath: "/missing/oauth.json", readText: async () => "{}" }), null);
+    readText: async () => JSON.stringify({
+      clientId: "packaged.apps.googleusercontent.com",
+      clientSecret: PACKAGED_CLIENT_SECRET
+    })
+  }), {
+    clientId: "packaged.apps.googleusercontent.com",
+    clientSecret: PACKAGED_CLIENT_SECRET
+  });
+  assert.equal(await loadOAuthClientCredentials({
+    environment: {},
+    resourcePath: "/app/oauth.json",
+    readText: async () => JSON.stringify({ clientId: "incomplete.apps.googleusercontent.com" })
+  }), null);
 });
 
 test("the loopback page reports receipt without claiming Drive is connected", () => {
@@ -69,6 +92,7 @@ test("OAuth token exchange has a bounded network deadline", async () => {
 
   await assert.rejects(() => exchangeAuthorizationCode({
     clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET,
     code: "code",
     verifier: "verifier",
     redirectUri: "http://127.0.0.1:43123",
@@ -84,12 +108,122 @@ test("OAuth token exchange has a bounded network deadline", async () => {
   }), { status: 200 });
   await assert.rejects(() => exchangeAuthorizationCode({
     clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET,
     code: "code",
     verifier: "verifier",
     redirectUri: "http://127.0.0.1:43123",
     fetch: responseWithStalledBody,
     timeoutMs: 10
   }), (error: unknown) => (error as Error).message === "network_timeout");
+});
+
+test("OAuth token exchange identifies the Desktop client with its generated secret", async () => {
+  let requestBody = "";
+  const token = await exchangeAuthorizationCode({
+    clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET,
+    code: "authorization-code",
+    verifier: "verifier",
+    redirectUri: "http://127.0.0.1:43123",
+    fetch: async (_input, init) => {
+      requestBody = String(init?.body ?? "");
+      return new Response(JSON.stringify({
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        expires_in: 3_600
+      }), { status: 200 });
+    }
+  } as Parameters<typeof exchangeAuthorizationCode>[0] & { readonly clientSecret: string });
+
+  const fields = new URLSearchParams(requestBody);
+  assert.equal(fields.get("client_id"), "client.apps.googleusercontent.com");
+  assert.equal(fields.get("client_secret"), DESKTOP_CLIENT_SECRET);
+  assert.equal(token.accessToken, "access-token");
+});
+
+test("OAuth refresh identifies the same Desktop client with its generated secret", async () => {
+  let requestBody = "";
+  const refresh = refreshAccessToken as unknown as (
+    credentials: { readonly clientId: string; readonly clientSecret: string },
+    refreshToken: string,
+    fetch: typeof globalThis.fetch,
+    now: () => number
+  ) => ReturnType<typeof refreshAccessToken>;
+  const token = await refresh({
+    clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET
+  }, "saved-refresh-token", async (_input, init) => {
+    requestBody = String(init?.body ?? "");
+    return new Response(JSON.stringify({ access_token: "fresh-access", expires_in: 3_600 }), { status: 200 });
+  }, () => 1_000);
+
+  const fields = new URLSearchParams(requestBody);
+  assert.equal(fields.get("client_id"), "client.apps.googleusercontent.com");
+  assert.equal(fields.get("client_secret"), DESKTOP_CLIENT_SECRET);
+  assert.equal(fields.get("refresh_token"), "saved-refresh-token");
+  assert.equal(token.accessToken, "fresh-access");
+});
+
+test("OAuth token exchange preserves safe Google rejection codes", async () => {
+  for (const [providerError, expected] of [
+    ["invalid_grant", "oauth_invalid_grant"],
+    ["invalid_client", "oauth_invalid_client"],
+    ["redirect_uri_mismatch", "oauth_redirect_mismatch"]
+  ] as const) {
+    await assert.rejects(() => exchangeAuthorizationCode({
+      clientId: "client.apps.googleusercontent.com",
+      clientSecret: DESKTOP_CLIENT_SECRET,
+      code: "authorization-code",
+      verifier: "verifier",
+      redirectUri: "http://127.0.0.1:43123",
+      fetch: async () => new Response(JSON.stringify({
+        error: providerError,
+        error_description: "must not be exposed"
+      }), { status: 400 })
+    }), (error: unknown) => {
+      assert.equal((error as Error).message, expected);
+      assert.doesNotMatch((error as Error).message, /must not be exposed/);
+      return true;
+    });
+  }
+});
+
+test("OAuth token exchange preserves a bounded diagnostic for an unrecognized Google error", async () => {
+  await assert.rejects(() => exchangeAuthorizationCode({
+    clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET,
+    code: "authorization-code",
+    verifier: "verifier",
+    redirectUri: "http://127.0.0.1:43123",
+    fetch: async () => new Response(JSON.stringify({
+      error: "invalid_request",
+      error_description: "Missing required parameter: client_secret"
+    }), { status: 400 })
+  }), (error: unknown) => {
+    const failure = error as Error & { providerCode?: string; providerDetail?: string };
+    assert.equal(failure.message, "oauth_provider_error");
+    assert.equal(failure.providerCode, "invalid_request");
+    assert.equal(failure.providerDetail, "client_secret");
+    return true;
+  });
+});
+
+test("OAuth token exchange never exposes malformed provider errors", async () => {
+  await assert.rejects(() => exchangeAuthorizationCode({
+    clientId: "client.apps.googleusercontent.com",
+    clientSecret: DESKTOP_CLIENT_SECRET,
+    code: "authorization-code",
+    verifier: "verifier",
+    redirectUri: "http://127.0.0.1:43123",
+    fetch: async () => new Response(JSON.stringify({
+      error: "invalid request: authorization-code=secret-value",
+      error_description: "secret-value"
+    }), { status: 400 })
+  }), (error: unknown) => {
+    assert.equal((error as Error).message, "auth_failed");
+    assert.doesNotMatch(String(error), /secret-value/);
+    return true;
+  });
 });
 
 test("OAuth deadlines keep the Node.js event loop alive", async () => {
@@ -119,6 +253,7 @@ test("authorization owns token exchange rejection while delayed receiver close r
 
     const authorization = authorizeWithPkce({
       clientId: "client.apps.googleusercontent.com",
+      clientSecret: ${JSON.stringify(DESKTOP_CLIENT_SECRET)},
       scope: "https://www.googleapis.com/auth/drive.appdata",
       openExternal: async (url) => {
         resolveReceive({ code: "rejected-code", state: new URL(url).searchParams.get("state") });
@@ -159,8 +294,66 @@ test("authorization owns token exchange rejection while delayed receiver close r
     readonly closeFinished: boolean;
   };
 
-  assert.equal(result.outerError, "auth_failed");
+  assert.equal(result.outerError, "oauth_invalid_grant");
   assert.equal(result.closeFinished, true);
   assert.deepEqual(result.rejectionEvents, []);
   assert.equal(stderr, "");
+});
+
+test("OAuth session carries the same Desktop credential pair through authorization", async () => {
+  let receivedSecret: string | undefined;
+  const tokenStore = {
+    securePersistence: () => true,
+    load: async () => null,
+    save: async () => undefined,
+    clear: async () => undefined
+  } as unknown as TokenStore;
+  const session = new OAuthSession({
+    credentials: {
+      clientId: "client.apps.googleusercontent.com",
+      clientSecret: DESKTOP_CLIENT_SECRET
+    },
+    scope: "https://www.googleapis.com/auth/drive.appdata",
+    tokenStore,
+    openExternal: async () => undefined,
+    authorize: async (input: Parameters<typeof authorizeWithPkce>[0]) => {
+      receivedSecret = (input as typeof input & { readonly clientSecret?: string }).clientSecret;
+      return {
+        accessToken: "access",
+        refreshToken: "refresh",
+        expiresAt: Date.now() + 60_000
+      };
+    }
+  } as unknown as ConstructorParameters<typeof OAuthSession>[0]);
+
+  await session.connect();
+
+  assert.equal(receivedSecret, DESKTOP_CLIENT_SECRET);
+});
+
+test("OAuth session distinguishes secure token-storage failures", async () => {
+  const tokenStore = {
+    securePersistence: () => true,
+    load: async () => null,
+    save: async () => { throw Object.assign(new Error("denied"), { code: "EACCES" }); }
+  } as unknown as TokenStore;
+  const session = new OAuthSession({
+    credentials: {
+      clientId: "client.apps.googleusercontent.com",
+      clientSecret: DESKTOP_CLIENT_SECRET
+    },
+    scope: "https://www.googleapis.com/auth/drive.appdata",
+    tokenStore,
+    openExternal: async () => undefined,
+    authorize: async () => ({
+      accessToken: "access",
+      refreshToken: "refresh",
+      expiresAt: Date.now() + 60_000
+    })
+  });
+
+  await assert.rejects(
+    () => session.connect(),
+    (error: unknown) => (error as Error).message === "token_store_failed"
+  );
 });

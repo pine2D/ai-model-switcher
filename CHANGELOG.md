@@ -8,6 +8,19 @@
 
 ## [未发布]
 
+### 新增
+
+- Desktop 支持 `Alt+1` / `Alt+2` / `Alt+3` 直达站点页
+
+### 变更
+
+- Desktop 每页最多显示 4 个站点，并按总数均衡分页
+- Desktop 会区分 OAuth 授权码、客户端配置、回调地址、刷新令牌与 Drive 鉴权失败，并显示经过筛选的 Google 错误代码
+
+### 修复
+
+- 修复 Desktop Google Drive 授权后因缺少 `client_secret` 无法连接的问题
+
 ## [0.20.1] - 2026-08-26
 
 ### 修复

@@ -32,6 +32,10 @@ test("application menu offers a keyboard route back to the prompt", () => {
   assert.match(main, /CmdOrCtrl\+Shift\+PageDown/);
   assert.match(main, /CmdOrCtrl\+Shift\+PageUp/);
   assert.match(main, /pageRelative/);
+  assert.match(main, /Alt\+1/);
+  assert.match(main, /Alt\+2/);
+  assert.match(main, /Alt\+3/);
+  assert.match(main, /pageDirect\(page\)/);
 });
 
 test("CI tests and packages desktop on Linux, Windows and macOS", () => {

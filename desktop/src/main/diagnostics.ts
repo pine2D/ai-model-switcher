@@ -62,7 +62,7 @@ export function buildDiagnosticSnapshot(input: DiagnosticInput): DiagnosticSnaps
   }
   const attached = input.sites.filter((site) => site.attached).map((site) => site.site);
   const placed = input.layout.placements.map((placement) => placement.key);
-  if (placed.length !== attached.length || placed.length > 6) violations.push("layout_count");
+  if (placed.length !== attached.length || placed.length > 4) violations.push("layout_count");
   if (new Set([...attached, ...placed]).size !== attached.length ||
       !attached.every((site) => placed.includes(site))) {
     violations.push("attached_layout");

@@ -36,6 +36,7 @@ export interface SyncStatus {
   readonly errorCount: number;
   readonly lastSuccessAt?: number;
   readonly reason?: string;
+  readonly diagnostic?: string;
   readonly readOnly: boolean;
   readonly oauthConfigured: boolean;
   readonly secureTokenStorage: boolean;

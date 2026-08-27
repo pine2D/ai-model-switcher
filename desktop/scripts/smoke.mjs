@@ -31,7 +31,7 @@ try {
   assert.ok(snapshot.sites.every((site) => site.sandbox && site.contextIsolation && !site.nodeIntegration));
   const attached = snapshot.sites.filter((site) => site.attached);
   assert.equal(attached.length, snapshot.layout.placements.length);
-  assert.ok(attached.length > 0 && attached.length <= 6);
+  assert.ok(attached.length > 0 && attached.length <= 4);
   assert.ok(attached.every((site) => site.bounds.width > 0 && site.bounds.height > 0));
   assert.deepEqual(
     new Set(attached.map((site) => site.site)),

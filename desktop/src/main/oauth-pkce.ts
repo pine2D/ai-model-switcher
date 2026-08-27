@@ -24,6 +24,11 @@ interface LoadClientInput {
   readonly readText?: (path: string) => Promise<string>;
 }
 
+export interface OAuthClientCredentials {
+  readonly clientId: string;
+  readonly clientSecret: string;
+}
+
 export interface TokenSet {
   readonly accessToken: string;
   readonly refreshToken: string | null;
@@ -31,6 +36,7 @@ export interface TokenSet {
 }
 
 const CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
+const CLIENT_SECRET = /^[A-Za-z0-9._~-]{8,256}$/;
 const encode = (value: Buffer) => value.toString("base64url");
 const NETWORK_TIMEOUT_MS = 30_000;
 
@@ -63,13 +69,28 @@ export async function buildAuthorizationRequest(input: BuildAuthorizationInput):
   return { url, state, verifier, redirectUri };
 }
 
-export async function loadOAuthClientId(input: LoadClientInput): Promise<string | null> {
-  const fromEnvironment = input.environment?.POLYASK_GOOGLE_DESKTOP_CLIENT_ID?.trim();
-  if (fromEnvironment && CLIENT_ID.test(fromEnvironment)) return fromEnvironment;
+export async function loadOAuthClientCredentials(input: LoadClientInput): Promise<OAuthClientCredentials | null> {
+  const environment = normalizeCredentials(
+    input.environment?.POLYASK_GOOGLE_DESKTOP_CLIENT_ID,
+    input.environment?.POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET
+  );
+  if (environment) return environment;
   try {
-    const parsed = JSON.parse(await (input.readText ?? ((path) => readFile(path, "utf8")))(input.resourcePath)) as { clientId?: unknown };
-    return typeof parsed.clientId === "string" && CLIENT_ID.test(parsed.clientId.trim()) ? parsed.clientId.trim() : null;
+    const parsed = JSON.parse(await (input.readText ?? ((path) => readFile(path, "utf8")))(input.resourcePath)) as {
+      clientId?: unknown;
+      clientSecret?: unknown;
+    };
+    return normalizeCredentials(parsed.clientId, parsed.clientSecret);
   } catch { return null; }
+}
+
+function normalizeCredentials(clientId: unknown, clientSecret: unknown): OAuthClientCredentials | null {
+  if (typeof clientId !== "string" || typeof clientSecret !== "string") return null;
+  const normalizedId = clientId.trim();
+  const normalizedSecret = clientSecret.trim();
+  return CLIENT_ID.test(normalizedId) && CLIENT_SECRET.test(normalizedSecret)
+    ? { clientId: normalizedId, clientSecret: normalizedSecret }
+    : null;
 }
 
 interface LoopbackReceiver {
@@ -102,6 +123,7 @@ export async function listenLoopback(): Promise<LoopbackReceiver> {
 
 interface AuthorizeInput {
   readonly clientId: string;
+  readonly clientSecret: string;
   readonly scope: string;
   readonly openExternal: (url: string) => Promise<void>;
   readonly listen?: () => Promise<LoopbackReceiver>;
@@ -125,6 +147,7 @@ export async function authorizeWithPkce(input: AuthorizeInput): Promise<TokenSet
     if (!callback.code) throw new Error("oauth_code_missing");
     return await exchangeAuthorizationCode({
       clientId: input.clientId,
+      clientSecret: input.clientSecret,
       code: callback.code,
       verifier: request.verifier,
       redirectUri: request.redirectUri,
@@ -139,6 +162,7 @@ export async function authorizeWithPkce(input: AuthorizeInput): Promise<TokenSet
 
 interface ExchangeInput {
   readonly clientId: string;
+  readonly clientSecret: string;
   readonly code: string;
   readonly verifier: string;
   readonly redirectUri: string;
@@ -155,17 +179,23 @@ export async function exchangeAuthorizationCode(input: ExchangeInput): Promise<T
     redirect_uri: input.redirectUri,
     grant_type: "authorization_code"
   });
+  body.set("client_secret", input.clientSecret);
   return tokenRequest(body, input.fetch ?? globalThis.fetch, input.now ?? Date.now, input.timeoutMs);
 }
 
 export async function refreshAccessToken(
-  clientId: string,
+  credentials: OAuthClientCredentials,
   refreshToken: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
   now: () => number = Date.now,
   timeoutMs?: number
 ): Promise<TokenSet> {
-  return tokenRequest(new URLSearchParams({ client_id: clientId, refresh_token: refreshToken, grant_type: "refresh_token" }), fetch, now, timeoutMs);
+  return tokenRequest(new URLSearchParams({
+    client_id: credentials.clientId,
+    client_secret: credentials.clientSecret,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token"
+  }), fetch, now, timeoutMs);
 }
 
 export async function revokeGoogleToken(token: string, fetch: typeof globalThis.fetch = globalThis.fetch, timeoutMs?: number): Promise<void> {
@@ -194,10 +224,14 @@ async function tokenRequest(body: URLSearchParams, fetch: typeof globalThis.fetc
         signal
       });
     } catch { throw new Error(signal.aborted ? "network_timeout" : "network_error"); }
-    let value: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
+    let value: { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown; error?: unknown; error_description?: unknown };
     try { value = JSON.parse(await response.text()); }
     catch { throw new Error(signal.aborted ? "network_timeout" : "oauth_invalid_response"); }
-    if (!response.ok) throw new Error(response.status === 400 ? "auth_failed" : "oauth_token_failed");
+    if (!response.ok) {
+      const rejection = oauthRejection(value.error, value.error_description);
+      if (rejection) throw rejection;
+      throw new Error(response.status === 400 ? "auth_failed" : "oauth_token_failed");
+    }
     if (typeof value.access_token !== "string" || !value.access_token || !Number.isFinite(Number(value.expires_in))) {
       throw new Error("oauth_invalid_response");
     }
@@ -207,6 +241,35 @@ async function tokenRequest(body: URLSearchParams, fetch: typeof globalThis.fetc
       expiresAt: now() + Math.max(1, Number(value.expires_in)) * 1_000
     };
   });
+}
+
+function oauthRejection(value: unknown, description: unknown): Error | null {
+  if (value === "invalid_grant") return new Error("oauth_invalid_grant");
+  if (value === "invalid_client" || value === "unauthorized_client") return new Error("oauth_invalid_client");
+  if (value === "redirect_uri_mismatch") return new Error("oauth_redirect_mismatch");
+  if (typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value)) {
+    const detail = oauthProviderDetail(description);
+    return Object.assign(new Error("oauth_provider_error"), {
+      providerCode: value,
+      ...(detail ? { providerDetail: detail } : {})
+    });
+  }
+  return null;
+}
+
+function oauthProviderDetail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const detail = value.toLowerCase();
+  if (/client[ _-]?secret/.test(detail)) return "client_secret";
+  if (/code[ _-]?verifier|pkce/.test(detail)) return "code_verifier";
+  if (/redirect[ _-]?uri/.test(detail)) return "redirect_uri";
+  if (/client[ _-]?id/.test(detail)) return "client_id";
+  if (/grant[ _-]?type/.test(detail)) return "grant_type";
+  if (/refresh[ _-]?token/.test(detail)) return "refresh_token";
+  if (/authorization code|auth code|authorization_code/.test(detail)) return "authorization_code";
+  if (/scope/.test(detail)) return "scope";
+  if (/bad request/.test(detail)) return "bad_request";
+  return null;
 }
 
 async function withNetworkDeadline<T>(timeoutMs: number, run: (signal: AbortSignal) => Promise<T>): Promise<T> {

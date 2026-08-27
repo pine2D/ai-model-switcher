@@ -44,6 +44,7 @@ test("site paging copy is concise, localized, and placeholder-compatible", () =>
   for (const locale of Object.values(COPY)) {
     assert.deepEqual([...locale.sitePageLabel.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{range}"]);
     assert.deepEqual([...locale.sitePageChanged.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{total}"]);
+    assert.deepEqual([...locale.sitePageMenu.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}"]);
   }
 });
 
@@ -62,17 +63,71 @@ test("Drive local-only state and settings close action stay precise in all local
   }
 });
 
-test("Drive timeout guidance is explicit and localized", () => {
+test("Drive setup copy requires the complete Desktop OAuth credential pair", () => {
   assert.deepEqual(
-    [COPY.en.syncReasonTimeout, COPY.zhCN.syncReasonTimeout, COPY.zhTW.syncReasonTimeout],
+    [COPY.en.syncOauthMissing, COPY.zhCN.syncOauthMissing, COPY.zhTW.syncOauthMissing],
     [
-      "Connection timed out. Check your network or proxy, then try again.",
-      "连接超时。请检查网络或代理设置后重试。",
-      "連線逾時。請檢查網路或代理設定後再試一次。"
+      "This build is missing its Google Desktop OAuth credentials. Before packaging, add both clientId and clientSecret to resources/oauth.json, or set POLYASK_GOOGLE_DESKTOP_CLIENT_ID and POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET.",
+      "当前构建缺少 Google 桌面 OAuth 凭据。打包前，请在 resources/oauth.json 中同时配置 clientId 和 clientSecret，或设置 POLYASK_GOOGLE_DESKTOP_CLIENT_ID 与 POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET。",
+      "目前組建缺少 Google 桌面 OAuth 憑證。封裝前，請在 resources/oauth.json 中同時設定 clientId 和 clientSecret，或設定 POLYASK_GOOGLE_DESKTOP_CLIENT_ID 與 POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET。"
     ]
   );
-  const status = { state: "offline", connected: false, pending: 0, errorCount: 0, reason: "network_timeout", readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
-  assert.equal(describeSync(COPY.zhCN, status), COPY.zhCN.syncReasonTimeout);
+});
+
+test("Drive connection failures identify the failed stage in every locale", () => {
+  assert.deepEqual(
+    [COPY.en.syncReasonOauthNetwork, COPY.zhCN.syncReasonOauthNetwork, COPY.zhTW.syncReasonOauthNetwork],
+    [
+      "Browser authorization completed, but PolyAsk could not reach Google sign-in services. Check your network, then try again.",
+      "浏览器授权已完成，但 PolyAsk 无法连接 Google 登录服务。请检查网络后重试。",
+      "瀏覽器授權已完成，但 PolyAsk 無法連線至 Google 登入服務。請檢查網路後再試一次。"
+    ]
+  );
+  const base = { connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
+  assert.equal(describeSync(COPY.zhCN, { ...base, state: "offline", reason: "oauth_network" }), COPY.zhCN.syncReasonOauthNetwork);
+  assert.equal(describeSync(COPY.zhCN, { ...base, state: "error", reason: "token_storage" }), COPY.zhCN.syncReasonTokenStorage);
+  assert.equal(describeSync(COPY.zhCN, { ...base, state: "offline", reason: "drive_network" }), COPY.zhCN.syncReasonDriveNetwork);
+});
+
+test("Drive authorization diagnostics distinguish the safe failure codes", () => {
+  const simplified = COPY.zhCN as unknown as Record<string, string>;
+  assert.equal(simplified.syncReasonOauthInvalidGrant, "Google 拒绝了本次授权码（invalid_grant）。请重新连接一次；若仍失败，请反馈此错误代码。");
+  assert.equal(simplified.syncReasonOauthInvalidClient, "当前版本的 Google OAuth 客户端配置无效（invalid_client），需要更新应用配置。");
+  assert.equal(simplified.syncReasonOauthRedirectMismatch, "Google 拒绝了本机回调地址（redirect_uri_mismatch），需要更新应用配置。");
+  assert.equal(simplified.syncReasonOauthRefreshMissing, "Google 已签发访问令牌，但未返回持续连接所需的刷新令牌。请先在 Google 账号中撤销 PolyAsk 的访问权限，再重新连接。");
+  assert.equal(simplified.syncReasonDriveUnauthorized, "授权已完成，但 Google Drive 拒绝了访问令牌（HTTP 401）。请先撤销 PolyAsk 的访问权限，再重新连接。");
+
+  const base = { connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
+  for (const [reason, copyKey] of [
+    ["oauth_invalid_grant", "syncReasonOauthInvalidGrant"],
+    ["oauth_invalid_client", "syncReasonOauthInvalidClient"],
+    ["oauth_redirect_mismatch", "syncReasonOauthRedirectMismatch"],
+    ["oauth_refresh_missing", "syncReasonOauthRefreshMissing"],
+    ["drive_unauthorized", "syncReasonDriveUnauthorized"]
+  ] as const) {
+    assert.equal(
+      describeSync(COPY.zhCN, { ...base, state: "auth", reason }),
+      simplified[copyKey]
+    );
+  }
+});
+
+test("Drive authorization shows a localized message around a protected Google diagnostic", () => {
+  const simplified = COPY.zhCN as unknown as Record<string, string>;
+  assert.equal(
+    simplified.syncReasonOauthProvider,
+    "Google 拒绝了令牌请求（错误代码：{code}）。反馈问题时请附上此代码，以便定位 OAuth 配置问题。"
+  );
+  const base = { connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: true, secureTokenStorage: true } as const;
+  assert.equal(
+    describeSync(COPY.zhCN, {
+      ...base,
+      state: "auth",
+      reason: "oauth_provider_error",
+      diagnostic: "invalid_request / client_secret"
+    }),
+    "Google 拒绝了令牌请求（错误代码：invalid_request / client_secret）。反馈问题时请附上此代码，以便定位 OAuth 配置问题。"
+  );
 });
 
 test("Drive connection phases describe browser authorization and Drive verification honestly", () => {

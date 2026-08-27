@@ -558,11 +558,11 @@ git commit -m "feat(desktop): add assisted synthesis workflow"
 - Modify: `CHANGELOG.md`
 
 **Interfaces:**
-- Produces: `OAuthPkce.authorize({ clientId, scope, openExternal, listen }): Promise<TokenSet>`。
+- Produces: `OAuthPkce.authorize({ clientId, clientSecret, scope, openExternal, listen }): Promise<TokenSet>`。
 - Produces: `TokenStore.save/load/clear`，持久化 refresh token 时必须经过 `safeStorage.encryptStringAsync`。
 - Produces: `DriveClient.listFiles/listChanges/getStartToken/download/upsert/clearAll`，只访问 Drive v3 与 `appDataFolder`。
 - Produces: `SyncEngine.connect/syncNow/disconnect/clearRemote/status`，本地变更 3 秒去抖、周期 15 分钟、启动时同步。
-- Produces: `loadOAuthClientId()`；开发优先读取 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID`，发行包读取构建时生成的 `resources/oauth.json`。`oauth.example.json` 只说明 `{ "clientId": "...apps.googleusercontent.com" }` 结构，不进入发行包。
+- Produces: `loadOAuthClientCredentials()`；开发环境只在 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 与 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 成对有效时采用环境配置，否则读取构建时生成的 `resources/oauth.json`。`oauth.example.json` 只说明 `{ "clientId": "...apps.googleusercontent.com", "clientSecret": "..." }` 结构，不进入发行包。
 - Sync 状态：`idle | syncing | offline | auth | blocked | waiting | schema | error`；界面只显示本地化 code。
 
 - [x] **Step 1: 写失败 PKCE 测试**
@@ -607,7 +607,7 @@ git add desktop/src desktop/test desktop/resources desktop/forge.config.ts deskt
 git commit -m "feat(desktop): add secure Drive synchronization"
 ```
 
-实现记录（2026-08-25）：OAuth/PKCE、异步 `safeStorage` token store、Drive transport、schema 1 合并、设置工作区、增量同步、退避、未来格式只读和受保护的云端清理已落地。131 项桌面 TypeScript/React 测试与 4 项运行器测试通过。独立 Desktop Client ID 已通过 Repository Variable 注入发行构建，Linux `.deb` 内容审计确认 `resources/oauth.json` 可被普通用户读取。Step 6 的真实系统浏览器授权、扩展/桌面双向 Drive 联网合并仍未执行，保持未完成。
+实现记录（2026-08-27）：OAuth/PKCE、异步 `safeStorage` token store、Drive transport、schema 1 合并、设置工作区、增量同步、退避、未来格式只读和受保护的云端清理已落地。Windows 真机确认该 Desktop 客户端的令牌端点要求 `client_secret` 后，发行链改为成对注入并审计 Client ID 与 Client Secret。Step 6 的修正版系统浏览器授权、扩展/桌面双向 Drive 联网合并仍未执行，保持未完成。
 
 ### Task 9: 全面缺陷排查与 UI/UX 优化升级
 

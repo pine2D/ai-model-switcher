@@ -4,6 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CLIENT_ID = /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/;
+const CLIENT_SECRET = /^[A-Za-z0-9._~-]{8,256}$/;
 const TARGETS = Object.freeze({
   win32: [
     { variant: "installer", label: "windows", suffix: "", extension: ".exe", matches: (name) => name.toLowerCase().endsWith(" setup.exe") },
@@ -39,7 +40,12 @@ async function verifyOAuthResource(outDir, platform, arch) {
         ? join(packageRoot, "PolyAsk.app", "Contents", "Resources", "oauth.json")
         : join(packageRoot, "resources", "oauth.json");
       const parsed = JSON.parse(await readFile(resource, "utf8"));
-      if (typeof parsed.clientId === "string" && CLIENT_ID.test(parsed.clientId.trim())) valid += 1;
+      if (
+        typeof parsed.clientId === "string"
+        && CLIENT_ID.test(parsed.clientId.trim())
+        && typeof parsed.clientSecret === "string"
+        && CLIENT_SECRET.test(parsed.clientSecret.trim())
+      ) valid += 1;
     } catch { /* This package candidate has no usable OAuth resource. */ }
   }
   if (valid !== 1) throw new Error("oauth_not_packaged");

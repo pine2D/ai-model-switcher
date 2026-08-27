@@ -37,6 +37,7 @@ export interface SyncAuth {
 }
 
 type QueuedOperation = OutboxOperation & { readonly revision: number };
+type FailureStage = "oauth" | "drive" | "sync";
 export class SyncEngine {
   private readonly now: () => number;
   private chain: Promise<unknown> = Promise.resolve();
@@ -80,6 +81,7 @@ export class SyncEngine {
       errorCount: config.errorCount,
       ...(config.lastSuccessAt ? { lastSuccessAt: config.lastSuccessAt } : {}),
       ...(config.reason ? { reason: config.reason } : {}),
+      ...(config.diagnostic ? { diagnostic: config.diagnostic } : {}),
       readOnly: config.readOnly,
       oauthConfigured: this.options.auth.configured(),
       secureTokenStorage: this.options.auth.securePersistence()
@@ -94,7 +96,7 @@ export class SyncEngine {
         await this.options.auth.connect();
         this.options.repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
         return await this.run("drive_check", true);
-      } catch (error) { return this.fail(error); }
+      } catch (error) { return this.fail(error, "oauth"); }
     });
   }
 
@@ -155,7 +157,7 @@ export class SyncEngine {
       return this.setStatus(next.readOnly ? "schema" : waiting ? "waiting" : "idle", {
         connected: true, lastSuccessAt: this.now(), reason: undefined
       });
-    } catch (error) { return this.fail(error); }
+    } catch (error) { return this.fail(error, establishingConnection ? "drive" : "sync"); }
     finally { if (this.activeController === controller) this.activeController = null; }
   }
 
@@ -210,11 +212,33 @@ export class SyncEngine {
     this.options.repository.complete(operation.key, operation.revision);
   }
 
-  private fail(error: unknown): SyncStatus {
+  private fail(error: unknown, stage: FailureStage = "sync"): SyncStatus {
     const code = (error as { code?: string; message?: string }).code ?? (error as { message?: string }).message;
-    if (code === "network_timeout" || code === "oauth_timeout") return this.setStatus("offline", { reason: "network_timeout" });
-    if (code === "network_error" || error instanceof TypeError) return this.setStatus("offline", { reason: undefined });
-    if (code === "unauthorized" || code === "auth_failed" || code === "refresh_token_missing") return this.setStatus("auth", { reason: undefined });
+    if (code === "oauth_timeout") return this.setStatus("offline", { reason: "oauth_callback_timeout" });
+    if (code === "network_timeout") return this.setStatus("offline", {
+      reason: stage === "oauth" ? "oauth_network_timeout" : stage === "drive" ? "drive_network_timeout" : "network_timeout"
+    });
+    if (code === "network_error" || error instanceof TypeError) return this.setStatus("offline", {
+      reason: stage === "oauth" ? "oauth_network" : stage === "drive" ? "drive_network" : undefined
+    });
+    if (code === "token_store_failed") return this.setStatus("error", { reason: "token_storage" });
+    if (code === "oauth_token_failed" || code === "oauth_invalid_response") return this.setStatus("error", { reason: "oauth_response" });
+    if (code === "invalid_response" && stage === "drive") return this.setStatus("error", { reason: "drive_response" });
+    if (code === "oauth_invalid_client" || code === "oauth_redirect_mismatch") {
+      return this.setStatus("blocked", { reason: code });
+    }
+    if (code === "oauth_provider_error") {
+      const diagnostic = oauthProviderDiagnostic(error);
+      return diagnostic
+        ? this.setStatus("auth", { reason: code, diagnostic })
+        : this.setStatus("auth", { reason: "oauth_rejected" });
+    }
+    if (code === "oauth_invalid_grant") return this.setStatus("auth", { reason: code });
+    if (code === "refresh_token_missing") return this.setStatus("auth", { reason: "oauth_refresh_missing" });
+    if (code === "unauthorized" && stage === "drive") return this.setStatus("auth", { reason: "drive_unauthorized" });
+    if (code === "unauthorized" || code === "auth_failed") {
+      return this.setStatus("auth", { reason: stage === "oauth" || stage === "drive" ? "oauth_rejected" : undefined });
+    }
     if (code === "oauth_not_configured") return this.setStatus("blocked", { reason: code });
     if (code === "forbidden") {
       const reason = String((error as { reason?: string }).reason ?? "").toLowerCase();
@@ -225,7 +249,7 @@ export class SyncEngine {
   }
 
   private setStatus(state: SyncStatus["state"], patch: Record<string, unknown> = {}): SyncStatus {
-    this.options.repository.saveConfig({ ...patch, state });
+    this.options.repository.saveConfig({ diagnostic: undefined, ...patch, state });
     return this.publish();
   }
 
@@ -246,4 +270,12 @@ export class SyncEngine {
     this.chain = run.catch(() => undefined);
     return run;
   }
+}
+
+function oauthProviderDiagnostic(error: unknown): string | null {
+  const failure = error as { providerCode?: unknown; providerDetail?: unknown };
+  if (typeof failure.providerCode !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(failure.providerCode)) return null;
+  const detail = typeof failure.providerDetail === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(failure.providerDetail)
+    ? ` / ${failure.providerDetail}` : "";
+  return `${failure.providerCode}${detail}`;
 }

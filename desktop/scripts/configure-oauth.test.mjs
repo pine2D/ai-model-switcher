@@ -6,15 +6,19 @@ import test from "node:test";
 
 import { writeOAuthResource } from "./configure-oauth.mjs";
 
-test("OAuth build resource accepts only a Google Desktop client id", async () => {
+test("OAuth build resource accepts only a complete Google Desktop credential pair", async () => {
   const root = await mkdtemp(join(tmpdir(), "polyask-oauth-"));
   const path = join(root, "resources", "oauth.json");
   const clientId = "test-client.apps.googleusercontent.com";
+  const clientSecret = "test-desktop-client-secret";
 
-  await writeOAuthResource(clientId, path);
-  assert.deepEqual(JSON.parse(await readFile(path, "utf8")), { clientId });
+  await writeOAuthResource({ clientId, clientSecret }, path);
+  assert.deepEqual(JSON.parse(await readFile(path, "utf8")), { clientId, clientSecret });
   if (process.platform !== "win32") {
     assert.equal((await stat(path)).mode & 0o777, 0o644);
   }
-  await assert.rejects(writeOAuthResource("not-a-client", path), /invalid_desktop_oauth_client_id/);
+  await assert.rejects(
+    writeOAuthResource({ clientId, clientSecret: "" }, path),
+    /invalid_desktop_oauth_credentials/
+  );
 });

@@ -5,7 +5,12 @@ import type {
   ViewPlacement
 } from "../shared/contracts";
 import { SITE_PAGE_SIZE } from "../shared/site-pages";
-export { paginateSiteKeys, resolveSitePage, SITE_PAGE_SIZE } from "../shared/site-pages";
+export {
+  paginateSiteKeys,
+  resolveSitePage,
+  resolveSitePageIndex,
+  SITE_PAGE_SIZE
+} from "../shared/site-pages";
 
 interface Track {
   readonly start: number;
@@ -101,26 +106,7 @@ function overview(
   gap: number
 ): ViewPlacement[] {
   if (keys.length <= 3) return grid(keys, area, keys.length, gap);
-  if (keys.length === 4) return grid(keys, area, 2, gap);
-  if (keys.length === 6) return grid(keys, area, 3, gap);
-
-  const yTracks = splitAxis(area.y, area.height, 2, gap);
-  const top = splitAxis(area.x, area.width, 2, gap);
-  const bottom = splitAxis(area.x, area.width, 3, gap);
-  return keys.map((key, index) => {
-    const tracks = index < 2 ? top : bottom;
-    const column = index < 2 ? index : index - 2;
-    const row = index < 2 ? 0 : 1;
-    return {
-      key,
-      bounds: {
-        x: tracks[column].start,
-        y: yTracks[row].start,
-        width: tracks[column].size,
-        height: yTracks[row].size
-      }
-    };
-  });
+  return grid(keys, area, 2, gap);
 }
 
 function trackBounds(
@@ -168,31 +154,15 @@ export function computeViewLayout(
     ];
   }
 
-  const rows = active.length === 3 ? 2 : 3;
+  const rows = secondary.length;
   const yTracks = splitAxis(area.y, area.height, rows, gap);
   const primary: ViewPlacement = {
     key: focused,
-    bounds: trackBounds(xTracks, yTracks, 0, 0, 2, 2)
+    bounds: trackBounds(xTracks, yTracks, 0, 0, 2, rows)
   };
-  const rail = secondary.slice(0, 2).map((key, index) => ({
+  const rail = secondary.map((key, index) => ({
     key,
     bounds: trackBounds(xTracks, yTracks, 2, index)
   }));
-  const bottomKeys = secondary.slice(2);
-  if (bottomKeys.length) {
-    const bottomTracks = splitAxis(area.x, area.width, bottomKeys.length, gap);
-    for (const [index, key] of bottomKeys.entries()) {
-      rail.push({
-        key,
-        bounds: {
-          x: bottomTracks[index].start,
-          y: yTracks[2].start,
-          width: bottomTracks[index].size,
-          height: yTracks[2].size
-        }
-      });
-    }
-  }
-
   return [primary, ...rail];
 }

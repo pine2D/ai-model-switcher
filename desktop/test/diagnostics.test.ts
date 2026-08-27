@@ -4,16 +4,16 @@ import test from "node:test";
 import { SITE_KEYS } from "../src/shared/contracts";
 import { buildDiagnosticSnapshot, type DiagnosticInput } from "../src/main/diagnostics";
 
-const visibleKeys = SITE_KEYS.slice(0, 6);
+const visibleKeys = SITE_KEYS.slice(0, 4);
 const placements = visibleKeys.map((key, index) => ({
   key,
-  bounds: { x: (index % 3) * 400, y: Math.floor(index / 3) * 240, width: 396, height: 236 }
+  bounds: { x: (index % 2) * 600, y: Math.floor(index / 2) * 240, width: 596, height: 236 }
 }));
 
 function diagnosticInput(): DiagnosticInput {
   return {
     shellId: 1,
-    layout: { mode: "overview", focused: "claude", page: 0, pageCount: 2, placements },
+    layout: { mode: "overview", focused: "claude", page: 0, pageCount: 3, placements },
     sites: SITE_KEYS.map((site, index) => ({
       site,
       webContentsId: index + 2,

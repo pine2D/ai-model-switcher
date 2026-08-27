@@ -86,11 +86,11 @@ npm run typecheck
 npm start
 ```
 
-Desktop 只显示当前勾选的站点。1 个站点铺满，2 个左右并排，3 个横向三分，4 个为 2×2，5 个为上 2 下 3，6 个为 3×2；选择 7–9 个站点时按每页最多 6 个分页。聚焦模式在当前页放大一个主站，其余站点保留为实时次要视图；空间不足时会自动采用聚焦模式。换页、切换布局或主站都不会销毁、重载页面或中断回答。
+Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点铺满，2 个左右并排，3 个横向三分，4 个为 2×2；选择 5–9 个站点时均衡分页：依次采用 3+2、3+3、4+3、4+4、3+3+3。聚焦模式在当前页放大一个主站，右侧保留最多 3 个实时次要视图；空间不足时会自动采用聚焦模式。换页、切换布局或主站都不会销毁、重载页面或中断回答。
 
 「视图」菜单可切换紧凑/舒适界面密度，以及 90%/100% 站点页面缩放。默认的「适应」缩放在九宫格和次要站使用 90%，聚焦主站保持 100%。Windows 和 Linux 默认隐藏菜单栏，按 `Alt` 可临时显示。
 
-桌面端可用 `Cmd/Ctrl+Shift+P` 将焦点从站点页面送回提问框，`Cmd/Ctrl+PageUp` / `Cmd/Ctrl+PageDown` 在已选站点间切换聚焦，`Cmd/Ctrl+Shift+PageUp` / `Cmd/Ctrl+Shift+PageDown` 切换上一组或下一组站点。页签也支持方向键移动焦点、`Enter` 或空格确认，键盘换页不播放位移动画。
+桌面端可用 `Alt+1` / `Alt+2` / `Alt+3` 直接切换站点页；即使焦点位于 AI 页面中也能使用，不存在的页码会被忽略。`Cmd/Ctrl+Shift+P` 可将焦点送回提问框，`Cmd/Ctrl+PageUp` / `Cmd/Ctrl+PageDown` 可在已选站点间切换聚焦，`Cmd/Ctrl+Shift+PageUp` / `Cmd/Ctrl+Shift+PageDown` 可切换上一组或下一组站点。页签也支持方向键移动焦点、`Enter` 或空格确认；键盘换页不播放位移动画。
 
 桌面端命令栏可选择或粘贴最多 4 张 PNG/JPEG 图片（总计不超过 10 MiB），并将同一批图片群发到 Claude、ChatGPT、DeepSeek、豆包、Kimi 和元宝。若当前范围包含 Gemini、千问或智谱，发送前会明确列出不兼容站点并引导调整范围，不会静默漏发。
 
@@ -100,7 +100,7 @@ Desktop 只显示当前勾选的站点。1 个站点铺满，2 个左右并排�
 
 桌面端设置页支持与扩展共用同一套 schema 1 Google Drive 数据：站点范围、分组、提问历史和结果库可在两种客户端之间合并，删除标记与新版本只读保护同样生效。断开连接只撤销授权并清理本机同步索引，不删除本机或云端记录；「删除云端数据」需输入 `DELETE`，且只删除 Drive 应用专属目录内标记为 PolyAsk 的文件。
 
-Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。只有用户点击“连接 Google Drive”才会打开授权页；启动和周期同步不会在未连接时擅自发起授权。浏览器回调页只表示已收到授权，应用完成首次 Drive 访问验证后才显示“已连接”；令牌交换和 Drive 请求超时后会保持未连接并提示检查网络或代理。Release 产物由 CI 从 GitHub Actions Repository Variable 注入 Client ID；Client ID 是公开标识，项目不使用也不需要 `client_secret`。本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId`，也可设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 后执行 `npm run configure-oauth`。
+Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。只有用户点击“连接 Google Drive”才会打开授权页；启动和周期同步不会在未连接时擅自发起授权。浏览器回调页只表示已收到授权，应用完成首次 Drive 访问验证后才显示“已连接”；令牌交换和 Drive 请求超时后会保持未连接并提示检查网络或代理。Release 产物由 CI 注入同一 Desktop 客户端的 Client ID 与 Client Secret，并在授权码交换和刷新令牌时提交完整凭据。Desktop 应用无法真正保密嵌入的 Client Secret；它不作为安全边界，但仍通过 GitHub Actions Secret 管理，避免进入仓库和构建日志。本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId` 与 `clientSecret`，也可同时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 和 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 后执行 `npm run configure-oauth`。
 
 Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一次 Gemini，为验证后页面停滞提供受控恢复路径；该机制仍待 Windows 真机复测。若 DeepSeek 提示“当前设备环境异常”，请先用同一账号和网络在最新版 Edge/Chrome 复测；PolyAsk 不通过伪装 User-Agent、关闭网页安全机制或复制浏览器 Cookie 绕过站点登录策略。详细诊断边界见 `docs/desktop-m0.md`。
 

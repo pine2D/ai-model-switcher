@@ -29,6 +29,19 @@ for file in "${JS_FILES[@]}"; do
   [ "$lines" -le 300 ] || { echo "✗ $file: $lines 行" >&2; exit 1; }
 done
 
+echo "[security] 检查 Desktop OAuth 凭据卫生"
+OAUTH_RESOURCE='desktop/resources/oauth.json'
+git check-ignore --quiet --no-index -- "$OAUTH_RESOURCE" || {
+  echo "✗ $OAUTH_RESOURCE 必须保持 Git 忽略" >&2
+  exit 1
+}
+if git ls-files --error-unmatch -- "$OAUTH_RESOURCE" >/dev/null 2>&1; then
+  echo "✗ $OAUTH_RESOURCE 不得进入版本控制" >&2
+  exit 1
+fi
+mapfile -d '' -t VERSIONED_FILES < <(existing_files '*')
+node scripts/oauth-secret-hygiene.js "${VERSIONED_FILES[@]}"
+
 echo "[docs] 检查文档引用未失效"
 mapfile -t DOC_REFS < <(grep -ohE 'docs/[A-Za-z0-9._-]+\.md' CLAUDE.md README.md docs/*.md | sort -u)
 [ "${#DOC_REFS[@]}" -gt 0 ] || { echo "✗ 未提取到任何 docs/*.md 引用，检查本身已失效" >&2; exit 1; }
@@ -55,6 +68,7 @@ echo "[test] 用户可见文案与本地化"
 node scripts/test-content-l10n.js
 node scripts/test-err-codes.js
 node scripts/test-release-flow.js
+node scripts/test-oauth-secret-hygiene.js
 
 echo "[test] 后台安全边界与控制台交互"
 node scripts/test-page-context.js

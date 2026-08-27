@@ -34,6 +34,7 @@ export interface SyncConfig {
   readonly errorCount: number;
   readonly state: SyncStatus["state"];
   readonly reason?: string;
+  readonly diagnostic?: string;
   readonly clearRunning?: boolean;
   readonly clearProgress?: number;
   readonly futureFileIds?: readonly string[];

@@ -8,6 +8,7 @@ import { collectReleaseArtifact } from "./release-artifacts.mjs";
 import * as releaseArtifacts from "./release-artifacts.mjs";
 
 const CLIENT_ID = "test-client.apps.googleusercontent.com";
+const CLIENT_SECRET = "test-desktop-client-secret";
 
 test("release artifacts are normalized, checksummed and OAuth-enabled", async () => {
   for (const item of [
@@ -28,7 +29,10 @@ test("release artifacts are normalized, checksummed and OAuth-enabled", async ()
     if (item.source.includes("0.17.0")) {
       await writeFile(join(makeDir, item.source.replace("0.17.0", "0.16.0")), "stale artifact");
     }
-    await writeFile(join(packageResources, "oauth.json"), JSON.stringify({ clientId: CLIENT_ID }));
+    await writeFile(join(packageResources, "oauth.json"), JSON.stringify({
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET
+    }));
 
     const output = await collectReleaseArtifact({
       platform: item.platform,
@@ -62,6 +66,27 @@ test("release collection rejects packages without OAuth configuration", async ()
   );
 });
 
+test("release collection rejects a package with only the Desktop client id", async () => {
+  const root = await mkdtemp(join(tmpdir(), "polyask-release-"));
+  const makeDir = join(root, "out", "make", "target");
+  const resources = join(root, "out", "PolyAsk-darwin-x64", "PolyAsk.app", "Contents", "Resources");
+  await mkdir(makeDir, { recursive: true });
+  await mkdir(resources, { recursive: true });
+  await writeFile(join(makeDir, "PolyAsk-darwin-x64-0.17.0.zip"), "artifact");
+  await writeFile(join(resources, "oauth.json"), JSON.stringify({ clientId: CLIENT_ID }));
+
+  await assert.rejects(
+    collectReleaseArtifact({
+      platform: "darwin",
+      arch: "x64",
+      version: "0.17.0",
+      outDir: join(root, "out"),
+      outputDir: join(root, "release")
+    }),
+    /oauth_not_packaged/
+  );
+});
+
 test("Windows release collection includes installer and portable archives", async () => {
   const collectReleaseArtifacts = releaseArtifacts.collectReleaseArtifacts;
   assert.equal(typeof collectReleaseArtifacts, "function");
@@ -73,7 +98,10 @@ test("Windows release collection includes installer and portable archives", asyn
   await mkdir(packageResources, { recursive: true });
   await writeFile(join(makeDir, "PolyAsk Setup.exe"), "installer");
   await writeFile(join(makeDir, "PolyAsk-win32-x64-0.17.0.zip"), "portable");
-  await writeFile(join(packageResources, "oauth.json"), JSON.stringify({ clientId: CLIENT_ID }));
+  await writeFile(join(packageResources, "oauth.json"), JSON.stringify({
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET
+  }));
 
   const outputs = await collectReleaseArtifacts({
     platform: "win32",

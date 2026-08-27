@@ -3,7 +3,7 @@ import { useRef } from "react";
 import type { SiteKey } from "../shared/contracts";
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { SiteStatus } from "../shared/protocol";
-import { paginateSiteKeys, SITE_PAGE_SIZE } from "../shared/site-pages";
+import { paginateSiteKeys } from "../shared/site-pages";
 import { pageTabKeyAction } from "./keyboard";
 
 interface PageTabsProps {
@@ -19,6 +19,7 @@ export function PageTabs(props: PageTabsProps): React.JSX.Element | null {
   const buttons = useRef<Array<HTMLButtonElement | null>>([]);
   const pages = paginateSiteKeys(props.selectedSites);
   if (pages.length <= 1) return null;
+  let nextStart = 1;
 
   return (
     <div className="page-tabs" role="tablist" aria-label={props.copy.sitePages} data-input-method={props.inputMethod}>
@@ -28,7 +29,8 @@ export function PageTabs(props: PageTabsProps): React.JSX.Element | null {
         style={{ width: `${100 / pages.length}%`, transform: `translateX(${props.page * 100}%)` }}
       />
       {pages.map((sites, index) => {
-        const start = index * SITE_PAGE_SIZE + 1;
+        const start = nextStart;
+        nextStart += sites.length;
         const range = `${start}–${start + sites.length - 1}`;
         const pageStatuses = sites.map((site) => props.statuses[site]).filter(Boolean);
         const sending = pageStatuses.filter((status) => status.phase === "sending").length;

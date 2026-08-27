@@ -95,7 +95,7 @@ test("an explicit connection timeout stays disconnected and remains actionable",
     const status = await new SyncEngine({ repository, drive, auth: session }).connect();
     assert.equal(status.connected, false);
     assert.equal(status.state, "offline");
-    assert.equal(status.reason, "network_timeout");
+    assert.equal(status.reason, "oauth_network_timeout");
   } finally { database.close(); }
 });
 
@@ -123,8 +123,76 @@ test("Drive becomes connected only after the first authenticated handshake succe
     assert.equal(status.connected, false);
     assert.equal(repository.config().connected, false);
     assert.equal(status.state, "offline");
-    assert.equal(status.reason, "network_timeout");
+    assert.equal(status.reason, "drive_network_timeout");
     assert.deepEqual(published.slice(0, 2), ["oauth", "drive_check"]);
+  } finally { database.close(); }
+});
+
+test("connection failures preserve the OAuth, token-storage, or Drive stage", async () => {
+  const cases = [
+    { authError: "network_error", expectedState: "offline", expectedReason: "oauth_network" },
+    { authError: "auth_failed", expectedState: "auth", expectedReason: "oauth_rejected" },
+    { authError: "oauth_invalid_grant", expectedState: "auth", expectedReason: "oauth_invalid_grant" },
+    { authError: "oauth_invalid_client", expectedState: "blocked", expectedReason: "oauth_invalid_client" },
+    { authError: "oauth_redirect_mismatch", expectedState: "blocked", expectedReason: "oauth_redirect_mismatch" },
+    { authError: "refresh_token_missing", expectedState: "auth", expectedReason: "oauth_refresh_missing" },
+    { authError: "token_store_failed", expectedState: "error", expectedReason: "token_storage" },
+    { driveError: "network_error", expectedState: "offline", expectedReason: "drive_network" },
+    { driveError: "unauthorized", expectedState: "auth", expectedReason: "drive_unauthorized" },
+    { driveError: "invalid_response", expectedState: "error", expectedReason: "drive_response" }
+  ] as const;
+
+  for (const scenario of cases) {
+    const database = DesktopDatabase.open(":memory:");
+    database.meta.put("deviceId", "desktop-device");
+    const repository = new SyncRepository(database);
+    const session: SyncAuth = {
+      configured: () => true,
+      securePersistence: () => true,
+      connect: async () => {
+        if ("authError" in scenario) throw new Error(scenario.authError);
+      },
+      disconnect: async () => undefined
+    };
+    const drive: SyncDrive = {
+      getStartToken: async () => {
+        if ("driveError" in scenario) throw Object.assign(new Error(scenario.driveError), { code: scenario.driveError });
+        return "start";
+      },
+      listFiles: async () => [],
+      listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+      download: async () => null,
+      upsert: async (_id, name, appProperties) => ({ id: `uploaded-${name}`, appProperties }),
+      clearAll: async () => undefined
+    };
+    try {
+      const status = await new SyncEngine({ repository, drive, auth: session }).connect();
+      assert.equal(status.state, scenario.expectedState, scenario.expectedReason);
+      assert.equal(status.reason, scenario.expectedReason);
+    } finally { database.close(); }
+  }
+});
+
+test("an unrecognized Google token rejection reaches the UI as a safe diagnostic", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const session: SyncAuth = {
+    configured: () => true,
+    securePersistence: () => true,
+    connect: async () => {
+      throw Object.assign(new Error("oauth_provider_error"), {
+        providerCode: "invalid_request",
+        providerDetail: "client_secret"
+      });
+    },
+    disconnect: async () => undefined
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive: {} as SyncDrive, auth: session }).connect();
+    assert.equal(status.state, "auth");
+    assert.equal(status.reason, "oauth_provider_error");
+    assert.equal(status.diagnostic, "invalid_request / client_secret");
   } finally { database.close(); }
 });
 

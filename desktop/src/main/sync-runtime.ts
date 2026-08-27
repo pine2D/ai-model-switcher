@@ -6,7 +6,7 @@ import type { SyncStatus } from "../shared/sync";
 import type { WorkspaceState } from "../shared/workspace";
 import type { DesktopDatabase } from "./database";
 import { DriveClient } from "./drive-client";
-import { loadOAuthClientId } from "./oauth-pkce";
+import { loadOAuthClientCredentials } from "./oauth-pkce";
 import { OAuthSession } from "./oauth-session";
 import { SyncEngine } from "./sync-engine";
 import { SyncRepository } from "./sync-repository";
@@ -20,13 +20,13 @@ interface SyncRuntimeOptions {
 }
 
 export async function createSyncRuntime(options: SyncRuntimeOptions): Promise<SyncEngine> {
-  const clientId = await loadOAuthClientId({
+  const credentials = await loadOAuthClientCredentials({
     environment: process.env,
     resourcePath: app.isPackaged
       ? join(process.resourcesPath, "oauth.json")
       : join(app.getAppPath(), "resources", "oauth.json")
   });
-  const encryptionAvailable = clientId
+  const encryptionAvailable = credentials
     ? await safeEncryptionAvailability(() => safeStorage.isAsyncEncryptionAvailable())
     : false;
   const tokenStore = new TokenStore(join(app.getPath("userData"), "oauth-token.bin"), {
@@ -38,7 +38,7 @@ export async function createSyncRuntime(options: SyncRuntimeOptions): Promise<Sy
     decrypt: async (value) => (await safeStorage.decryptStringAsync(value)).result
   });
   const oauth = new OAuthSession({
-    clientId,
+    credentials,
     scope: "https://www.googleapis.com/auth/drive.appdata",
     tokenStore,
     openExternal: async (url) => {

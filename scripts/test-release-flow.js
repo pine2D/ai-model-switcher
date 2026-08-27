@@ -29,6 +29,7 @@ for (const marker of [
   "macos-x64",
   "macos-arm64",
   "vars.POLYASK_GOOGLE_DESKTOP_CLIENT_ID",
+  "secrets.POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET",
   "actions/upload-artifact",
   "actions/download-artifact",
   "release-assets",

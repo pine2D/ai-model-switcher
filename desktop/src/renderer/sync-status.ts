@@ -1,4 +1,4 @@
-import type { DesktopCopy } from "../shared/copy";
+import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { SyncStatus } from "../shared/sync";
 
 export function describeSync(copy: DesktopCopy, status: SyncStatus): string {
@@ -18,6 +18,23 @@ export function describeSync(copy: DesktopCopy, status: SyncStatus): string {
   if (status.reason === "quota") return copy.syncReasonQuota;
   if (status.reason === "policy") return copy.syncReasonPolicy;
   if (status.reason === "oauth_not_configured") return copy.syncReasonOauthMissing;
+  if (status.reason === "oauth_callback_timeout") return copy.syncReasonOauthCallbackTimeout;
+  if (status.reason === "oauth_network_timeout") return copy.syncReasonOauthNetworkTimeout;
+  if (status.reason === "oauth_network") return copy.syncReasonOauthNetwork;
+  if (status.reason === "oauth_invalid_grant") return copy.syncReasonOauthInvalidGrant;
+  if (status.reason === "oauth_invalid_client") return copy.syncReasonOauthInvalidClient;
+  if (status.reason === "oauth_redirect_mismatch") return copy.syncReasonOauthRedirectMismatch;
+  if (status.reason === "oauth_refresh_missing") return copy.syncReasonOauthRefreshMissing;
+  if (status.reason === "oauth_provider_error" && status.diagnostic) {
+    return formatCopy(copy.syncReasonOauthProvider, { code: status.diagnostic });
+  }
+  if (status.reason === "oauth_rejected") return copy.syncReasonOauthRejected;
+  if (status.reason === "oauth_response") return copy.syncReasonOauthResponse;
+  if (status.reason === "token_storage") return copy.syncReasonTokenStorage;
+  if (status.reason === "drive_network_timeout") return copy.syncReasonDriveNetworkTimeout;
+  if (status.reason === "drive_network") return copy.syncReasonDriveNetwork;
+  if (status.reason === "drive_response") return copy.syncReasonDriveResponse;
+  if (status.reason === "drive_unauthorized") return copy.syncReasonDriveUnauthorized;
   if (status.reason === "network_timeout") return copy.syncReasonTimeout;
   if (!status.connected && status.state === "idle") return copy.syncStateLocalOnly;
   return byState[status.state];

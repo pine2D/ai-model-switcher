@@ -63,7 +63,7 @@ Electron 43 携带 Node 24，能够直接使用 `node:sqlite`。桌面端采用 
 - 授权页面必须用系统默认浏览器打开，不在 Electron 内嵌页或任一 AI 站点 view 中打开。
 - 不使用已废弃的 OOB 手工复制验证码，也不使用容易被其他应用劫持的自定义 URI scheme。
 - access token 只驻留内存；refresh token 通过 `safeStorage` 保存，断开连接时撤销并删除。
-- 已单独创建 Google OAuth “Desktop app” Client ID；Chrome Extension 类型 client 不能承担 loopback 回调。Client ID 作为公开 Repository Variable 在发行 runner 上生成 `resources/oauth.json`，项目不保存或使用 `client_secret`。
+- 已单独创建 Google OAuth “Desktop app” 客户端；Chrome Extension 类型 client 不能承担 loopback 回调。Client ID 与同一客户端生成的 Client Secret 分别通过 Repository Variable 和 Repository Secret 注入发行 runner，生成不入库的 `resources/oauth.json`。Client Secret 会随桌面应用分发，不能作为保密安全边界，但授权码交换与刷新请求必须按该客户端的实际要求提交它。
 - Drive 中继续使用隐藏的 `appDataFolder`，用户主动断开不删除云端数据；“清空云端”必须二段确认。
 
 依据：[Google OAuth for Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app)、[Google OAuth Policies](https://developers.google.com/identity/protocols/oauth2/policies)、[Drive appDataFolder](https://developers.google.com/workspace/drive/api/guides/appdata)、[Drive Scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)。

@@ -126,7 +126,7 @@ test("sync settings surfaces missing OAuth without irrelevant storage warnings",
       onClose={noop}
     />
   );
-  assert.match(html, /no Google desktop OAuth client ID/);
+  assert.match(html, /missing its Google Desktop OAuth credentials/);
   assert.doesNotMatch(html, /Linux keyring is unavailable/);
   assert.match(html, /<button type="button" class="primary" disabled="">Connect Google Drive<\/button>/);
 });

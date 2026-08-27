@@ -20,7 +20,7 @@ import type {
   SiteStatus,
   SubmitSiteCommand
 } from "../shared/protocol";
-import { resolveFocusedSite, resolveSitePage, SITE_PAGE_SIZE } from "../shared/site-pages";
+import { resolveFocusedSite, resolveSitePage, resolveSitePageIndex } from "../shared/site-pages";
 import {
   SITE_PARTITION,
   type DiagnosticSiteInput
@@ -48,7 +48,7 @@ export class ViewManager {
   private focused: SiteKey = "claude";
   private selected: SiteKey[] = SITES.map((site) => site.key);
   private page = 0;
-  private pageCount = 2;
+  private pageCount = 3;
   private readonly focusedByPage = new Map<number, SiteKey>();
   private focusOrder: SiteKey[] = SITES.map((site) => site.key);
   private placements: readonly ViewPlacement[] = [];
@@ -137,7 +137,7 @@ export class ViewManager {
 
   setLayout(mode: "overview" | "focus", requestedFocus: SiteKey = this.focused): void {
     const selectedIndex = this.selected.indexOf(requestedFocus);
-    if (selectedIndex >= 0) this.page = Math.floor(selectedIndex / SITE_PAGE_SIZE);
+    if (selectedIndex >= 0) this.page = resolveSitePageIndex(this.selected, requestedFocus);
     const current = resolveSitePage(this.selected, this.page);
     const focused = resolveFocusedSite(current.keys, requestedFocus, this.focusedByPage.get(current.page));
     if (mode === "focus" && current.keys.includes(focused)) {
@@ -177,6 +177,11 @@ export class ViewManager {
   pageRelative(offset: -1 | 1): void {
     if (this.pageCount <= 1) return;
     this.setPage((this.page + offset + this.pageCount) % this.pageCount);
+  }
+
+  pageDirect(page: number): void {
+    if (!Number.isInteger(page) || page < 0 || page >= this.pageCount) return;
+    this.setPage(page);
   }
 
   reload(site: SiteKey): void {

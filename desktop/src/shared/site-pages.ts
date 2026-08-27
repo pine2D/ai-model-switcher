@@ -1,6 +1,6 @@
 import type { SiteKey } from "./contracts";
 
-export const SITE_PAGE_SIZE = 6;
+export const SITE_PAGE_SIZE = 4;
 
 export function paginateSiteKeys(
   keys: readonly SiteKey[],
@@ -8,11 +8,26 @@ export function paginateSiteKeys(
 ): SiteKey[][] {
   const size = Math.max(1, Math.floor(pageSize));
   if (keys.length === 0) return [[]];
+  const pageCount = Math.ceil(keys.length / size);
+  const baseSize = Math.floor(keys.length / pageCount);
+  let largerPages = keys.length % pageCount;
   const pages: SiteKey[][] = [];
-  for (let index = 0; index < keys.length; index += size) {
-    pages.push(keys.slice(index, index + size));
+  let start = 0;
+  for (let page = 0; page < pageCount; page += 1) {
+    const count = baseSize + (largerPages > 0 ? 1 : 0);
+    largerPages = Math.max(0, largerPages - 1);
+    pages.push(keys.slice(start, start + count));
+    start += count;
   }
   return pages;
+}
+
+export function resolveSitePageIndex(
+  keys: readonly SiteKey[],
+  site: SiteKey
+): number {
+  const page = paginateSiteKeys(keys).findIndex((items) => items.includes(site));
+  return page < 0 ? 0 : page;
 }
 
 export function resolveSitePage(

@@ -11,7 +11,7 @@ import {
 } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
 
-import { getCopy } from "../shared/copy";
+import { formatCopy, getCopy } from "../shared/copy";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
@@ -118,6 +118,7 @@ const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
 let viewManager: ViewManager | null = null;
 let desktopDatabase: DesktopDatabase | null = null;
+const DIRECT_PAGE_ACCELERATORS = ["Alt+1", "Alt+2", "Alt+3"] as const;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
 
@@ -223,6 +224,11 @@ function createMenu(): void {
           accelerator: "CmdOrCtrl+Shift+PageUp",
           click: () => viewManager?.pageRelative(-1)
         },
+        ...DIRECT_PAGE_ACCELERATORS.map((accelerator, page): MenuItemConstructorOptions => ({
+          label: formatCopy(copy.sitePageMenu, { page: page + 1 }),
+          accelerator,
+          click: () => viewManager?.pageDirect(page)
+        })),
         {
           label: copy.nextSiteMenu,
           accelerator: "CmdOrCtrl+PageDown",
