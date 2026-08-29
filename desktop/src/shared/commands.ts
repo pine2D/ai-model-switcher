@@ -1,0 +1,78 @@
+import type { DesktopCopy } from "./copy";
+
+export type CommandId =
+  | "open-command-palette"
+  | "open-sites"
+  | "open-site-health"
+  | "show-page-1"
+  | "show-page-2"
+  | "show-page-3"
+  | "focus-prompt"
+  | "set-think"
+  | "set-fast"
+  | "collect-answers"
+  | "retry-failed"
+  | "new-session"
+  | "open-settings"
+  | "open-drive-diagnostics"
+  | "open-shortcuts"
+  | "next-unfinished"
+  | "next-failed"
+  | "check-updates";
+
+export type CommandGroup = "navigate" | "compose" | "results" | "app";
+
+export interface CommandDescriptor {
+  readonly id: CommandId;
+  readonly labelKey: keyof DesktopCopy;
+  readonly group: CommandGroup;
+  readonly accelerator?: string;
+  readonly macAccelerator?: string;
+  readonly aliases?: readonly string[];
+}
+
+export interface CommandInput {
+  readonly type: string;
+  readonly key: string;
+  readonly alt: boolean;
+  readonly control: boolean;
+  readonly meta: boolean;
+  readonly shift: boolean;
+}
+
+export const COMMANDS: readonly CommandDescriptor[] = Object.freeze([
+  { id: "open-command-palette", labelKey: "commandPalette", group: "navigate", accelerator: "Alt+K", aliases: ["F1"] },
+  { id: "open-sites", labelKey: "sitesAndGroups", group: "navigate", accelerator: "Alt+S" },
+  { id: "open-site-health", labelKey: "siteHealth", group: "navigate", accelerator: "Alt+H" },
+  { id: "show-page-1", labelKey: "showPageOne", group: "navigate", accelerator: "Alt+1" },
+  { id: "show-page-2", labelKey: "showPageTwo", group: "navigate", accelerator: "Alt+2" },
+  { id: "show-page-3", labelKey: "showPageThree", group: "navigate", accelerator: "Alt+3" },
+  { id: "focus-prompt", labelKey: "focusPromptMenu", group: "compose", accelerator: "Alt+Q" },
+  { id: "set-think", labelKey: "chooseThinkMode", group: "compose", accelerator: "Alt+T" },
+  { id: "set-fast", labelKey: "chooseFastMode", group: "compose", accelerator: "Alt+Y" },
+  { id: "collect-answers", labelKey: "collectAnswers", group: "results", accelerator: "Alt+C" },
+  { id: "retry-failed", labelKey: "retryFailedCommand", group: "results", accelerator: "Alt+R" },
+  { id: "new-session", labelKey: "newSessionSelected", group: "compose", accelerator: "Alt+N" },
+  { id: "open-settings", labelKey: "settings", group: "app", accelerator: "Control+,", macAccelerator: "Command+," },
+  { id: "open-drive-diagnostics", labelKey: "openDriveDiagnostics", group: "app" },
+  { id: "open-shortcuts", labelKey: "keyboardShortcuts", group: "app" },
+  { id: "next-unfinished", labelKey: "nextUnfinished", group: "results" },
+  { id: "next-failed", labelKey: "nextFailed", group: "results" },
+  { id: "check-updates", labelKey: "checkForUpdates", group: "app" }
+]);
+
+const BY_ID = new Map<string, CommandDescriptor>(COMMANDS.map((command) => [command.id, command]));
+
+export function commandById(id: string): CommandDescriptor | undefined {
+  return BY_ID.get(id);
+}
+
+export function commandAccelerator(id: CommandId, platform: NodeJS.Platform): string | undefined {
+  const command = commandById(id);
+  return platform === "darwin" ? command?.macAccelerator ?? command?.accelerator : command?.accelerator;
+}
+
+export function commandAliasForInput(input: CommandInput): CommandId | undefined {
+  if (input.type !== "keyDown" || input.alt || input.control || input.meta || input.shift) return undefined;
+  return COMMANDS.find((command) => command.aliases?.some((alias) => alias === input.key))?.id;
+}

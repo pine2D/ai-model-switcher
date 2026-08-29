@@ -102,7 +102,21 @@ export const COPY = {
     comfortableDensity: "Comfortable",
     siteScaleMenu: "Site scale",
     fitSiteScale: "Fit (90%)",
-    actualSiteScale: "Actual size (100%)"
+    actualSiteScale: "Actual size (100%)",
+    commandPalette: "Command palette",
+    sitesAndGroups: "Sites & groups",
+    siteHealth: "Site status",
+    showPageOne: "Show site page 1",
+    showPageTwo: "Show site page 2",
+    showPageThree: "Show site page 3",
+    chooseThinkMode: "Use deep thinking",
+    chooseFastMode: "Use fast responses",
+    retryFailedCommand: "Retry failed sites",
+    openDriveDiagnostics: "Open Drive diagnostics",
+    keyboardShortcuts: "Keyboard shortcuts",
+    nextUnfinished: "Go to next unfinished site",
+    nextFailed: "Go to next failed site",
+    checkForUpdates: "Check for updates"
   },
   zhCN: {
     ...ARCHIVE_COPY.zhCN,
@@ -202,7 +216,21 @@ export const COPY = {
     comfortableDensity: "舒适",
     siteScaleMenu: "站点缩放",
     fitSiteScale: "适应（90%）",
-    actualSiteScale: "原始大小（100%）"
+    actualSiteScale: "原始大小（100%）",
+    commandPalette: "命令面板",
+    sitesAndGroups: "站点与分组",
+    siteHealth: "站点状态",
+    showPageOne: "显示第 1 组站点",
+    showPageTwo: "显示第 2 组站点",
+    showPageThree: "显示第 3 组站点",
+    chooseThinkMode: "切换为深度思考",
+    chooseFastMode: "切换为快速回答",
+    retryFailedCommand: "重试失败站点",
+    openDriveDiagnostics: "打开 Drive 连接诊断",
+    keyboardShortcuts: "快捷键速查",
+    nextUnfinished: "转到下一个未完成站点",
+    nextFailed: "转到下一个失败站点",
+    checkForUpdates: "检查更新"
   },
   zhTW: {
     ...ARCHIVE_COPY.zhTW,
@@ -302,7 +330,21 @@ export const COPY = {
     comfortableDensity: "舒適",
     siteScaleMenu: "網站縮放",
     fitSiteScale: "適應（90%）",
-    actualSiteScale: "原始大小（100%）"
+    actualSiteScale: "原始大小（100%）",
+    commandPalette: "指令面板",
+    sitesAndGroups: "網站與群組",
+    siteHealth: "網站狀態",
+    showPageOne: "顯示第 1 組網站",
+    showPageTwo: "顯示第 2 組網站",
+    showPageThree: "顯示第 3 組網站",
+    chooseThinkMode: "切換為深度思考",
+    chooseFastMode: "切換為快速回答",
+    retryFailedCommand: "重試失敗網站",
+    openDriveDiagnostics: "開啟 Drive 連線診斷",
+    keyboardShortcuts: "快速鍵一覽",
+    nextUnfinished: "前往下一個未完成網站",
+    nextFailed: "前往下一個失敗網站",
+    checkForUpdates: "檢查更新"
   }
 } as const;
 

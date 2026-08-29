@@ -8,6 +8,7 @@ import type {
   ArchiveSearchResult
 } from "../shared/archive";
 import type { SiteKey } from "../shared/contracts";
+import type { CommandId } from "../shared/commands";
 import type { DisplayPreferences } from "../shared/display";
 import type {
   BootstrapState,
@@ -63,6 +64,7 @@ export interface PolyAskDesktopApi {
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
   onFocusPrompt(listener: () => void): () => void;
+  onCommand(listener: (id: CommandId) => void): () => void;
   onWorkspaceState(listener: (value: WorkspaceState) => void): () => void;
   onSyncStatus(listener: (value: SyncStatus) => void): () => void;
 }
@@ -110,6 +112,7 @@ const api: PolyAskDesktopApi = Object.freeze({
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>
     subscribe("polyask:display-preferences", listener),
   onFocusPrompt: (listener: () => void) => subscribe("polyask:focus-prompt", listener),
+  onCommand: (listener: (id: CommandId) => void) => subscribe("polyask:command", listener),
   onWorkspaceState: (listener: (value: WorkspaceState) => void) =>
     subscribe("polyask:workspace-state", listener),
   onSyncStatus: (listener: (value: SyncStatus) => void) => subscribe("polyask:sync-status", listener)

@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { SiteDefinition } from "../shared/contracts";
+import type { CommandActions } from "./command-dispatcher";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
 import { unsupportedImageSites } from "../shared/images";
@@ -14,6 +15,7 @@ import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
 import { ExclusiveActionLock } from "./broadcast-flow-state";
 import { CommandBar } from "./command-bar";
+import { executeCommand } from "./command-dispatcher";
 import {
   applyDisplayDensity,
   applyDisplayPreferences,
@@ -61,6 +63,7 @@ function App(): React.JSX.Element {
   const layoutPage = useRef(0);
   const requestedPage = useRef<{ readonly page: number; readonly inputMethod: "keyboard" | "pointer" } | null>(null);
   const actionLock = useRef<ExclusiveActionLock | null>(null);
+  const commandActions = useRef<CommandActions>({});
   if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
@@ -142,6 +145,7 @@ function App(): React.JSX.Element {
     });
     const offDisplay = window.polyask.onDisplayPreferences(acceptDisplayPreferences);
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
+    const offCommand = window.polyask.onCommand((id) => executeCommand(id, commandActions.current));
     const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
     const offSync = window.polyask.onSyncStatus(setSyncStatus);
     return () => {
@@ -149,6 +153,7 @@ function App(): React.JSX.Element {
       offLayout();
       offDisplay();
       offFocusPrompt();
+      offCommand();
       offWorkspace();
       offSync();
     };
@@ -247,6 +252,28 @@ function App(): React.JSX.Element {
       workspaceFlow.recover();
     }
   });
+
+  commandActions.current = {
+    "open-sites": () => {
+      changeSurface("sites");
+      changeDrawerOpen(true);
+    },
+    "open-site-health": () => {
+      changeSurface("sites");
+      changeDrawerOpen(true);
+    },
+    "focus-prompt": () => {
+      changeSurface("sites");
+      if (drawerOpen) changeDrawerOpen(false);
+      queueMicrotask(() => promptRef.current?.focus());
+    },
+    "set-think": () => { void workspaceFlow.changeTier("think"); },
+    "set-fast": () => { void workspaceFlow.changeTier("fast"); },
+    "collect-answers": () => { void collectAndCopy(); },
+    "retry-failed": () => { void actionLock.current!.run(broadcast.retry); },
+    "new-session": () => { void startNewSession(); },
+    "open-settings": () => changeSurface("settings")
+  };
 
   if (bootstrapPhase !== "ready") {
     return (

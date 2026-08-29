@@ -11,7 +11,13 @@ import {
 } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
 
-import { formatCopy, getCopy } from "../shared/copy";
+import {
+  COMMANDS,
+  commandAccelerator,
+  commandAliasForInput,
+  type CommandId
+} from "../shared/commands";
+import { getCopy } from "../shared/copy";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
@@ -118,7 +124,6 @@ const coordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
 let viewManager: ViewManager | null = null;
 let desktopDatabase: DesktopDatabase | null = null;
-const DIRECT_PAGE_ACCELERATORS = ["Alt+1", "Alt+2", "Alt+3"] as const;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
 
@@ -126,6 +131,19 @@ type ShellPayload = SiteStatus | LayoutState | DisplayPreferences | WorkspaceSta
 
 function sendToShell(channel: string, payload: ShellPayload): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+function dispatchAppCommand(id: CommandId): void {
+  const page = (["show-page-1", "show-page-2", "show-page-3"] as const).indexOf(
+    id as "show-page-1" | "show-page-2" | "show-page-3"
+  );
+  if (page >= 0) {
+    viewManager?.pageDirect(page);
+    return;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (id === "focus-prompt") mainWindow.webContents.focus();
+  mainWindow.webContents.send("polyask:command", id);
 }
 
 function applyDisplayPreferences(
@@ -205,15 +223,13 @@ function createMenu(): void {
           ]
         },
         { type: "separator" },
-        {
-          label: copy.focusPromptMenu,
-          accelerator: "CmdOrCtrl+Shift+P",
-          click: () => {
-            if (!mainWindow || mainWindow.isDestroyed()) return;
-            mainWindow.webContents.focus();
-            mainWindow.webContents.send("polyask:focus-prompt");
-          }
-        },
+        ...COMMANDS.filter((command) => !!commandAccelerator(command.id, process.platform))
+          .map((command): MenuItemConstructorOptions => ({
+            label: copy[command.labelKey],
+            accelerator: commandAccelerator(command.id, process.platform),
+            click: () => dispatchAppCommand(command.id)
+          })),
+        { type: "separator" },
         {
           label: copy.nextPageMenu,
           accelerator: "CmdOrCtrl+Shift+PageDown",
@@ -224,11 +240,6 @@ function createMenu(): void {
           accelerator: "CmdOrCtrl+Shift+PageUp",
           click: () => viewManager?.pageRelative(-1)
         },
-        ...DIRECT_PAGE_ACCELERATORS.map((accelerator, page): MenuItemConstructorOptions => ({
-          label: formatCopy(copy.sitePageMenu, { page: page + 1 }),
-          accelerator,
-          click: () => viewManager?.pageDirect(page)
-        })),
         {
           label: copy.nextSiteMenu,
           accelerator: "CmdOrCtrl+PageDown",
@@ -404,6 +415,12 @@ else {
   });
   app.on("web-contents-created", (_event, contents) => {
     contents.on("will-attach-webview", (event) => event.preventDefault());
+    contents.on("before-input-event", (event, input) => {
+      const command = commandAliasForInput(input);
+      if (!command) return;
+      event.preventDefault();
+      dispatchAppCommand(command);
+    });
   });
   app.on("activate", () => {
     if (!mainWindow) void runStartup(createWindow, failStartup);

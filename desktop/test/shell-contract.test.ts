@@ -25,16 +25,21 @@ test("focus action transfers keyboard focus to the native site view", () => {
 
 test("application menu offers a keyboard route back to the prompt", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
+  const commands = readFileSync("src/shared/commands.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
   const renderer = readFileSync("src/renderer/index.tsx", "utf8");
-  assert.match(main, /polyask:focus-prompt/);
-  assert.match(main, /CmdOrCtrl\+Shift\+P/);
-  assert.match(renderer, /onFocusPrompt/);
+  assert.match(main, /commandAccelerator/);
+  assert.match(main, /polyask:command/);
+  assert.match(main, /before-input-event/);
+  assert.match(preload, /onCommand/);
+  assert.match(renderer, /onCommand/);
+  assert.match(commands, /Alt\+Q/);
   assert.match(main, /CmdOrCtrl\+Shift\+PageDown/);
   assert.match(main, /CmdOrCtrl\+Shift\+PageUp/);
   assert.match(main, /pageRelative/);
-  assert.match(main, /Alt\+1/);
-  assert.match(main, /Alt\+2/);
-  assert.match(main, /Alt\+3/);
+  assert.match(commands, /Alt\+1/);
+  assert.match(commands, /Alt\+2/);
+  assert.match(commands, /Alt\+3/);
   assert.match(main, /pageDirect\(page\)/);
 });
 
