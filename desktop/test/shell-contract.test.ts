@@ -238,6 +238,22 @@ test("Drive sync uses a trusted typed bridge and protects destructive cloud clea
   assert.match(protocol, /readonly runtime: RuntimeInfo/);
 });
 
+test("Drive diagnostics use the existing trusted sync bridge", () => {
+  const ipc = readFileSync("src/main/sync-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  assert.match(ipc, /polyask:sync-diagnostics/);
+  assert.match(ipc, /options\.trusted\(event\)/);
+  assert.match(preload, /syncDiagnostics\(\): Promise<SyncDiagnosticSnapshot>/);
+  assert.match(preload, /polyask:sync-diagnostics/);
+});
+
+test("Drive diagnostics command opens and targets the settings diagnostic section", () => {
+  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  assert.match(renderer, /"open-drive-diagnostics": \(\) =>/);
+  assert.match(renderer, /setSettingsSection\("drive-diagnostics"\)/);
+  assert.match(renderer, /initialSection=\{settingsSection\}/);
+});
+
 test("windows and linux auto-hide the native menu bar", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   assert.match(main, /setAutoHideMenuBar\(true\)/);

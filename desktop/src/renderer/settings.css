@@ -46,6 +46,40 @@
 .settings-actions button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .settings-actions button.primary:hover:not(:disabled) { color: white; filter: brightness(.92); }
 .settings-actions button:disabled, .danger-zone button:disabled { opacity: .42; }
+.sync-diagnostics {
+  grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.sync-diagnostics-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.sync-diagnostics-heading h2 { font-size: 13px; }
+.sync-diagnostics-heading p { margin-bottom: 0; font-size: 11px; }
+.sync-diagnostics-heading button, .sync-diagnostic-actions button {
+  min-height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px;
+  color: inherit; background: transparent;
+}
+.sync-diagnostics-heading button:hover, .sync-diagnostic-actions button:hover:not(:disabled) {
+  color: var(--accent); border-color: var(--accent);
+}
+.sync-stage-list {
+  margin: 10px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px;
+  list-style: none;
+}
+.sync-stage-list li {
+  min-width: 0; padding: 8px; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 6px;
+}
+.sync-stage-list li:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sync-stage-list i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sync-stage-list span { min-width: 0; display: grid; gap: 2px; }
+.sync-stage-list strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.sync-stage-list code { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.sync-stage-list small { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.sync-stage-list li[data-stage-state="ok"] i { background: var(--success); }
+.sync-stage-list li[data-stage-state="checking"] i { background: var(--accent); }
+.sync-stage-list li[data-stage-state="warning"] i { background: var(--warning); }
+.sync-stage-list li[data-stage-state="failed"] i { background: var(--danger); }
+.sync-diagnostic-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.sync-diagnostic-actions button:disabled { opacity: .42; }
+.sync-diagnostics .sync-diagnostic-privacy { margin: 7px 0 0; font-size: 10px; }
 .sync-overview .sync-privacy { grid-column: 1 / -1; margin: 0; font-size: 10px; }
 .danger-zone { border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
 .danger-zone h2 { color: var(--danger); }
@@ -57,7 +91,9 @@
   .settings-body { grid-template-columns: 1fr; }
   .sync-overview { grid-template-columns: 1fr; }
   .sync-state, .sync-facts, .settings-notice, .settings-actions, .sync-overview .sync-privacy { grid-column: 1; }
+  .sync-stage-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (max-width: 560px) { .sync-stage-list { grid-template-columns: 1fr; } }
 @media (prefers-color-scheme: dark) {
   .settings-workspace { background: #17171a; }
   .danger-zone input { background: #19191d; }

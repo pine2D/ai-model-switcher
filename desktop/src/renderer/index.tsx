@@ -88,6 +88,7 @@ function App(): React.JSX.Element {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [panelState, setPanelState] = useState<WorkspacePanelState>(null);
   const [surface, setSurface] = useState<DesktopSurface>("sites");
+  const [settingsSection, setSettingsSection] = useState<"overview" | "drive-diagnostics">("overview");
   const [commandMode, setCommandMode] = useState<CommandPaletteMode>("commands");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
@@ -369,7 +370,14 @@ function App(): React.JSX.Element {
       "retry-failed": () => { changeSurface("sites"); void actionLock.current!.run(broadcast.retry); }
     } : {}),
     ...(selected.size > 0 ? { "new-session": () => { changeSurface("sites"); void startNewSession(); } } : {}),
-    "open-settings": () => changeSurface("settings"),
+    "open-settings": () => {
+      setSettingsSection("overview");
+      changeSurface("settings");
+    },
+    "open-drive-diagnostics": () => {
+      setSettingsSection("drive-diagnostics");
+      changeSurface("settings");
+    },
     "open-shortcuts": () => openCommandSurface("shortcuts")
   };
   const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
@@ -389,7 +397,7 @@ function App(): React.JSX.Element {
     return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
   }
   if (surface === "commands") {
     return (

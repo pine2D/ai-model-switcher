@@ -3,8 +3,15 @@ import { useEffect, useState } from "react";
 import type { DesktopCopy } from "../shared/copy";
 import { formatCopy } from "../shared/copy";
 import { CLEAR_REMOTE_CONFIRMATION, type SyncStatus } from "../shared/sync";
+import {
+  buildSyncDiagnosticReport,
+  createSyncDiagnosticSnapshot,
+  firstFailedSyncStage,
+  type SyncDiagnosticSnapshot
+} from "../shared/sync-diagnostics";
 import type { RuntimeInfo } from "../shared/runtime";
 import { CloseIcon } from "./icons";
+import { SyncDiagnosticsPanel } from "./sync-diagnostics-panel";
 import { describeSync } from "./sync-status";
 
 interface SettingsWorkspaceProps {
@@ -15,6 +22,7 @@ interface SettingsWorkspaceProps {
   readonly onStatus: (value: SyncStatus) => void;
   readonly onAnnounce: (value: string) => void;
   readonly onClose: () => void;
+  readonly initialSection?: "overview" | "drive-diagnostics";
 }
 
 type SyncAction = () => Promise<SyncStatus>;
@@ -23,6 +31,14 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
   const [actionBusy, setActionBusy] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [diagnostics, setDiagnostics] = useState<SyncDiagnosticSnapshot>(() =>
+    createSyncDiagnosticSnapshot(props.status, props.runtime)
+  );
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(() =>
+    props.initialSection === "drive-diagnostics"
+      || firstFailedSyncStage(createSyncDiagnosticSnapshot(props.status, props.runtime)) !== null
+  );
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const busy = actionBusy || props.status.state === "syncing";
   const statusText = describeSync(props.copy, props.status);
   useEffect(() => {
@@ -30,6 +46,20 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [busy, props.onClose]);
+  useEffect(() => {
+    const next = createSyncDiagnosticSnapshot(props.status, props.runtime);
+    setDiagnostics(next);
+    if (firstFailedSyncStage(next)) setDiagnosticsOpen(true);
+  }, [props.runtime, props.status]);
+  useEffect(() => {
+    if (props.initialSection !== "drive-diagnostics") return;
+    setDiagnosticsOpen(true);
+    queueMicrotask(() => document.getElementById("sync-diagnostics-toggle")?.focus());
+  }, [props.initialSection]);
+  useEffect(() => {
+    const failed = diagnosticsOpen ? firstFailedSyncStage(diagnostics) : null;
+    if (failed) queueMicrotask(() => document.getElementById(`sync-stage-${failed.id}`)?.focus());
+  }, [diagnostics, diagnosticsOpen]);
   const lastSuccess = props.status.lastSuccessAt
     ? formatCopy(props.copy.syncLastSuccess, {
       time: new Intl.DateTimeFormat(props.locale, { dateStyle: "short", timeStyle: "short" })
@@ -50,6 +80,33 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
       props.onAnnounce(props.copy.syncActionFailed);
     } finally {
       setActionBusy(false);
+    }
+  };
+  const refreshDiagnostics = async (announceFailure = true): Promise<void> => {
+    if (diagnosticsBusy) return;
+    setDiagnosticsBusy(true);
+    try {
+      const next = await window.polyask.syncDiagnostics();
+      setDiagnostics(next);
+      if (firstFailedSyncStage(next)) setDiagnosticsOpen(true);
+    } catch {
+      if (announceFailure) {
+        setFeedback(props.copy.syncDiagnosticsRefreshFailed);
+        props.onAnnounce(props.copy.syncDiagnosticsRefreshFailed);
+      }
+    } finally {
+      setDiagnosticsBusy(false);
+    }
+  };
+  useEffect(() => { void refreshDiagnostics(false); }, []);
+  const copyDiagnostics = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(buildSyncDiagnosticReport(diagnostics));
+      setFeedback(props.copy.syncDiagnosticsCopied);
+      props.onAnnounce(props.copy.syncDiagnosticsCopied);
+    } catch {
+      setFeedback(props.copy.syncDiagnosticsCopyFailed);
+      props.onAnnounce(props.copy.syncDiagnosticsCopyFailed);
     }
   };
 
@@ -88,6 +145,17 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             ) : <button type="button" className="primary" disabled={busy} onClick={() => void run(() => window.polyask.syncNow())}>{props.copy.syncNow}</button>}
             {props.status.connected ? <button type="button" disabled={busy} onClick={() => void run(() => window.polyask.disconnectSync())}>{props.copy.syncDisconnect}</button> : null}
           </div>
+          <SyncDiagnosticsPanel
+            copy={props.copy}
+            snapshot={diagnostics}
+            open={diagnosticsOpen}
+            busy={busy || diagnosticsBusy}
+            canSync={props.status.connected && props.status.state !== "auth"}
+            onOpenChange={setDiagnosticsOpen}
+            onCopy={() => { void copyDiagnostics(); }}
+            onRefresh={() => { void refreshDiagnostics(); }}
+            onSync={() => { void run(() => window.polyask.syncNow()); }}
+          />
           <p className="sync-privacy">{props.copy.syncPrivacy}</p>
         </section>
         <section className="settings-card danger-zone" aria-labelledby="clear-sync-title">

@@ -217,6 +217,32 @@ test("a successful first Drive handshake commits the connected state", async () 
   } finally { database.close(); }
 });
 
+test("sync diagnostics reflect the engine clock, runtime, and persisted connection state", () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({
+    connected: false,
+    state: "blocked",
+    reason: "oauth_invalid_client",
+    diagnostic: "invalid_client / client_secret"
+  });
+  try {
+    const diagnostics = new SyncEngine({
+      repository,
+      drive: {} as SyncDrive,
+      auth: auth(),
+      now: () => 4_000
+    }).diagnostics({ version: "0.21.0", distribution: "portable" });
+    assert.equal(diagnostics.generatedAt, 4_000);
+    assert.equal(diagnostics.appVersion, "0.21.0");
+    assert.equal(diagnostics.distribution, "portable");
+    assert.equal(diagnostics.reason, "oauth_invalid_client");
+    assert.equal(diagnostics.diagnostic, "invalid_client / client_secret");
+    assert.equal(diagnostics.stages.find((stage) => stage.id === "token-exchange")?.state, "failed");
+  } finally { database.close(); }
+});
+
 test("an imported pending history flushes as the portable device without overwriting the old file", async () => {
   const database = DesktopDatabase.open(":memory:");
   database.meta.put("deviceId", "device-old");

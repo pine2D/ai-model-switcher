@@ -154,3 +154,35 @@ test("an expired connected session offers reauthentication instead of a dead-end
   assert.match(html, /Disconnect/);
   assert.doesNotMatch(html, />Sync now<\/button>/);
 });
+
+test("Drive failure expands six-stage diagnostics with safe support actions", () => {
+  const html = renderSettings(status({
+    state: "blocked",
+    reason: "oauth_invalid_client"
+  }));
+  assert.match(html, /aria-controls="sync-diagnostic-stages" aria-expanded="true"/);
+  assert.equal([...html.matchAll(/data-diagnostic-stage=/g)].length, 6);
+  assert.match(html, /data-diagnostic-stage="token-exchange" data-stage-state="failed"/);
+  assert.match(html, />Connection diagnostics</);
+  assert.match(html, />Copy diagnostic report</);
+  assert.match(html, />Check again</);
+});
+
+test("Drive diagnostics command opens the healthy six-stage section on demand", () => {
+  const html = renderToStaticMarkup(
+    <SettingsWorkspace
+      copy={getCopy("zh-CN")}
+      locale="zh-CN"
+      runtime={runtime}
+      status={status({ connected: true, lastSuccessAt: 2_000 })}
+      initialSection="drive-diagnostics"
+      onStatus={noop}
+      onAnnounce={noop}
+      onClose={noop}
+    />
+  );
+  assert.match(html, /aria-controls="sync-diagnostic-stages" aria-expanded="true"/);
+  assert.equal([...html.matchAll(/data-diagnostic-stage=/g)].length, 6);
+  assert.match(html, />连接诊断</);
+  assert.match(html, /报告仅包含应用与连接状态/);
+});

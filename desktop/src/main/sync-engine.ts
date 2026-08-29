@@ -1,4 +1,6 @@
 import type { StoredArchive } from "../shared/archive";
+import type { RuntimeInfo } from "../shared/runtime";
+import { createSyncDiagnosticSnapshot, type SyncDiagnosticSnapshot } from "../shared/sync-diagnostics";
 import {
   retryDelay,
   utf8Preview,
@@ -86,6 +88,10 @@ export class SyncEngine {
       oauthConfigured: this.options.auth.configured(),
       secureTokenStorage: this.options.auth.securePersistence()
     };
+  }
+
+  diagnostics(runtime: RuntimeInfo): SyncDiagnosticSnapshot {
+    return createSyncDiagnosticSnapshot(this.status(), runtime, this.now());
   }
 
   connect(): Promise<SyncStatus> {

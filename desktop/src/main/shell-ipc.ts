@@ -107,7 +107,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (!window.isDestroyed()) window.webContents.send("polyask:workspace-state", state);
     return state;
   };
-  const disposeSyncIpc = registerSyncIpc({ sync, trusted: trustedShell });
+  const disposeSyncIpc = registerSyncIpc({ sync, runtime: options.runtime, trusted: trustedShell });
   const disposeSiteHealthIpc = registerSiteHealthIpc({ manager, trusted: trustedShell });
 
   ipcMain.handle("polyask:bootstrap", (event) => {
