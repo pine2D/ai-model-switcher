@@ -77,6 +77,16 @@ test("occasional full-workspace surfaces enter without animating native site bou
   assert.doesNotMatch(css, /webcontents|web-contents/i);
 });
 
+test("the high-frequency command surface opens without motion", () => {
+  const css = renderer("styles.css");
+  const start = css.indexOf(".command-surface {");
+  const end = css.indexOf("\n}", start);
+  const rule = css.slice(start, end);
+  assert.ok(start >= 0);
+  assert.doesNotMatch(rule, /transition|animation|transform/);
+  assert.doesNotMatch(renderer("index.tsx"), /surface-stage[^\n]*CommandPalette/);
+});
+
 test("Drive idle success color requires an active connection", () => {
   const css = renderer("settings.css");
   assert.match(css, /\.sync-state\[data-connected="true"\]\[data-state="idle"\] i\s*\{\s*background:\s*var\(--success\);\s*\}/);

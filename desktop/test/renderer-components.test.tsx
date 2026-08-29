@@ -6,16 +6,63 @@ import test from "node:test";
 
 import { BootstrapStateView } from "../src/renderer/bootstrap-state";
 import { CommandBar } from "../src/renderer/command-bar";
+import { CommandPalette } from "../src/renderer/command-palette";
 import { ImagePicker } from "../src/renderer/image-picker";
 import { PageTabs } from "../src/renderer/page-tabs";
 import { SiteFrames } from "../src/renderer/site-frames";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { WorkspaceActions } from "../src/renderer/workspace-actions";
 import { getCopy } from "../src/shared/copy";
+import { COMMANDS } from "../src/shared/commands";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
 
 const noop = () => undefined;
+
+test("command palette is a keyboard-first full surface", () => {
+  const html = renderToStaticMarkup(
+    <CommandPalette
+      copy={getCopy("en")}
+      commands={COMMANDS}
+      groups={[]}
+      isMac={false}
+      mode="commands"
+      onModeChange={noop}
+      onExecute={noop}
+      onApplyGroup={noop}
+      onClose={noop}
+    />
+  );
+
+  assert.match(html, /^<main class="command-surface"/);
+  assert.match(html, /aria-label="Command palette"/);
+  assert.match(html, /role="combobox"/);
+  assert.match(html, /aria-controls="command-results"/);
+  assert.match(html, /role="listbox"/);
+  assert.match(html, /aria-keyshortcuts="Escape"/);
+  assert.doesNotMatch(html, /command-overlay/);
+});
+
+test("shortcut reference lists registered accelerators and aliases", () => {
+  const html = renderToStaticMarkup(
+    <CommandPalette
+      copy={getCopy("zh-CN")}
+      commands={COMMANDS}
+      groups={[]}
+      isMac={false}
+      mode="shortcuts"
+      onModeChange={noop}
+      onExecute={noop}
+      onApplyGroup={noop}
+      onClose={noop}
+    />
+  );
+
+  assert.match(html, /快捷键速查/);
+  assert.match(html, /Alt\+K/);
+  assert.match(html, /F1/);
+  assert.match(html, /Alt\+1/);
+});
 
 test("bootstrap loading is a polite busy state without a retry action", () => {
   const copy = getCopy("en");

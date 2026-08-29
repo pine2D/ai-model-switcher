@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import type { CommandId } from "../shared/commands";
+import { COMMANDS, type CommandId } from "../shared/commands";
 import type { SiteDefinition } from "../shared/contracts";
 import type { CommandActions } from "./command-dispatcher";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
@@ -16,6 +16,7 @@ import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
 import { ExclusiveActionLock } from "./broadcast-flow-state";
 import { CommandBar } from "./command-bar";
+import { CommandPalette, type CommandPaletteMode } from "./command-palette";
 import { executeCommand } from "./command-dispatcher";
 import {
   applyDisplayDensity,
@@ -83,6 +84,7 @@ function App(): React.JSX.Element {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [panelState, setPanelState] = useState<WorkspacePanelState>(null);
   const [surface, setSurface] = useState<DesktopSurface>("sites");
+  const [commandMode, setCommandMode] = useState<CommandPaletteMode>("commands");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
   const [announcement, setAnnouncement] = useState("");
@@ -293,14 +295,11 @@ function App(): React.JSX.Element {
     }
   };
   const showMoreMenu = async (): Promise<void> => {
-    const commands: CommandId[] = [
-      ...(broadcast.failureCount + broadcast.cancelledCount > 0 ? ["retry-failed" as const] : []),
-      ...(selected.size > 0 ? ["collect-answers" as const] : []),
-      "open-archive",
-      ...(synthesis.pending ? ["collect-synthesis" as const] : []),
-      ...(selected.size > 0 ? ["new-session" as const] : []),
-      "open-settings"
+    const moreIds: readonly CommandId[] = [
+      "retry-failed", "collect-answers", "open-archive", "collect-synthesis",
+      "new-session", "open-command-palette", "open-shortcuts", "open-settings"
     ];
+    const commands = moreIds.filter((id) => !!commandActions.current[id]);
     try {
       const command = await window.polyask.showCommandMenu(commands);
       if (command) executeCommand(command, commandActions.current);
@@ -309,27 +308,46 @@ function App(): React.JSX.Element {
     }
   };
 
+  const openCommandSurface = (mode: CommandPaletteMode): void => {
+    setCommandMode(mode);
+    changeSurface("commands");
+  };
+  const showPage = (page: number): void => {
+    changeSurface("sites");
+    requestedPage.current = { page, inputMethod: "keyboard" };
+    setPageInputMethod("keyboard");
+    window.polyask.setPage(page);
+  };
+
   commandActions.current = {
+    "open-command-palette": () => openCommandSurface("commands"),
     "open-sites": () => {
       openPanel("sites", "keyboard");
     },
     "open-site-health": () => {
       openPanel("health", "keyboard");
     },
+    ...(layout.pageCount >= 1 ? { "show-page-1": () => showPage(0) } : {}),
+    ...(layout.pageCount >= 2 ? { "show-page-2": () => showPage(1) } : {}),
+    ...(layout.pageCount >= 3 ? { "show-page-3": () => showPage(2) } : {}),
     "focus-prompt": () => {
       changeSurface("sites");
       if (drawerOpen) changeDrawerOpen(false);
       queueMicrotask(() => promptRef.current?.focus());
     },
-    "set-think": () => { void workspaceFlow.changeTier("think"); },
-    "set-fast": () => { void workspaceFlow.changeTier("fast"); },
-    "collect-answers": () => { void collectAndCopy(); },
+    "set-think": () => { changeSurface("sites"); void workspaceFlow.changeTier("think"); },
+    "set-fast": () => { changeSurface("sites"); void workspaceFlow.changeTier("fast"); },
+    ...(selected.size > 0 ? { "collect-answers": () => { changeSurface("sites"); void collectAndCopy(); } } : {}),
     "open-archive": () => changeSurface("archive"),
-    "collect-synthesis": () => { void collectSynthesis(); },
-    "retry-failed": () => { void actionLock.current!.run(broadcast.retry); },
-    "new-session": () => { void startNewSession(); },
-    "open-settings": () => changeSurface("settings")
+    ...(synthesis.pending ? { "collect-synthesis": () => { changeSurface("sites"); void collectSynthesis(); } } : {}),
+    ...(broadcast.failureCount + broadcast.cancelledCount > 0 ? {
+      "retry-failed": () => { changeSurface("sites"); void actionLock.current!.run(broadcast.retry); }
+    } : {}),
+    ...(selected.size > 0 ? { "new-session": () => { changeSurface("sites"); void startNewSession(); } } : {}),
+    "open-settings": () => changeSurface("settings"),
+    "open-shortcuts": () => openCommandSurface("shortcuts")
   };
+  const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
 
   if (bootstrapPhase !== "ready") {
     return (
@@ -347,6 +365,26 @@ function App(): React.JSX.Element {
   }
   if (surface === "settings") {
     return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+  }
+  if (surface === "commands") {
+    return (
+      <CommandPalette
+        copy={copy}
+        commands={availableCommands}
+        groups={workspace.groups}
+        isMac={navigator.userAgent.includes("Mac")}
+        mode={commandMode}
+        onModeChange={setCommandMode}
+        onExecute={(id) => executeCommand(id, commandActions.current)}
+        onApplyGroup={(id) => {
+          const group = workspace.groups.find((candidate) => candidate.id === id);
+          if (!group) return;
+          workspaceFlow.changeSelection(group.sites);
+          changeSurface("sites");
+        }}
+        onClose={() => changeSurface("sites")}
+      />
+    );
   }
 
   return (

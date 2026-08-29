@@ -12,7 +12,7 @@ import type { SyncStatus } from "./sync";
 import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
-export type DesktopSurface = "sites" | "archive" | "settings";
+export type DesktopSurface = "sites" | "archive" | "settings" | "commands";
 
 export interface BroadcastPayload {
   readonly text: string;

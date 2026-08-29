@@ -8,9 +8,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-
 }
 h1, h2 { text-wrap: balance; }
 .workspace-drawer, .image-tray, .archive-list, .archive-detail-pane,
-.synthesis-config, .synthesis-preview, .settings-body { overscroll-behavior: contain; }
+.synthesis-config, .synthesis-preview, .settings-body, .command-results { overscroll-behavior: contain; }
 @media (forced-colors: active) {
-  .tile-frame, .command-bar, .workspace-drawer, .archive-toolbar, .settings-toolbar { border-color: CanvasText; }
+  .tile-frame, .command-bar, .workspace-drawer, .archive-toolbar, .settings-toolbar, .command-palette { border-color: CanvasText; }
   .answer-rail { border: 1px solid CanvasText; }
   .phase-sending .answer-rail, .phase-submitted .answer-rail,
   .phase-warning .answer-rail, .phase-failed .answer-rail,

@@ -165,7 +165,7 @@ test("answer collection uses the trusted shell and the existing read-only adapte
   assert.match(sitePreload, /collectAnswer/);
 });
 
-test("archive surface detaches site views without destroying their web contents", () => {
+test("workspace surfaces detach site views without destroying their web contents", () => {
   const manager = readFileSync("src/main/view-manager.ts", "utf8");
   const start = manager.indexOf("setSurface(");
   const end = manager.indexOf("\n  focusRelative", start);
@@ -175,6 +175,8 @@ test("archive surface detaches site views without destroying their web contents"
   assert.match(implementation, /this\.reconcileViews/);
   assert.match(detach, /removeChildView/);
   assert.doesNotMatch(implementation, /webContents\.close/);
+  assert.match(readFileSync("src/shared/protocol.ts", "utf8"), /"commands"/);
+  assert.match(readFileSync("src/main/shell-ipc.ts", "utf8"), /"commands"/);
 });
 
 test("archive mutations and history persistence stay behind trusted main-process IPC", () => {

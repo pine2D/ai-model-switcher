@@ -1,4 +1,5 @@
 import { ARCHIVE_COPY } from "./archive-copy";
+import { COMMAND_COPY } from "./command-copy";
 import { SYNC_COPY } from "./sync-copy";
 import { SYNTHESIS_COPY } from "./synthesis-copy";
 import { WORKSPACE_COPY } from "./workspace-copy";
@@ -6,6 +7,7 @@ import { WORKSPACE_COPY } from "./workspace-copy";
 export const COPY = {
   en: {
     ...ARCHIVE_COPY.en,
+    ...COMMAND_COPY.en,
     ...SYNC_COPY.en,
     ...SYNTHESIS_COPY.en,
     ...WORKSPACE_COPY.en,
@@ -120,6 +122,7 @@ export const COPY = {
   },
   zhCN: {
     ...ARCHIVE_COPY.zhCN,
+    ...COMMAND_COPY.zhCN,
     ...SYNC_COPY.zhCN,
     ...SYNTHESIS_COPY.zhCN,
     ...WORKSPACE_COPY.zhCN,
@@ -234,6 +237,7 @@ export const COPY = {
   },
   zhTW: {
     ...ARCHIVE_COPY.zhTW,
+    ...COMMAND_COPY.zhTW,
     ...SYNC_COPY.zhTW,
     ...SYNTHESIS_COPY.zhTW,
     ...WORKSPACE_COPY.zhTW,

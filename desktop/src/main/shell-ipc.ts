@@ -16,6 +16,7 @@ import {
   parseBroadcastRequest,
   parseCollectionRequest,
   parsePageIndex,
+  type DesktopSurface,
   type SiteResponseEnvelope
 } from "../shared/protocol";
 import { BroadcastCoordinator } from "./broadcast";
@@ -258,8 +259,8 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     manager.setDrawerOpen(value);
   });
   ipcMain.on("polyask:set-surface", (event, value: unknown) => {
-    if (!trustedShell(event) || !["sites", "archive", "settings"].includes(String(value))) return;
-    manager.setSurface(value as "sites" | "archive" | "settings");
+    if (!trustedShell(event) || !["sites", "archive", "settings", "commands"].includes(String(value))) return;
+    manager.setSurface(value as DesktopSurface);
   });
   ipcMain.on("polyask:set-layout", (event, value: unknown) => {
     if (!trustedShell(event) || !value || typeof value !== "object") return;
