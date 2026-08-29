@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.21.0] - 2026-08-29
+
 ### 新增
 
 - Desktop 支持 `Alt+1` / `Alt+2` / `Alt+3` 直达站点页
@@ -508,7 +510,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.20.1...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/pine2D/polyask/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/pine2D/polyask/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/pine2D/polyask/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/pine2D/polyask/compare/v0.18.0...v0.19.0

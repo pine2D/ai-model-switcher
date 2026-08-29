@@ -3,7 +3,7 @@
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn2cHFEU9NPhsGL5DwH9jAs85R20BuWnHkAe6Vv+kNcc34+V3RxW+3rm0ME1K6Fg8agNzb1Xysequf5wJVV4H0x2Qqzqp3WZwzK7sek0MkQrIz+6t9g3M0BEAg+YqE+3qtcgZTFAx4weROfS/sIvso3xF10Qz4fa4yLXJWSre6RVMi0W6wjO5veMjhIa549TU8wUteRqlLjoIdwFCgByaUD3cuSMycJcGpQdk6wcVWYY2ZYSHTeDyHR1e8XIqDf8bh/8ZUFqHJpGWjJXSbBbnwMZD+inrtU6fhh7HMnCogw0QP7PV7nSf/zkgciz0+85jx1LkVAgnatKxWaXLjt7zfwIDAQAB",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "action": { "default_popup": "popup/popup.html" },
