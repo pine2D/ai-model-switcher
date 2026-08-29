@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   dialog,
   Menu,
+  screen,
   type MenuItemConstructorOptions
 } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
@@ -18,6 +19,7 @@ import {
   type CommandId
 } from "../shared/commands";
 import { getCopy } from "../shared/copy";
+import { parseDesktopUiState } from "../shared/desktop-ui-state";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
@@ -47,6 +49,7 @@ import { runStartup } from "./startup";
 import { statusForResult } from "./status";
 import { createSyncRuntime } from "./sync-runtime";
 import { SynthesisService } from "./synthesis-service";
+import { UiStateStore } from "./ui-state-store";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
 
@@ -260,10 +263,34 @@ function createMenu(): void {
 
 async function createWindow(): Promise<void> {
   const copy = getCopy(app.getLocale());
+  if (!desktopDatabase) throw new Error("database_not_ready");
+  const database = desktopDatabase;
+  let managerForWorkspace: ViewManager | null = null;
+  let collectionForWorkspace: CollectionService | null = null;
+  const workspace = new WorkspaceService(
+    database.state,
+    database.meta,
+    (site, url) => {
+      if (!managerForWorkspace) throw new Error("view_manager_not_ready");
+      return managerForWorkspace.navigate(site, url);
+    },
+    { onNewSession: () => collectionForWorkspace?.clearRun() }
+  );
+  const workspaceState = workspace.getState();
+  const uiStateStore = new UiStateStore(join(app.getPath("userData"), "desktop-ui-state.json"));
+  const initialUiState = parseDesktopUiState(
+    uiStateStore.load(),
+    screen.getAllDisplays().map((display) => display.workArea),
+    workspaceState.selectedSites
+  );
+  const bounds = initialUiState.windowBounds;
+  const restorePosition = !(process.platform === "linux"
+    && process.env.XDG_SESSION_TYPE?.toLowerCase() === "wayland");
   const window = new BrowserWindow({
     title: copy.appTitle,
-    width: 1600,
-    height: 1050,
+    width: bounds?.width ?? 1600,
+    height: bounds?.height ?? 1050,
+    ...(bounds && restorePosition ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 960,
     minHeight: 680,
     show: false,
@@ -292,30 +319,28 @@ async function createWindow(): Promise<void> {
     window,
     (status) => sendToShell("polyask:site-status", status),
     (layout) => sendToShell("polyask:layout", layout),
-    runtimeGates.record
+    runtimeGates.record,
+    {
+      initialUiState,
+      selectedSites: workspaceState.selectedSites,
+      onUiStateChange: (state) => uiStateStore.schedule(state)
+    }
   );
+  managerForWorkspace = manager;
   viewManager = manager;
-  if (!desktopDatabase) throw new Error("database_not_ready");
   const collection = new CollectionService(
     SITES,
     (site, deadline) => manager.collect(site, deadline)
   );
-  const workspace = new WorkspaceService(
-    desktopDatabase.state,
-    desktopDatabase.meta,
-    (site, url) => manager.navigate(site, url),
-    { onNewSession: () => collection.clearRun() }
-  );
-  manager.setSelection(workspace.getState().selectedSites);
+  collectionForWorkspace = collection;
   const deviceId = () => {
-    const stored = desktopDatabase?.meta.get<unknown>("deviceId");
+    const stored = database.meta.get<unknown>("deviceId");
     if (typeof stored === "string" && stored) return stored;
-    if (!desktopDatabase) throw new Error("database_not_ready");
-    return desktopDatabase.meta.put("deviceId", randomUUID());
+    return database.meta.put("deviceId", randomUUID());
   };
   deviceId();
-  const archives = new ArchiveService(desktopDatabase.archives, { deviceId });
-  const history = new HistoryService(desktopDatabase.history, { deviceId });
+  const archives = new ArchiveService(database.archives, { deviceId });
+  const history = new HistoryService(database.history, { deviceId });
   const synthesis = new SynthesisService({
     sites: SITES,
     archives,
@@ -339,7 +364,7 @@ async function createWindow(): Promise<void> {
     recordHistory: (text) => history.record(text)
   });
   const sync = await createSyncRuntime({
-    database: desktopDatabase,
+    database,
     workspace: () => workspace.getState(),
     onStatus: (status) => sendToShell("polyask:sync-status", status),
     onWorkspace: (state) => {
@@ -362,11 +387,19 @@ async function createWindow(): Promise<void> {
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
     applyDisplay: (value) => applyDisplayPreferences(manager, value)
   });
-  window.once("ready-to-show", () => window.show());
+  window.on("move", () => uiStateStore.schedule(manager.getUiState()));
+  window.on("maximize", () => uiStateStore.schedule(manager.getUiState()));
+  window.on("unmaximize", () => uiStateStore.schedule(manager.getUiState()));
+  window.on("close", () => uiStateStore.save(manager.getUiState()));
+  window.once("ready-to-show", () => {
+    if (initialUiState.maximized) window.maximize();
+    window.show();
+  });
   await window.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   sync.start();
   runtimeGates.writeDiagnostic(manager);
   window.on("closed", () => {
+    uiStateStore.dispose();
     runtimeGates.dispose();
     sync.dispose();
     disposeIpc();

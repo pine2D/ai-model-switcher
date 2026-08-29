@@ -225,3 +225,21 @@ test("windows and linux auto-hide the native menu bar", () => {
   assert.match(main, /setAutoHideMenuBar\(true\)/);
   assert.match(main, /setMenuBarVisibility\(false\)/);
 });
+
+test("desktop UI state restores before window creation and remains local to the profile", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const store = readFileSync("src/main/ui-state-store.ts", "utf8");
+  const load = main.indexOf("uiStateStore.load()");
+  const create = main.indexOf("new BrowserWindow");
+
+  assert.ok(load >= 0 && load < create);
+  assert.match(main, /screen\.getAllDisplays/);
+  assert.match(main, /XDG_SESSION_TYPE/);
+  assert.match(main, /desktop-ui-state\.json/);
+  assert.match(manager, /getUiState\(\)/);
+  assert.match(manager, /initialUiState/);
+  assert.match(store, /setTimeout/);
+  assert.match(store, /250/);
+  assert.doesNotMatch(store, /StateRepository|outbox|sync/);
+});

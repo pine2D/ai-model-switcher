@@ -6,6 +6,7 @@ import {
 } from "electron";
 
 import type { SiteDefinition, SiteKey, ViewPlacement } from "../shared/contracts";
+import type { DesktopUiState } from "../shared/desktop-ui-state";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
@@ -20,7 +21,12 @@ import type {
   SiteStatus,
   SubmitSiteCommand
 } from "../shared/protocol";
-import { resolveFocusedSite, resolveSitePage, resolveSitePageIndex } from "../shared/site-pages";
+import {
+  paginateSiteKeys,
+  resolveFocusedSite,
+  resolveSitePage,
+  resolveSitePageIndex
+} from "../shared/site-pages";
 import {
   SITE_PARTITION,
   type DiagnosticSiteInput
@@ -36,6 +42,12 @@ import { effectiveStatus } from "./status";
 import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 import { reconcileVisibleSiteKeys } from "./view-visibility";
+
+interface ViewManagerOptions {
+  readonly initialUiState?: DesktopUiState;
+  readonly selectedSites?: readonly SiteKey[];
+  readonly onUiStateChange?: (state: DesktopUiState) => void;
+}
 
 export class ViewManager {
   private readonly views = new Map<SiteKey, WebContentsView>();
@@ -62,8 +74,23 @@ export class ViewManager {
     private readonly window: BrowserWindow,
     private readonly onStatus: (status: SiteStatus) => void,
     private readonly onLayout: (layout: LayoutState) => void,
-    private readonly onRuntimeEvent: (event: StabilityEventInput) => void = () => undefined
+    private readonly onRuntimeEvent: (event: StabilityEventInput) => void = () => undefined,
+    private readonly options: ViewManagerOptions = {}
   ) {
+    const selectedSites = new Set(options.selectedSites ?? SITES.map((site) => site.key));
+    this.selected = SITES.map((site) => site.key).filter((site) => selectedSites.has(site));
+    const initial = options.initialUiState;
+    if (initial) {
+      this.mode = initial.layoutMode;
+      this.page = initial.currentPage;
+      for (const [page, site] of Object.entries(initial.focusedByPage)) {
+        this.focusedByPage.set(Number(page), site);
+      }
+      const current = resolveSitePage(this.selected, this.page);
+      this.page = current.page;
+      this.pageCount = current.pageCount;
+      this.focused = resolveFocusedSite(current.keys, this.focused, this.focusedByPage.get(current.page));
+    }
     this.siteSession.setPermissionCheckHandler(() => false);
     this.siteSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 
@@ -90,6 +117,22 @@ export class ViewManager {
 
   getDisplayPreferences(): DisplayPreferences {
     return this.display;
+  }
+
+  getUiState(): DesktopUiState {
+    const focusedByPage: Partial<Record<number, SiteKey>> = {};
+    paginateSiteKeys(this.selected).forEach((sites, page) => {
+      const remembered = page === this.page ? this.focused : this.focusedByPage.get(page);
+      const focused = remembered && sites.includes(remembered) ? remembered : sites[0];
+      if (focused) focusedByPage[page] = focused;
+    });
+    return {
+      windowBounds: this.window.getNormalBounds(),
+      maximized: this.window.isMaximized(),
+      layoutMode: this.mode,
+      currentPage: this.page,
+      focusedByPage: focusedByPage as Readonly<Record<number, SiteKey>>
+    };
   }
 
   getDiagnosticSites(): DiagnosticSiteInput[] {
@@ -313,6 +356,7 @@ export class ViewManager {
     });
     const layout = this.getLayout();
     this.onLayout(layout);
+    this.options.onUiStateChange?.(this.getUiState());
   }
 
   private currentStatus(site: SiteKey): SiteStatus {
