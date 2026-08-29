@@ -5,8 +5,9 @@ import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { PendingSynthesis, SynthesisCandidate } from "../shared/synthesis";
 import { formatDateTime } from "../shared/format";
 import { describeCollectionCode } from "../shared/status-copy";
+import { ArchiveCompare } from "./archive-compare";
 import { ArchiveSynthesis } from "./archive-synthesis";
-import { SparklesIcon, StarIcon } from "./icons";
+import { CompareIcon, SparklesIcon, StarIcon } from "./icons";
 import { MarkdownPreview } from "./markdown-preview";
 
 interface ArchiveDetailProps {
@@ -27,12 +28,15 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
   const { copy, record } = props;
   const [tags, setTags] = useState(record.tags.join(", "));
   const [note, setNote] = useState(record.note);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   useEffect(() => { setTags(record.tags.join(", ")); setNote(record.note); }, [record]);
+  useEffect(() => { setComparisonOpen(false); }, [record.id]);
   const saveTags = () => props.onPatch({
     tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean)
   });
   const favoriteLabel = record.favorite ? copy.unfavoriteArchive : copy.favoriteArchive;
-  const canSynthesize = record.results.filter((result) => !!result.text?.trim()).length >= 2;
+  const successfulResults = record.results.filter((result) => !!result.text?.trim());
+  const canSynthesize = successfulResults.length >= 2;
   return (
     <article className="archive-detail">
       <header className="archive-detail-heading">
@@ -45,6 +49,7 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
         </div>
         <div className="archive-detail-actions">
           {canSynthesize ? <button type="button" title={copy.synthesisAction} aria-label={copy.synthesisAction} disabled={props.busy} onClick={props.onSynthesize}><SparklesIcon /></button> : null}
+          {canSynthesize ? <button type="button" className={comparisonOpen ? "active" : ""} title={comparisonOpen ? copy.closeAnswerComparison : copy.compareAnswers} aria-label={comparisonOpen ? copy.closeAnswerComparison : copy.compareAnswers} aria-pressed={comparisonOpen} onClick={() => setComparisonOpen((open) => !open)}><CompareIcon /></button> : null}
           <button type="button" className={record.favorite ? "active" : ""} title={favoriteLabel} aria-label={favoriteLabel} aria-pressed={record.favorite} onClick={() => props.onPatch({ favorite: !record.favorite })}><StarIcon /></button>
         </div>
       </header>
@@ -52,6 +57,7 @@ export function ArchiveDetail(props: ArchiveDetailProps): React.JSX.Element {
         <label>{copy.archiveTags}<input name="archive-tags" autoComplete="off" value={tags} onChange={(event) => setTags(event.target.value)} onBlur={saveTags} onKeyDown={(event) => { if (event.key === "Enter") saveTags(); }} /></label>
         <label>{copy.archiveNote}<textarea name="archive-note" autoComplete="off" maxLength={4000} value={note} onChange={(event) => setNote(event.target.value)} onBlur={() => props.onPatch({ note })} /></label>
       </div>
+      {comparisonOpen ? <ArchiveCompare copy={copy} results={successfulResults} /> : null}
       <nav className="archive-answer-nav" aria-label={copy.siteViews}>
         {record.results.map((result, index) => <a key={`${result.host}:${index}`} href={`#archive-answer-${index}`}>{result.label}</a>)}
       </nav>

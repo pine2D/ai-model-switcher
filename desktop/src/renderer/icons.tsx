@@ -103,6 +103,10 @@ export function ArchiveIcon(): React.JSX.Element {
   return <Icon><path d="M4 7v13h16V7M3 3h18v4H3zM9 11h6" /></Icon>;
 }
 
+export function CompareIcon(): React.JSX.Element {
+  return <Icon><rect x="3" y="5" width="7" height="14" rx="1" /><rect x="14" y="5" width="7" height="14" rx="1" /><path d="M10 9h4M10 15h4" /></Icon>;
+}
+
 export function CopyIcon(): React.JSX.Element {
   return <Icon><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></Icon>;
 }
