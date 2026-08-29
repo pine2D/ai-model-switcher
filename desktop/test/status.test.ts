@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { effectiveStatus, statusForResult } from "../src/main/status";
+import { effectiveStatus, markStatusRead, statusForResult, statusWithUnread } from "../src/main/status";
 
 test("successful submit with an unconfirmed tier remains a visible warning", () => {
   assert.deepEqual(
@@ -46,4 +46,26 @@ test("a page crash overrides stale send state", () => {
     ),
     { site: "claude", phase: "crashed", code: "renderer_crashed" }
   );
+});
+
+test("only unseen terminal work is marked unread and visiting retains its phase", () => {
+  assert.deepEqual(statusWithUnread({ site: "claude", phase: "complete" }, false), {
+    site: "claude",
+    phase: "complete",
+    unread: true,
+  });
+  assert.deepEqual(statusWithUnread({ site: "claude", phase: "failed" }, true), {
+    site: "claude",
+    phase: "failed",
+    unread: false,
+  });
+  assert.deepEqual(statusWithUnread({ site: "claude", phase: "generating" }, false), {
+    site: "claude",
+    phase: "generating",
+  });
+  assert.deepEqual(markStatusRead({ site: "claude", phase: "complete", unread: true }), {
+    site: "claude",
+    phase: "complete",
+    unread: false,
+  });
 });

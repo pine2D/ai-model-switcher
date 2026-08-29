@@ -24,6 +24,8 @@ export function describeStatus(copy: DesktopCopy, status: SiteStatus): string {
     case "ready": return copy.ready;
     case "sending": return copy.sending;
     case "submitted": return copy.submitted;
+    case "generating": return copy.generating;
+    case "complete": return copy.answerComplete;
     case "warning": return copy.submittedWithWarning;
     case "cancelled": return copy.cancelledStatus;
     case "failed": return copy.failed;

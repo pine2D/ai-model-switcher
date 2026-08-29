@@ -34,10 +34,18 @@ export function PageTabs(props: PageTabsProps): React.JSX.Element | null {
         const range = `${start}–${start + sites.length - 1}`;
         const pageStatuses = sites.map((site) => props.statuses[site]).filter(Boolean);
         const sending = pageStatuses.filter((status) => status.phase === "sending").length;
+        const generating = pageStatuses.filter((status) => status.phase === "generating").length;
+        const complete = pageStatuses.filter((status) => status.phase === "complete").length;
         const failed = pageStatuses.filter((status) => status.phase === "failed" || status.phase === "crashed").length;
+        const unreadComplete = pageStatuses.some((status) => status.phase === "complete" && status.unread);
+        const unreadFailed = pageStatuses.some((status) =>
+          (status.phase === "failed" || status.phase === "crashed") && status.unread
+        );
         const label = [
           formatCopy(props.copy.sitePageLabel, { page: index + 1, range }),
           sending ? formatCopy(props.copy.sitePageSending, { count: sending }) : "",
+          generating ? formatCopy(props.copy.sitePageGenerating, { count: generating }) : "",
+          complete ? formatCopy(props.copy.sitePageComplete, { count: complete }) : "",
           failed ? formatCopy(props.copy.sitePageFailed, { count: failed }) : ""
         ].filter(Boolean).join(", ");
         const selected = index === props.page;
@@ -64,7 +72,9 @@ export function PageTabs(props: PageTabsProps): React.JSX.Element | null {
           >
             <span>{range}</span>
             {sending ? <i className="page-tab-badge sending" aria-hidden="true">{sending}</i> : null}
-            {failed ? <i className="page-tab-badge failed" aria-hidden="true">{failed}</i> : null}
+            {generating ? <i className="page-tab-badge generating" aria-hidden="true">{generating}</i> : null}
+            {complete ? <i className={`page-tab-badge complete${unreadComplete ? " unread" : ""}`} aria-hidden="true">{complete}</i> : null}
+            {failed ? <i className={`page-tab-badge failed${unreadFailed ? " unread" : ""}`} aria-hidden="true">{failed}</i> : null}
           </button>
         );
       })}

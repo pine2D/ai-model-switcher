@@ -95,6 +95,7 @@ node scripts/test-qwen-adapter.js
 node scripts/test-site-send-runtime.js
 node scripts/test-submit-recovery.js
 node scripts/test-diag-runtime.js
+node scripts/test-generation-runtime.js
 node scripts/test-probe-drift.js
 
 echo "[test] 图片载荷与群发消息契约"

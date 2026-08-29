@@ -2,7 +2,14 @@ import type { SiteKey } from "./contracts";
 
 export type SiteHealthState = "ready" | "sign-in" | "error" | "unknown";
 export type SiteHealthPageState = "loading" | "ready" | "error" | "unknown";
-export type SiteHealthRunPhase = "sending" | "submitted" | "warning" | "cancelled" | "failed";
+export type SiteHealthRunPhase =
+  | "sending"
+  | "submitted"
+  | "generating"
+  | "complete"
+  | "warning"
+  | "cancelled"
+  | "failed";
 
 export interface SiteDiagnosticCheck {
   readonly name: string;

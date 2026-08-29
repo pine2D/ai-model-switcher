@@ -19,3 +19,12 @@ export function effectiveStatus(
   if (pageStatus.phase === "failed" || pageStatus.phase === "crashed") return pageStatus;
   return runStatus ?? pageStatus;
 }
+
+export function statusWithUnread(status: SiteStatus, visible: boolean): SiteStatus {
+  const terminal = status.phase === "complete" || status.phase === "failed" || status.phase === "crashed";
+  return terminal ? { ...status, unread: !visible } : status;
+}
+
+export function markStatusRead(status: SiteStatus): SiteStatus {
+  return status.unread ? { ...status, unread: false } : status;
+}

@@ -53,7 +53,16 @@ export interface DiagnoseSiteCommand {
   readonly deadline: number;
 }
 
-export type SiteCommand = SubmitSiteCommand | CollectSiteCommand | DiagnoseSiteCommand;
+export type GenerationState = "idle" | "generating" | "complete" | null;
+
+export interface GenerationSiteCommand {
+  readonly source: "AMS";
+  readonly cmd: "generation";
+  readonly runId: string;
+  readonly deadline: number;
+}
+
+export type SiteCommand = SubmitSiteCommand | CollectSiteCommand | DiagnoseSiteCommand | GenerationSiteCommand;
 
 export interface SiteResult {
   readonly ok: boolean;
@@ -76,6 +85,10 @@ export interface SiteDiagnosticResponse {
   readonly code?: string;
 }
 
+export interface SiteGenerationResponse {
+  readonly state: GenerationState;
+}
+
 export interface CollectedAnswer {
   readonly site: SiteKey;
   readonly host: string;
@@ -85,7 +98,7 @@ export interface CollectedAnswer {
   readonly code?: string;
 }
 
-export type SiteCommandResponse = SiteResult | SiteCollectionResult | SiteDiagnosticResponse;
+export type SiteCommandResponse = SiteResult | SiteCollectionResult | SiteDiagnosticResponse | SiteGenerationResponse;
 
 export interface CollectionRequest {
   readonly sites: readonly SiteKey[];
@@ -97,6 +110,8 @@ export type SitePhase =
   | "ready"
   | "sending"
   | "submitted"
+  | "generating"
+  | "complete"
   | "warning"
   | "cancelled"
   | "failed"
@@ -106,6 +121,7 @@ export interface SiteStatus {
   readonly site: SiteKey;
   readonly phase: SitePhase;
   readonly code?: string;
+  readonly unread?: boolean;
 }
 
 export interface LayoutState {
@@ -147,6 +163,10 @@ export function parsePageIndex(value: unknown): number | null {
   return Number.isInteger(value) && Number(value) >= 0 && Number(value) < 10_000
     ? Number(value)
     : null;
+}
+
+export function parseGenerationState(value: unknown): GenerationState {
+  return value === "idle" || value === "generating" || value === "complete" ? value : null;
 }
 
 export function parseBroadcastRequest(value: unknown): BroadcastRequest | null {

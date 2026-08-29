@@ -6,9 +6,11 @@ import type {
   SiteCommandEnvelope,
   SiteCollectionResult,
   SiteDiagnosticResponse,
+  SiteGenerationResponse,
   SiteResponseEnvelope,
   SiteResult
 } from "../shared/protocol";
+import { parseGenerationState } from "../shared/protocol";
 import { normalizeDiagnosticChecks } from "../shared/site-health";
 
 type SendResponse = (response: unknown) => void;
@@ -50,6 +52,7 @@ require("../../../content/md.js");
 require("../../../content/adapters-intl.js");
 require("../../../content/adapters-cn.js");
 require("../../../content/adapters-cn2.js");
+require("../../../content/generation.js");
 require("../../../content/diag.js");
 
 function normalizeResult(value: unknown): SiteResult {
@@ -80,7 +83,22 @@ function normalizeDiagnostic(value: unknown): SiteDiagnosticResponse {
   return checks.length ? { checks } : { code: "not_ready" };
 }
 
+function readGeneration(): SiteGenerationResponse {
+  const runtime = (globalThis as typeof globalThis & {
+    __AMS?: { adapters?: Record<string, { generation?: () => unknown }> };
+  }).__AMS;
+  const host = location.hostname;
+  const key = Object.keys(runtime?.adapters ?? {}).find((candidate) => host.includes(candidate));
+  const adapter = key ? runtime?.adapters?.[key] : undefined;
+  try {
+    return { state: parseGenerationState(adapter?.generation?.()) };
+  } catch {
+    return { state: null };
+  }
+}
+
 function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
+  if (command.cmd === "generation") return Promise.resolve(readGeneration());
   const listener = listeners[0];
   if (!listener) return Promise.resolve({ ok: false, code: "adapter_unavailable" });
   const remaining = Math.max(0, command.deadline - Date.now());

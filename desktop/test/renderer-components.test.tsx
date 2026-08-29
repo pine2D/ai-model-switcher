@@ -525,6 +525,58 @@ test("page tabs expose compact ranges, manual activation, and off-page status", 
   assert.match(html, />5–8</);
 });
 
+test("page tabs distinguish generating, completed, and failed background work without taking focus", () => {
+  const html = renderToStaticMarkup(
+    <PageTabs
+      copy={getCopy("zh-CN")}
+      selectedSites={SITES.slice(0, 8).map((site) => site.key)}
+      statuses={{
+        claude: { site: "claude", phase: "generating" },
+        gemini: { site: "gemini", phase: "complete", unread: true },
+        yuanbao: { site: "yuanbao", phase: "failed", code: "submit_unconfirmed", unread: true }
+      }}
+      page={0}
+      inputMethod="keyboard"
+      onPageChange={noop}
+    />
+  );
+  assert.match(html, /aria-label="第 1 页，站点 1–4, 1 个正在回答, 1 个已完成"/);
+  assert.match(html, /aria-label="第 2 页，站点 5–8, 1 个失败"/);
+  assert.match(html, /class="page-tab-badge generating"/);
+  assert.match(html, /class="page-tab-badge complete unread"/);
+  assert.match(html, /class="page-tab-badge failed unread"/);
+  assert.match(html, /data-input-method="keyboard"/);
+  assert.match(html, /aria-selected="true"[^>]*tabindex="0"/);
+});
+
+test("site frames expose answer-generation terminal states without verbose chrome", () => {
+  const sites = SITES.slice(0, 2);
+  const placements: LayoutState["placements"] = sites.map((site, index) => ({
+    key: site.key,
+    bounds: { x: index * 100, y: 0, width: 100, height: 80 }
+  }));
+  const html = renderToStaticMarkup(
+    <SiteFrames
+      copy={getCopy("en")}
+      sites={sites}
+      statuses={{
+        claude: { site: "claude", phase: "generating" },
+        chatgpt: { site: "chatgpt", phase: "complete" }
+      }}
+      layout={{ mode: "overview", focused: "claude", page: 0, pageCount: 1, placements }}
+      selected={new Set(sites.map((site) => site.key))}
+      onToggle={noop}
+      onFocus={noop}
+      onReload={noop}
+    />
+  );
+  assert.match(html, /class="tile-frame phase-generating"/);
+  assert.match(html, /class="tile-frame phase-complete"/);
+  assert.match(html, /class="answer-rail priority-p0" title="Answering"/);
+  assert.match(html, /class="answer-rail priority-p0" title="Answer complete"/);
+  assert.doesNotMatch(html, /class="site-state priority-p0"[^>]*>Answer/);
+});
+
 test("page tabs stay hidden while selected-site state catches up with layout state", () => {
   const html = renderToStaticMarkup(
     <PageTabs

@@ -12,7 +12,8 @@ h1, h2 { text-wrap: balance; }
 @media (forced-colors: active) {
   .tile-frame, .command-bar, .workspace-drawer, .archive-toolbar, .settings-toolbar, .command-palette { border-color: CanvasText; }
   .answer-rail { border: 1px solid CanvasText; }
-  .phase-sending .answer-rail, .phase-submitted .answer-rail,
+  .phase-sending .answer-rail, .phase-submitted .answer-rail, .phase-generating .answer-rail,
+  .phase-complete .answer-rail,
   .phase-warning .answer-rail, .phase-failed .answer-rail,
   .phase-crashed .answer-rail { background: Highlight; }
   button.active, button[aria-pressed="true"] { outline: 1px solid Highlight; }

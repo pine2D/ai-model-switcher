@@ -136,6 +136,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (request.images.length && unsupportedImageSites(request.sites, SITES).length) {
       throw new Error("image_sites_unsupported");
     }
+    manager.beginGenerationRun(request.runId, request.sites);
     collection.beginRun(request.runId, request.sites);
     for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
     let historyRecorded = false;
@@ -145,6 +146,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       request.images.length ? 90_000 : 44_000,
       (result) => {
         manager.markStatus(statusForResult(result.site, result));
+        if (result.ok) manager.watchGeneration(request.runId, result.site);
         if (result.ok && !historyRecorded) {
           history.record(request.text);
           historyRecorded = true;
@@ -248,6 +250,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) {
       coordinator.cancel();
+      manager.cancelGenerationRun();
       synthesis.cancel();
     }
   });

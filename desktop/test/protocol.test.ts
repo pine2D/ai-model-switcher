@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseBroadcastRequest, parseCollectionRequest, parsePageIndex } from "../src/shared/protocol";
+import {
+  parseBroadcastRequest,
+  parseCollectionRequest,
+  parseGenerationState,
+  parsePageIndex
+} from "../src/shared/protocol";
 
 const png = {
   name: "x.png",
@@ -96,4 +101,13 @@ test("page IPC accepts only bounded non-negative integers", () => {
   assert.equal(parsePageIndex(1.5), null);
   assert.equal(parsePageIndex("1"), null);
   assert.equal(parsePageIndex(10_000), null);
+});
+
+test("generation probes accept only the four read-only states", () => {
+  assert.equal(parseGenerationState("idle"), "idle");
+  assert.equal(parseGenerationState("generating"), "generating");
+  assert.equal(parseGenerationState("complete"), "complete");
+  assert.equal(parseGenerationState(null), null);
+  assert.equal(parseGenerationState("failed"), null);
+  assert.equal(parseGenerationState({ state: "complete" }), null);
 });

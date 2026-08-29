@@ -11,11 +11,13 @@ import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
 } from "../shared/display";
+import { parseGenerationState } from "../shared/protocol";
 import type {
   LayoutState,
   CollectSiteCommand,
   DiagnoseSiteCommand,
   DesktopSurface,
+  GenerationSiteCommand,
   SiteCollectionResult,
   SiteResponseEnvelope,
   SiteResult,
@@ -42,11 +44,12 @@ import {
 import {
   swapFocusedSite
 } from "./layout";
+import { GenerationMonitor } from "./generation-monitor";
 import { navigationDisposition } from "./navigation";
 import { SiteCommandChannel } from "./site-command-channel";
 import { createSiteView, diagnosticSitesForViews } from "./site-view";
 import { SITES } from "./sites";
-import { effectiveStatus } from "./status";
+import { effectiveStatus, markStatusRead, statusWithUnread } from "./status";
 import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 import { reconcileVisibleSiteKeys } from "./view-visibility";
@@ -63,6 +66,10 @@ export class ViewManager {
   private readonly pageStatus = new Map<SiteKey, SiteStatus>();
   private readonly runStatus = new Map<SiteKey, SiteStatus>();
   private readonly commands = new SiteCommandChannel();
+  private readonly generation = new GenerationMonitor();
+  private readonly generationTimers = new Map<SiteKey, NodeJS.Timeout>();
+  private readonly generationDeadlines = new Map<SiteKey, number>();
+  private readonly generationObserved = new Set<SiteKey>();
   private mode: "overview" | "focus" = "overview";
   private renderedMode: "overview" | "focus" = "overview";
   private focused: SiteKey = "claude";
@@ -172,6 +179,7 @@ export class ViewManager {
     this.pageCount = current.pageCount;
     this.focused = resolveFocusedSite(current.keys, this.focused, this.focusedByPage.get(this.page));
     this.reconcileViews();
+    this.clearVisibleUnread();
     this.layout();
   }
 
@@ -183,6 +191,7 @@ export class ViewManager {
     this.pageCount = next.pageCount;
     this.focused = resolveFocusedSite(next.keys, this.focused, this.focusedByPage.get(this.page));
     this.reconcileViews();
+    this.clearVisibleUnread();
     this.layout();
   }
 
@@ -198,6 +207,7 @@ export class ViewManager {
     this.mode = mode;
     this.focused = focused;
     this.reconcileViews();
+    this.clearVisibleUnread();
     this.layout();
     if (mode === "focus" && current.keys.includes(focused)) {
       const view = this.views.get(focused);
@@ -213,6 +223,7 @@ export class ViewManager {
     this.surface = value;
     if (value === "sites") {
       this.reconcileViews();
+      this.clearVisibleUnread();
       this.layout();
     }
   }
@@ -261,8 +272,27 @@ export class ViewManager {
   }
 
   markStatus(status: SiteStatus): void {
-    this.runStatus.set(status.site, status);
+    this.runStatus.set(status.site, statusWithUnread(status, this.isSiteVisible(status.site)));
     this.onStatus(this.currentStatus(status.site));
+  }
+
+  beginGenerationRun(runId: string, sites: readonly SiteKey[]): void {
+    this.cancelGenerationRun();
+    this.generation.begin(runId, sites);
+  }
+
+  watchGeneration(runId: string, site: SiteKey): void {
+    if (!this.generation.accepts(runId, site) || this.generationDeadlines.has(site)) return;
+    this.generationDeadlines.set(site, Date.now() + 45_000);
+    void this.probeGeneration(runId, site);
+  }
+
+  cancelGenerationRun(): void {
+    this.generation.invalidate();
+    for (const timer of this.generationTimers.values()) clearTimeout(timer);
+    this.generationTimers.clear();
+    this.generationDeadlines.clear();
+    this.generationObserved.clear();
   }
 
   owns(contents: WebContents): SiteKey | null {
@@ -301,7 +331,8 @@ export class ViewManager {
     const command: CollectSiteCommand = { source: "AMS", cmd: "collect", deadline };
     return this.commands.send(view.webContents, command, {
       timeoutResult: { code: "not_ready" }
-    }).then((result) => "ok" in result ? { code: "not_ready" } : result);
+    }).then((result): SiteCollectionResult =>
+      "ok" in result ? { code: "not_ready" } : result as SiteCollectionResult);
   }
 
   private async checkSiteHealth(site: SiteKey): Promise<SiteHealth> {
@@ -314,7 +345,7 @@ export class ViewManager {
       const page: SiteHealthPageState = pageStatus.phase === "failed" || pageStatus.phase === "crashed"
         ? "error"
         : pageStatus.phase === "loading" || pageStatus.phase === "ready" ? pageStatus.phase : "unknown";
-      const recentPhases: readonly SiteHealthRunPhase[] = ["sending", "submitted", "warning", "cancelled", "failed"];
+      const recentPhases: readonly SiteHealthRunPhase[] = ["sending", "submitted", "generating", "complete", "warning", "cancelled", "failed"];
       const recent = runStatus && recentPhases.includes(runStatus.phase as SiteHealthRunPhase)
         ? { phase: runStatus.phase as SiteHealthRunPhase, ...(runStatus.code ? { code: runStatus.code } : {}) }
         : undefined;
@@ -341,6 +372,41 @@ export class ViewManager {
 
   receiveResponse(sender: WebContents, envelope: SiteResponseEnvelope): void {
     this.commands.receive(sender, envelope);
+  }
+
+  private async probeGeneration(runId: string, site: SiteKey): Promise<void> {
+    if (!this.generation.accepts(runId, site)) return;
+    const view = this.views.get(site);
+    const definition = SITES.find((candidate) => candidate.key === site);
+    if (!view || view.webContents.isDestroyed() || !definition ||
+      navigationDisposition(definition, view.webContents.getURL()) !== "site") return;
+    const command: GenerationSiteCommand = {
+      source: "AMS",
+      cmd: "generation",
+      runId,
+      deadline: Date.now() + 2_500
+    };
+    const response = await this.commands.send(view.webContents, command, {
+      timeoutResult: { state: null }
+    });
+    if (!this.generation.accepts(runId, site)) return;
+    const state = "state" in response ? parseGenerationState(response.state) : null;
+    const phase = this.generation.accept(runId, site, state);
+    if (!phase || state === null) return;
+    if (phase === "generating" && !this.generationObserved.has(site)) {
+      this.generationObserved.add(site);
+      this.generationDeadlines.set(site, Date.now() + 15 * 60_000);
+    }
+    if ((phase === "generating" || phase === "complete") && this.currentStatus(site).phase !== phase) {
+      this.markStatus({ site, phase });
+    }
+    if (phase === "complete" || Date.now() >= (this.generationDeadlines.get(site) ?? 0)) return;
+    const timer = setTimeout(() => {
+      this.generationTimers.delete(site);
+      void this.probeGeneration(runId, site);
+    }, 900);
+    timer.unref?.();
+    this.generationTimers.set(site, timer);
   }
 
   private replaceView(site: SiteDefinition, view: WebContentsView, url: string): void {
@@ -414,8 +480,22 @@ export class ViewManager {
   }
 
   private updatePageStatus(status: SiteStatus): void {
-    this.pageStatus.set(status.site, status);
+    this.pageStatus.set(status.site, statusWithUnread(status, this.isSiteVisible(status.site)));
     this.onStatus(this.currentStatus(status.site));
+  }
+
+  private clearVisibleUnread(): void {
+    for (const site of this.visibleSites()) {
+      for (const statuses of [this.pageStatus, this.runStatus]) {
+        const status = statuses.get(site);
+        if (status?.unread) statuses.set(site, markStatusRead(status));
+      }
+      this.onStatus(this.currentStatus(site));
+    }
+  }
+
+  private isSiteVisible(site: SiteKey): boolean {
+    return this.surface === "sites" && this.visibleSites().includes(site);
   }
 
   private visibleSites(): readonly SiteKey[] {
@@ -444,6 +524,7 @@ export class ViewManager {
   }
 
   private dispose(): void {
+    this.cancelGenerationRun();
     this.commands.dispose();
     for (const view of this.views.values()) {
       if (!view.webContents.isDestroyed()) view.webContents.close();

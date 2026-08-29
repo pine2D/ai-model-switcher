@@ -165,6 +165,18 @@ test("answer collection uses the trusted shell and the existing read-only adapte
   assert.match(sitePreload, /collectAnswer/);
 });
 
+test("answer generation monitoring is run-scoped and never changes navigation", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const preload = readFileSync("src/preload/site.ts", "utf8");
+  assert.match(ipc, /beginGenerationRun\(request\.runId, request\.sites\)/);
+  assert.match(ipc, /watchGeneration\(request\.runId, result\.site\)/);
+  assert.match(ipc, /cancelGenerationRun\(\)/);
+  assert.match(manager, /cmd: "generation"/);
+  assert.match(preload, /parseGenerationState/);
+  assert.doesNotMatch(manager, /generation[\s\S]{0,500}(loadURL|reload\(|focus\()/);
+});
+
 test("workspace surfaces detach site views without destroying their web contents", () => {
   const manager = readFileSync("src/main/view-manager.ts", "utf8");
   const start = manager.indexOf("setSurface(");

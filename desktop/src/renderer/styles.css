@@ -203,7 +203,10 @@ kbd { opacity: .7; font: 10px system-ui; }
 .page-tabs[data-input-method="keyboard"] .page-tab-indicator { transition-duration: 0ms; }
 .page-tab-badge { min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; color: white; font: 9px/13px system-ui; font-style: normal; }
 .page-tab-badge.sending { background: var(--accent); }
+.page-tab-badge.generating { background: var(--accent); }
+.page-tab-badge.complete { background: var(--success); }
 .page-tab-badge.failed { background: var(--danger); }
+.page-tab-badge:not(.unread):not(.sending):not(.generating) { opacity: .58; }
 
 .image-picker { position: relative; height: var(--control-height); display: flex; align-items: center; gap: 2px; }
 .image-trigger, .image-warning button, .image-error button {
@@ -450,6 +453,8 @@ kbd { opacity: .7; font: 10px system-ui; }
 }
 .phase-sending .answer-rail { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 .phase-submitted .answer-rail { background: var(--success); }
+.phase-generating .answer-rail { background: var(--accent); }
+.phase-complete .answer-rail { background: var(--success); }
 .phase-warning .answer-rail { background: var(--warning); }
 .phase-warning .site-state { color: var(--warning); }
 .phase-cancelled .answer-rail { background: var(--muted); }
