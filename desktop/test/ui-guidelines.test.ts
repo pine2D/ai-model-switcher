@@ -11,7 +11,8 @@ test("desktop forms expose stable names and disable browser autofill where it is
     renderer("archive-detail.tsx"),
     renderer("synthesis-workspace.tsx"),
     renderer("settings-workspace.tsx"),
-    renderer("workspace-drawer.tsx")
+    renderer("workspace-drawer.tsx"),
+    renderer("workspace-sites.tsx")
   ].join("\n");
   for (const name of ["prompt", "archive-search", "archive-tags", "archive-note", "synthesis-target", "synthesis-tier", "synthesis-instruction", "synthesis-preview", "clear-cloud-confirmation", "group-name"]) {
     assert.match(files, new RegExp(`name="${name}"`));

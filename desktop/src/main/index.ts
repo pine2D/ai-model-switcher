@@ -375,6 +375,7 @@ async function createWindow(): Promise<void> {
   createMenu();
   const disposeIpc = registerShellIpc({
     runtime: runtimeInfo,
+    copy,
     window,
     manager,
     workspace,

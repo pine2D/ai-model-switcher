@@ -78,11 +78,11 @@ test("command bar renders one compact command surface with stateful controls", (
       auxiliaryBusy={false}
       layoutMode="overview"
       selectedCount={9}
-      totalSites={9}
-      activeCount={0}
       failureCount={0}
       cancelledCount={0}
-      drawerOpen={false}
+      scopeLabel="Custom · 9"
+      healthAttention={0}
+      panelTab={null}
       pageControl={<span data-test="pages" />}
       imageControl={<span data-test="images" />}
       sendBlockedReason={null}
@@ -96,13 +96,9 @@ test("command bar renders one compact command surface with stateful controls", (
       onTierChange={noop}
       onLayoutChange={noop}
       onExpandedChange={noop}
-      onToggleDrawer={noop}
-      onNewSession={noop}
-      onRetryFailed={noop}
-      onCollectAnswers={noop}
-      onOpenArchive={noop}
-      onCollectSynthesis={noop}
-      onOpenSettings={noop}
+      onOpenPanel={noop}
+      onShowGroupMenu={noop}
+      onOpenMore={noop}
       onPasteImages={noop}
     />
   );
@@ -122,13 +118,56 @@ test("command bar renders one compact command surface with stateful controls", (
     assert.equal([...html.matchAll(new RegExp(label, "g"))].length, 2);
   }
   assert.doesNotMatch(html, /<small>AI Answers<\/small>/);
-  assert.match(html, /aria-controls="workspace-drawer"/);
-  assert.match(html, /aria-label="New session for selected sites"/);
-  assert.match(html, /aria-label="Collect and copy selected answers"/);
-  assert.match(html, /aria-label="Open result library"/);
+  assert.match(html, /aria-controls="workspace-panel"/);
+  assert.match(html, /aria-label="Custom · 9"/);
+  assert.match(html, /aria-label="More actions"/);
+  assert.doesNotMatch(html, /aria-label="New session for selected sites"/);
   assert.match(html, /data-test="images"/);
   assert.match(html, /data-test="pages"/);
   assert.doesNotMatch(html, /sync-attention/);
+});
+
+test("command bar begins with adjacent workspace and health entries", () => {
+  const html = renderToStaticMarkup(React.createElement(CommandBar as React.ComponentType<any>, {
+    copy: getCopy("en"),
+    promptRef: createRef<HTMLTextAreaElement>(),
+    text: "Question",
+    tier: null,
+    runState: "idle",
+    auxiliaryBusy: false,
+    layoutMode: "overview",
+    selectedCount: 3,
+    totalSites: 9,
+    activeCount: 0,
+    failureCount: 0,
+    cancelledCount: 0,
+    drawerOpen: false,
+    scopeLabel: "Writing · 3",
+    healthAttention: 2,
+    panelTab: null,
+    imageControl: null,
+    sendBlockedReason: null,
+    synthesisPending: false,
+    syncStatus: { state: "idle", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: false, secureTokenStorage: true },
+    isMac: false,
+    expanded: false,
+    onTextChange: noop,
+    onSubmit: noop,
+    onCancel: noop,
+    onTierChange: noop,
+    onLayoutChange: noop,
+    onExpandedChange: noop,
+    onOpenPanel: noop,
+    onShowGroupMenu: noop,
+    onOpenMore: noop,
+    onPasteImages: noop
+  }));
+
+  assert.match(html, /^<header[^>]*><div class="workspace-entry/);
+  assert.match(html, /aria-controls="workspace-panel"/);
+  assert.match(html, /data-health-attention="2"/);
+  assert.match(html, />Writing · 3</);
+  assert.ok(html.indexOf("workspace-entry") < html.indexOf("mode-switch"));
 });
 
 test("command bar surfaces actionable sync state without consuming toolbar width", () => {
@@ -142,11 +181,11 @@ test("command bar surfaces actionable sync state without consuming toolbar width
       auxiliaryBusy={false}
       layoutMode="overview"
       selectedCount={9}
-      totalSites={9}
-      activeCount={0}
       failureCount={0}
       cancelledCount={0}
-      drawerOpen={false}
+      scopeLabel="Custom · 9"
+      healthAttention={0}
+      panelTab={null}
       imageControl={null}
       sendBlockedReason={null}
       synthesisPending={false}
@@ -159,64 +198,37 @@ test("command bar surfaces actionable sync state without consuming toolbar width
       onTierChange={noop}
       onLayoutChange={noop}
       onExpandedChange={noop}
-      onToggleDrawer={noop}
-      onNewSession={noop}
-      onRetryFailed={noop}
-      onCollectAnswers={noop}
-      onOpenArchive={noop}
-      onCollectSynthesis={noop}
-      onOpenSettings={noop}
+      onOpenPanel={noop}
+      onShowGroupMenu={noop}
+      onOpenMore={noop}
       onPasteImages={noop}
     />
   );
 
-  assert.match(html, /class="sync-attention sync-auth"/);
-  assert.match(html, /aria-label="Settings: Sign in again to continue"/);
+  assert.match(html, /class="more-trigger sync-attention sync-auth"/);
+  assert.match(html, /aria-label="More actions: Sign in again to continue"/);
   assert.match(html, /data-sync-state="auth"/);
 });
 
-test("workspace actions distinguish failed, cancelled and mixed retry summaries", () => {
+test("workspace actions summarize pending attention on one More entry", () => {
   const copy = getCopy("en");
   const base = {
     copy,
-    selectedCount: 5,
-    totalSites: 9,
-    activeCount: 0,
-    drawerOpen: false,
     disabled: false,
     synthesisPending: false,
     syncStatus: { state: "idle", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: false, secureTokenStorage: true } as const,
-    onToggleDrawer: noop,
-    onNewSession: noop,
-    onRetryFailed: noop,
-    onCollectAnswers: noop,
-    onOpenArchive: noop,
-    onCollectSynthesis: noop,
-    onOpenSettings: noop
+    onOpenMore: noop
   };
-  const failedHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} failureCount={2} cancelledCount={0} />
+  const attentionHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} retryCount={2} synthesisPending />
   );
-  const cancelledHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} failureCount={0} cancelledCount={2} />
-  );
-  const mixedHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} failureCount={2} cancelledCount={1} />
-  );
-  const recoveredHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} failureCount={0} cancelledCount={0} />
+  const idleHtml = renderToStaticMarkup(
+    <WorkspaceActions {...base} retryCount={0} />
   );
 
-  assert.match(failedHtml, /2 selected sites failed/);
-  assert.equal([...failedHtml.matchAll(/title="Retry 2 failed sites"/g)].length, 1);
-  assert.equal([...failedHtml.matchAll(/aria-label="Retry 2 failed sites"/g)].length, 1);
-  assert.match(cancelledHtml, /Sending was cancelled for 2 selected sites/);
-  assert.equal([...cancelledHtml.matchAll(/title="Retry 2 cancelled sites"/g)].length, 1);
-  assert.equal([...cancelledHtml.matchAll(/aria-label="Retry 2 cancelled sites"/g)].length, 1);
-  assert.match(mixedHtml, /Selected sites: 2 failed, 1 cancelled/);
-  assert.equal([...mixedHtml.matchAll(/title="Retry 3 failed or cancelled sites"/g)].length, 1);
-  assert.equal([...mixedHtml.matchAll(/aria-label="Retry 3 failed or cancelled sites"/g)].length, 1);
-  assert.doesNotMatch(recoveredHtml, /Retry [0-9]+ (?:failed|cancelled)/);
+  assert.match(attentionHtml, /data-attention-count="3"/);
+  assert.equal([...attentionHtml.matchAll(/aria-label="More actions"/g)].length, 1);
+  assert.doesNotMatch(idleHtml, /data-attention-count/);
 });
 
 test("image picker stays icon-first and exposes removable previews and scope warning", () => {
@@ -258,6 +270,7 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
   const html = renderToStaticMarkup(
     <WorkspaceDrawer
       open={true}
+      state={{ tab: "sites", detail: null, inputMethod: "pointer" }}
       copy={copy}
       sites={SITES}
       selected={new Set(["claude", "kimi"])}
@@ -268,14 +281,17 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
         updatedAt: 1_000,
         deviceId: "device-a"
       }]}
-      onClose={noop}
+      statuses={{}}
+      onStateChange={noop}
       onSelectionChange={noop}
       onSaveGroup={async () => true}
       onDeleteGroup={noop}
     />
   );
 
-  assert.match(html, /^<aside id="workspace-drawer"/);
+  assert.match(html, /^<aside id="workspace-panel"/);
+  assert.equal([...html.matchAll(/role="tab"/g)].length, 2);
+  assert.equal([...html.matchAll(/role="tabpanel"/g)].length, 1);
   assert.equal([...html.matchAll(/class="scope-preset"/g)].length, 5);
   assert.equal([...html.matchAll(/type="checkbox"/g)].length, 9);
   assert.match(html, /aria-label="Delete Research"/);

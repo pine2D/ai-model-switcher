@@ -3,8 +3,9 @@ import type { ReactNode, RefObject } from "react";
 import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
 import type { SyncStatus } from "../shared/sync";
-import { DeepThinkIcon, FastIcon, FocusIcon, GridIcon, SendIcon, SiteSettingIcon, StopIcon } from "./icons";
+import { ChevronDownIcon, DeepThinkIcon, FastIcon, FocusIcon, GridIcon, HealthIcon, SendIcon, SiteSettingIcon, StopIcon } from "./icons";
 import { commandKeyAction } from "./keyboard";
+import type { WorkspacePanelTab } from "./workspace-panel-state";
 import { WorkspaceActions } from "./workspace-actions";
 
 export type RunState = "idle" | "sending" | "cancelling";
@@ -18,11 +19,11 @@ interface CommandBarProps {
   readonly auxiliaryBusy: boolean;
   readonly layoutMode: "overview" | "focus";
   readonly selectedCount: number;
-  readonly totalSites: number;
-  readonly activeCount: number;
   readonly failureCount: number;
   readonly cancelledCount: number;
-  readonly drawerOpen: boolean;
+  readonly scopeLabel: string;
+  readonly healthAttention: number;
+  readonly panelTab: WorkspacePanelTab | null;
   readonly pageControl?: ReactNode;
   readonly imageControl: ReactNode;
   readonly sendBlockedReason: string | null;
@@ -36,134 +37,80 @@ interface CommandBarProps {
   readonly onTierChange: (value: Tier) => void;
   readonly onLayoutChange: (value: "overview" | "focus") => void;
   readonly onExpandedChange: (value: boolean) => void;
-  readonly onToggleDrawer: () => void;
-  readonly onNewSession: () => void;
-  readonly onRetryFailed: () => void;
-  readonly onCollectAnswers: () => void;
-  readonly onOpenArchive: () => void;
-  readonly onCollectSynthesis: () => void;
-  readonly onOpenSettings: () => void;
+  readonly onOpenPanel: (tab: WorkspacePanelTab) => void;
+  readonly onShowGroupMenu: () => void;
+  readonly onOpenMore: () => void;
   readonly onPasteImages: (files: readonly File[]) => void;
 }
 
 export function CommandBar(props: CommandBarProps): React.JSX.Element {
-  const {
-    copy,
-    promptRef,
-    text,
-    tier,
-    runState,
-    auxiliaryBusy,
-    layoutMode,
-    selectedCount,
-    totalSites,
-    activeCount,
-    failureCount,
-    cancelledCount,
-    drawerOpen,
-    pageControl,
-    imageControl,
-    sendBlockedReason,
-    synthesisPending,
-    isMac,
-    expanded,
-    onTextChange,
-    onSubmit,
-    onCancel,
-    onTierChange,
-    onLayoutChange,
-    onExpandedChange,
-    onToggleDrawer,
-    onNewSession,
-    onRetryFailed,
-    onCollectAnswers,
-    onOpenArchive,
-    onCollectSynthesis,
-    onOpenSettings,
-    onPasteImages
-  } = props;
   const tierOptions = [
-    { value: null, label: copy.followSite, icon: "site-setting", glyph: <SiteSettingIcon /> },
-    { value: "fast", label: copy.fast, icon: "fast", glyph: <FastIcon /> },
-    { value: "think", label: copy.think, icon: "think", glyph: <DeepThinkIcon /> }
+    { value: null, label: props.copy.followSite, icon: "site-setting", glyph: <SiteSettingIcon /> },
+    { value: "fast", label: props.copy.fast, icon: "fast", glyph: <FastIcon /> },
+    { value: "think", label: props.copy.think, icon: "think", glyph: <DeepThinkIcon /> }
   ] as const;
+  const busy = props.runState !== "idle" || props.auxiliaryBusy;
 
   return (
-    <header className={`command-bar${pageControl ? " has-pages" : ""}${expanded ? " is-expanded" : ""}`} aria-label={copy.broadcastLabel}>
-      <div className="mode-switch priority-p0" aria-label={copy.layoutLabel}>
-        <button type="button" title={copy.overview} aria-pressed={layoutMode === "overview"} className={layoutMode === "overview" ? "active" : ""} onClick={() => onLayoutChange("overview")}>
-          <GridIcon /><span className="priority-p1">{copy.overview}</span>
-        </button>
-        <button type="button" title={copy.focus} aria-pressed={layoutMode === "focus"} className={layoutMode === "focus" ? "active" : ""} onClick={() => onLayoutChange("focus")}>
-          <FocusIcon /><span className="priority-p1">{copy.focus}</span>
-        </button>
+    <header className={`command-bar${props.pageControl ? " has-pages" : ""}${props.expanded ? " is-expanded" : ""}`} aria-label={props.copy.broadcastLabel}>
+      <div className="workspace-entry priority-p0">
+        <div className="scope-split">
+          <button type="button" className="scope-main" title={props.scopeLabel} aria-label={props.scopeLabel} aria-expanded={props.panelTab === "sites"} aria-controls="workspace-panel" onClick={() => props.onOpenPanel("sites")}>
+            <span className="scope-label-full">{props.scopeLabel}</span>
+            <span className="scope-label-compact">{props.copy.sitesCompact} · {props.selectedCount}</span>
+          </button>
+          <button type="button" className="scope-menu" title={props.copy.chooseSavedGroup} aria-label={props.copy.chooseSavedGroup} aria-haspopup="menu" onClick={props.onShowGroupMenu}><ChevronDownIcon /></button>
+        </div>
+        <button type="button" className={props.panelTab === "health" ? "health-trigger active" : "health-trigger"} title={props.copy.siteHealth} aria-label={props.copy.siteHealth} aria-pressed={props.panelTab === "health"} aria-controls="workspace-panel" data-health-attention={props.healthAttention || undefined} onClick={() => props.onOpenPanel("health")}><HealthIcon /></button>
       </div>
-      {pageControl}
+      <div className="mode-switch priority-p0" aria-label={props.copy.layoutLabel}>
+        <button type="button" title={props.copy.overview} aria-pressed={props.layoutMode === "overview"} className={props.layoutMode === "overview" ? "active" : ""} onClick={() => props.onLayoutChange("overview")}><GridIcon /><span className="priority-p1">{props.copy.overview}</span></button>
+        <button type="button" title={props.copy.focus} aria-pressed={props.layoutMode === "focus"} className={props.layoutMode === "focus" ? "active" : ""} onClick={() => props.onLayoutChange("focus")}><FocusIcon /><span className="priority-p1">{props.copy.focus}</span></button>
+      </div>
+      {props.pageControl}
       <textarea
         className="priority-p0"
         name="prompt"
         autoComplete="off"
-        ref={promptRef}
+        ref={props.promptRef}
         rows={1}
-        value={text}
-        onChange={(event) => onTextChange(event.target.value)}
+        value={props.text}
+        onChange={(event) => props.onTextChange(event.target.value)}
         onPaste={(event) => {
           const files = [...event.clipboardData.files].filter((file) => file.type.startsWith("image/"));
-          if (files.length) onPasteImages(files);
+          if (files.length) props.onPasteImages(files);
         }}
-        onFocus={() => onExpandedChange(true)}
-        onBlur={() => onExpandedChange(false)}
+        onFocus={() => props.onExpandedChange(true)}
+        onBlur={() => props.onExpandedChange(false)}
         onKeyDown={(event) => {
           const action = commandKeyAction({
             key: event.key,
             ctrlKey: event.ctrlKey,
             metaKey: event.metaKey,
             isComposing: event.nativeEvent.isComposing
-          }, runState !== "idle" || auxiliaryBusy);
+          }, busy);
           if (action === "submit") {
             event.preventDefault();
-            onSubmit();
+            props.onSubmit();
           } else if (action === "collapse") {
-            onExpandedChange(false);
+            props.onExpandedChange(false);
           }
         }}
-        placeholder={copy.promptPlaceholder}
-        aria-label={copy.promptLabel}
+        placeholder={props.copy.promptPlaceholder}
+        aria-label={props.copy.promptLabel}
       />
-      <div className="tier-switch priority-p0" aria-label={copy.tierLabel}>
+      <div className="tier-switch priority-p0" aria-label={props.copy.tierLabel}>
         {tierOptions.map(({ value, label, icon, glyph }) => (
-          <button type="button" key={icon} title={label} aria-label={label} aria-pressed={tier === value} data-tier-icon={icon} className={tier === value ? "active" : ""} onClick={() => onTierChange(value)}>{glyph}</button>
+          <button type="button" key={icon} title={label} aria-label={label} aria-pressed={props.tier === value} data-tier-icon={icon} className={props.tier === value ? "active" : ""} onClick={() => props.onTierChange(value)}>{glyph}</button>
         ))}
       </div>
-      {imageControl}
-      <WorkspaceActions
-        copy={copy}
-        selectedCount={selectedCount}
-        totalSites={totalSites}
-        activeCount={activeCount}
-        failureCount={failureCount}
-        cancelledCount={cancelledCount}
-        drawerOpen={drawerOpen}
-        disabled={runState !== "idle" || auxiliaryBusy}
-        synthesisPending={synthesisPending}
-        syncStatus={props.syncStatus}
-        onToggleDrawer={onToggleDrawer}
-        onNewSession={onNewSession}
-        onRetryFailed={onRetryFailed}
-        onCollectAnswers={onCollectAnswers}
-        onOpenArchive={onOpenArchive}
-        onCollectSynthesis={onCollectSynthesis}
-        onOpenSettings={onOpenSettings}
-      />
-      {runState !== "idle" ? (
-        <button type="button" className="cancel primary-action priority-p0" disabled={runState === "cancelling"} onClick={onCancel}>
-          <StopIcon /><span>{runState === "cancelling" ? copy.cancelling : copy.cancel}</span>
-        </button>
+      {props.imageControl}
+      {props.runState !== "idle" ? (
+        <button type="button" className="cancel primary-action priority-p0" disabled={props.runState === "cancelling"} onClick={props.onCancel}><StopIcon /><span>{props.runState === "cancelling" ? props.copy.cancelling : props.copy.cancel}</span></button>
       ) : (
-        <button type="button" className="send primary-action priority-p0" title={sendBlockedReason ?? undefined} disabled={auxiliaryBusy || !text.trim() || selectedCount === 0 || !!sendBlockedReason} onClick={onSubmit}>
-          <SendIcon /><span>{copy.send}</span><kbd>{isMac ? "⌘↵" : "Ctrl+↵"}</kbd>
-        </button>
+        <button type="button" className="send primary-action priority-p0" title={props.sendBlockedReason ?? undefined} disabled={props.auxiliaryBusy || !props.text.trim() || props.selectedCount === 0 || !!props.sendBlockedReason} onClick={props.onSubmit}><SendIcon /><span>{props.copy.send}</span><kbd>{props.isMac ? "⌘↵" : "Ctrl+↵"}</kbd></button>
       )}
+      <WorkspaceActions copy={props.copy} disabled={busy} retryCount={props.failureCount + props.cancelledCount} synthesisPending={props.synthesisPending} syncStatus={props.syncStatus} onOpenMore={props.onOpenMore} />
     </header>
   );
 }

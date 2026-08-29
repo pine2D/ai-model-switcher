@@ -243,3 +243,20 @@ test("desktop UI state restores before window creation and remains local to the 
   assert.match(store, /250/);
   assert.doesNotMatch(store, /StateRepository|outbox|sync/);
 });
+
+test("workspace menus and new-session confirmation stay in trusted native UI", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const native = readFileSync("src/main/native-menus.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  for (const channel of [
+    "polyask:show-group-menu",
+    "polyask:show-command-menu",
+    "polyask:confirm-new-session"
+  ]) assert.match(ipc, new RegExp(channel));
+  assert.match(ipc, /trustedShell\(event\)/);
+  assert.match(native, /Menu\.buildFromTemplate/);
+  assert.match(native, /dialog\.showMessageBox/);
+  assert.match(preload, /showGroupMenu/);
+  assert.match(preload, /showCommandMenu/);
+  assert.match(preload, /confirmNewSession/);
+});

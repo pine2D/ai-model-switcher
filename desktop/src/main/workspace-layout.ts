@@ -39,9 +39,9 @@ interface ApplyWorkspaceLayoutInput {
   readonly focused: SiteKey;
 }
 
-export function drawerWidthForDensity(density: Density, open: boolean): number {
+export function drawerWidthForDensity(_density: Density, open: boolean): number {
   if (!open) return 0;
-  return density === "compact" ? 280 : 320;
+  return 320;
 }
 
 export function reserveWorkspaceArea(area: ViewBounds, drawerWidth: number): ViewBounds {

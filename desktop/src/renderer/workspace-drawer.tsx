@@ -1,127 +1,90 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
-import { formatCopy, type DesktopCopy } from "../shared/copy";
+import type { DesktopCopy } from "../shared/copy";
+import type { SiteStatus } from "../shared/protocol";
+import { describeStatus } from "../shared/status-copy";
+import type { ActiveWorkspaceGroup } from "../shared/workspace";
+import { BackIcon, CloseIcon, HealthIcon, ScopeIcon } from "./icons";
 import {
-  groupSignature,
-  workspacePresets,
-  type ActiveWorkspaceGroup
-} from "../shared/workspace";
-import { CloseIcon, SaveIcon, TrashIcon } from "./icons";
+  escapeWorkspacePanel,
+  showWorkspaceDetail,
+  type OpenWorkspacePanelState
+} from "./workspace-panel-state";
+import { WorkspaceSites } from "./workspace-sites";
 
 interface WorkspaceDrawerProps {
   readonly copy: DesktopCopy;
   readonly sites: readonly SiteDefinition[];
   readonly selected: ReadonlySet<SiteKey>;
   readonly groups: readonly ActiveWorkspaceGroup[];
+  readonly statuses: Readonly<Record<string, SiteStatus>>;
   readonly open: boolean;
-  readonly onClose: () => void;
+  readonly state: OpenWorkspacePanelState;
+  readonly onStateChange: (state: OpenWorkspacePanelState | null) => void;
   readonly onSelectionChange: (sites: readonly SiteKey[]) => void;
   readonly onSaveGroup: (name: string) => Promise<boolean>;
   readonly onDeleteGroup: (id: string) => void;
 }
 
 export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  useEffect(() => setPendingDeleteId(null), [props.groups, props.selected]);
-  const choices = workspacePresets(props.sites);
-  const selectedSites = props.sites.map((site) => site.key).filter((site) => props.selected.has(site));
-  const selectedSignature = groupSignature(selectedSites);
-  const reservedSignatures = new Set(
-    [choices.all, choices.image, choices.intl, choices.domestic].map(groupSignature)
-  );
-  const duplicate = props.groups.some((group) => groupSignature(group.sites) === selectedSignature);
-  const saveHint = selectedSites.length === 0
-    ? props.copy.groupSelectionRequired
-    : reservedSignatures.has(selectedSignature)
-      ? props.copy.groupPresetReserved
-      : duplicate ? props.copy.groupAlreadySaved : "";
-  const canSave = !saveHint;
-  const presets = [
-    [props.copy.allSites, choices.all],
-    [props.copy.clearSites, choices.clear],
-    [props.copy.imageSites, choices.image],
-    [props.copy.intlSites, choices.intl],
-    [props.copy.domesticSites, choices.domestic]
-  ] as const;
-  const toggleSite = (site: SiteKey) => {
-    const next = new Set(props.selected);
-    if (next.has(site)) next.delete(site);
-    else next.add(site);
-    props.onSelectionChange(props.sites.map((item) => item.key).filter((key) => next.has(key)));
-  };
   useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [props.onClose]);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onStateChange(escapeWorkspacePanel(props.state));
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [props.onStateChange, props.state]);
+  const detailSite = props.state.detail
+    ? props.sites.find((site) => site.key === props.state.detail)
+    : null;
+  const detailStatus = detailSite ? props.statuses[detailSite.key] : null;
 
   return (
     <aside
-      id="workspace-drawer"
+      id="workspace-panel"
       className="workspace-drawer"
-      aria-label={props.copy.scope}
+      aria-label={props.copy.workbench}
       aria-hidden={props.open ? undefined : true}
       inert={!props.open}
       data-state={props.open ? "open" : "closed"}
+      data-input-method={props.state.inputMethod}
     >
       <div className="drawer-heading">
-        <strong>{props.copy.scope}</strong>
-        <button type="button" title={props.copy.closeScope} aria-label={props.copy.closeScope} onClick={props.onClose}><CloseIcon /></button>
+        <strong>{props.copy.workbench}</strong>
+        <button type="button" title={props.copy.closeWorkbench} aria-label={props.copy.closeWorkbench} onClick={() => props.onStateChange(null)}><CloseIcon /></button>
       </div>
-      <div className="scope-presets" aria-label={props.copy.scope}>
-        {presets.map(([label, sites]) => (
-          <button type="button" className="scope-preset" key={label} onClick={() => props.onSelectionChange(sites)}>{label}</button>
-        ))}
+      <div className="workspace-tabs" role="tablist" aria-label={props.copy.workbench}>
+        <button id="workspace-sites-tab" type="button" role="tab" aria-selected={props.state.tab === "sites"} aria-controls="workspace-sites-panel" tabIndex={props.state.tab === "sites" ? 0 : -1} onClick={() => props.onStateChange({ ...props.state, tab: "sites", detail: null })}><ScopeIcon />{props.copy.sitesAndGroups}</button>
+        <button id="workspace-health-tab" type="button" role="tab" aria-selected={props.state.tab === "health"} aria-controls="workspace-health-panel" tabIndex={props.state.tab === "health" ? 0 : -1} onClick={() => props.onStateChange({ ...props.state, tab: "health", detail: null })}><HealthIcon />{props.copy.siteHealth}</button>
       </div>
-      <section className="drawer-section">
-        <h2>{props.copy.selectedSites}</h2>
-        <div className="site-checklist">
-          {props.sites.map((site) => (
-            <label key={site.key}>
-              <input type="checkbox" name="scope-sites" value={site.key} checked={props.selected.has(site.key)} onChange={() => toggleSite(site.key)} />
-              <span>{site.label}</span>
-            </label>
-          ))}
+      {props.state.tab === "sites" ? (
+        <div id="workspace-sites-panel" role="tabpanel" aria-labelledby="workspace-sites-tab"><WorkspaceSites {...props} /></div>
+      ) : (
+        <div id="workspace-health-panel" role="tabpanel" aria-labelledby="workspace-health-tab">
+          {detailSite ? (
+            <section className="site-status-detail">
+              <button type="button" className="detail-back" onClick={() => props.onStateChange({ ...props.state, detail: null })}><BackIcon />{props.copy.backToSiteStatus}</button>
+              <h2>{detailSite.label}</h2>
+              <p>{detailStatus ? describeStatus(props.copy, detailStatus) : props.copy.loading}</p>
+            </section>
+          ) : (
+            <section className="site-status-overview" aria-label={props.copy.siteStatusSummary}>
+              <p>{props.copy.siteStatusSummary}</p>
+              <div className="site-status-list">
+                {props.sites.map((site) => {
+                  const status = props.statuses[site.key];
+                  return (
+                    <button type="button" key={site.key} data-phase={status?.phase ?? "loading"} onClick={() => props.onStateChange(showWorkspaceDetail(props.state, site.key))}>
+                      <span>{site.label}</span><small>{status ? describeStatus(props.copy, status) : props.copy.loading}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
-      </section>
-      <section className="drawer-section group-section">
-        <h2>{props.copy.savedGroups}</h2>
-        {props.groups.length === 0 ? <p>{props.copy.noSavedGroups}</p> : (
-          <div className="group-list">
-            {props.groups.map((group) => pendingDeleteId === group.id ? (
-              <div className="group-confirm" data-group-id={group.id} key={group.id}>
-                <span>{formatCopy(props.copy.confirmDeleteGroup, { group: group.name })}</span>
-                <button type="button" className="danger" onClick={() => props.onDeleteGroup(group.id)}>{props.copy.confirmDelete}</button>
-                <button type="button" onClick={() => setPendingDeleteId(null)}>{props.copy.cancelDelete}</button>
-              </div>
-            ) : (
-              <div className="group-row" data-group-id={group.id} key={group.id}>
-                <button type="button" className="group-apply" onClick={() => props.onSelectionChange(group.sites)}>{group.name}</button>
-                <button
-                  type="button"
-                  title={formatCopy(props.copy.deleteGroup, { group: group.name })}
-                  aria-label={formatCopy(props.copy.deleteGroup, { group: group.name })}
-                  onClick={() => setPendingDeleteId(group.id)}
-                ><TrashIcon /></button>
-              </div>
-            ))}
-          </div>
-        )}
-        <form className="group-save" aria-busy={saving} onSubmit={(event) => {
-          event.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed || !canSave || saving) return;
-          setSaving(true);
-          void props.onSaveGroup(trimmed).then((saved) => { if (saved) setName(""); }).finally(() => setSaving(false));
-        }}>
-          <input name="group-name" autoComplete="off" value={name} maxLength={80} aria-describedby="group-save-hint" aria-label={props.copy.groupNamePlaceholder} placeholder={props.copy.groupNamePlaceholder} onChange={(event) => setName(event.target.value)} />
-          <button type="submit" title={saveHint || props.copy.saveGroup} aria-label={props.copy.saveGroup} disabled={!name.trim() || !canSave || saving}><SaveIcon /></button>
-          <span id="group-save-hint" className="group-save-hint" role="status">{saving ? props.copy.groupSaving : saveHint}</span>
-        </form>
-      </section>
+      )}
     </aside>
   );
 }

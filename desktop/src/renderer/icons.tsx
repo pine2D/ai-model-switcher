@@ -59,6 +59,22 @@ export function ScopeIcon(): React.JSX.Element {
   return <Icon><path d="M4 6h16M4 12h10M4 18h7" /><path d="m16 16 2 2 3-4" /></Icon>;
 }
 
+export function ChevronDownIcon(): React.JSX.Element {
+  return <Icon><path d="m7 9 5 5 5-5" /></Icon>;
+}
+
+export function HealthIcon(): React.JSX.Element {
+  return <Icon><path d="M3 12h4l2-5 4 10 2-5h6" /><circle cx="12" cy="12" r="9" /></Icon>;
+}
+
+export function MoreIcon(): React.JSX.Element {
+  return <Icon><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></Icon>;
+}
+
+export function BackIcon(): React.JSX.Element {
+  return <Icon><path d="m15 18-6-6 6-6" /></Icon>;
+}
+
 export function NewSessionIcon(): React.JSX.Element {
   return <Icon><path d="M5 5h10v14H5zM15 9h4v10H9" /><path d="M10 9v6M7 12h6" /></Icon>;
 }

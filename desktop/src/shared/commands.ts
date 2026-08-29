@@ -11,6 +11,8 @@ export type CommandId =
   | "set-think"
   | "set-fast"
   | "collect-answers"
+  | "open-archive"
+  | "collect-synthesis"
   | "retry-failed"
   | "new-session"
   | "open-settings"
@@ -51,6 +53,8 @@ export const COMMANDS: readonly CommandDescriptor[] = Object.freeze([
   { id: "set-think", labelKey: "chooseThinkMode", group: "compose", accelerator: "Alt+T" },
   { id: "set-fast", labelKey: "chooseFastMode", group: "compose", accelerator: "Alt+Y" },
   { id: "collect-answers", labelKey: "collectAnswers", group: "results", accelerator: "Alt+C" },
+  { id: "open-archive", labelKey: "openArchive", group: "results" },
+  { id: "collect-synthesis", labelKey: "synthesisCollect", group: "results" },
   { id: "retry-failed", labelKey: "retryFailedCommand", group: "results", accelerator: "Alt+R" },
   { id: "new-session", labelKey: "newSessionSelected", group: "compose", accelerator: "Alt+N" },
   { id: "open-settings", labelKey: "settings", group: "app", accelerator: "Control+,", macAccelerator: "Command+," },

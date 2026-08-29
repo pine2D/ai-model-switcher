@@ -48,6 +48,13 @@ test("site paging copy is concise, localized, and placeholder-compatible", () =>
   }
 });
 
+test("dynamic layouts use overview wording instead of a fixed nine-site grid", () => {
+  assert.deepEqual(
+    [COPY.en.overview, COPY.zhCN.overview, COPY.zhTW.overview],
+    ["Overview", "总览", "總覽"]
+  );
+});
+
 test("Drive local-only state and settings close action stay precise in all locales", () => {
   assert.deepEqual(
     [COPY.en.syncStateLocalOnly, COPY.zhCN.syncStateLocalOnly, COPY.zhTW.syncStateLocalOnly],

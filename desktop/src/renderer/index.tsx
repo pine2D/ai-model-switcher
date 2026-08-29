@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import type { CommandId } from "../shared/commands";
 import type { SiteDefinition } from "../shared/contracts";
 import type { CommandActions } from "./command-dispatcher";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
@@ -27,6 +28,13 @@ import { usePresence } from "./presence";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
 import { WorkspaceDrawer } from "./workspace-drawer";
+import {
+  openWorkspacePanel,
+  scopeDisplayName,
+  type OpenWorkspacePanelState,
+  type WorkspacePanelState,
+  type WorkspacePanelTab
+} from "./workspace-panel-state";
 import { useArchiveCapture } from "./use-archive-capture";
 import { useBroadcastFlow } from "./use-broadcast-flow";
 import { useImageSelection } from "./use-image-selection";
@@ -64,6 +72,7 @@ function App(): React.JSX.Element {
   const requestedPage = useRef<{ readonly page: number; readonly inputMethod: "keyboard" | "pointer" } | null>(null);
   const actionLock = useRef<ExclusiveActionLock | null>(null);
   const commandActions = useRef<CommandActions>({});
+  const lastOpenPanel = useRef<OpenWorkspacePanelState>(openWorkspacePanel("sites", "pointer"));
   if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
@@ -72,18 +81,27 @@ function App(): React.JSX.Element {
   const [text, setText] = useState("");
   const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [panelState, setPanelState] = useState<WorkspacePanelState>(null);
   const [surface, setSurface] = useState<DesktopSurface>("sites");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
   const [announcement, setAnnouncement] = useState("");
   const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
-  const drawerPresent = usePresence(drawerOpen, 180);
+  const drawerOpen = panelState !== null;
+  if (panelState) lastOpenPanel.current = panelState;
+  const drawerPresent = usePresence(drawerOpen, 200);
   const workspaceFlow = useWorkspaceFlow(sites, copy.workspaceActionFailed, setAnnouncement);
   const { workspace, selected } = workspaceFlow;
+  const changePanelState = (value: WorkspacePanelState): void => {
+    setPanelState(value);
+    window.polyask.setDrawerOpen(value !== null);
+  };
+  const openPanel = (tab: WorkspacePanelTab, inputMethod: "pointer" | "keyboard"): void => {
+    changeSurface("sites");
+    changePanelState(openWorkspacePanel(tab, inputMethod));
+  };
   const changeDrawerOpen = (value: boolean): void => {
-    setDrawerOpen(value);
-    window.polyask.setDrawerOpen(value);
+    changePanelState(value ? openWorkspacePanel("sites", "pointer") : null);
   };
   const synthesis = useSynthesisFlow();
   const archiveCapture = useArchiveCapture({ sites, selected, prompt: text });
@@ -162,8 +180,12 @@ function App(): React.JSX.Element {
   const composerExpanded = promptExpanded || imageTrayOpen;
   useEffect(() => window.polyask.setComposerExpanded(composerExpanded), [composerExpanded]);
 
-  const activeCount = useMemo(
-    () => Object.values(statuses).filter((status) => status.phase === "sending").length,
+  const scopeLabel = useMemo(
+    () => scopeDisplayName(workspace.selectedSites, workspace.groups, copy),
+    [copy, workspace.groups, workspace.selectedSites]
+  );
+  const healthAttention = useMemo(
+    () => Object.values(statuses).filter((status) => ["warning", "failed", "crashed"].includes(status.phase)).length,
     [statuses]
   );
   const unsupportedSites = useMemo(() => {
@@ -238,29 +260,61 @@ function App(): React.JSX.Element {
       changeSurface("archive");
     } catch { setAnnouncement(copy.synthesisCollectFailed); }
   });
-  const startNewSession = async (): Promise<void> => runAuxiliary(async () => {
+  const startNewSession = async (): Promise<void> => {
     const selectedSites = [...selected];
-    broadcast.invalidate();
-    archiveCapture.invalidate();
+    if (!selectedSites.length) return;
     try {
-      const results = await window.polyask.newSession(selectedSites);
-      const failed = results.filter((result) => !result.ok).length;
-      setAnnouncement(failed
-        ? formatCopy(copy.newSessionPartial, { ok: results.length - failed, failed })
-        : formatCopy(copy.newSessionDone, { count: results.length }));
+      if (!await window.polyask.confirmNewSession(selectedSites.length)) return;
     } catch {
-      workspaceFlow.recover();
+      setAnnouncement(copy.workspaceActionFailed);
+      return;
     }
-  });
+    await runAuxiliary(async () => {
+      broadcast.invalidate();
+      archiveCapture.invalidate();
+      try {
+        const results = await window.polyask.newSession(selectedSites);
+        const failed = results.filter((result) => !result.ok).length;
+        setAnnouncement(failed
+          ? formatCopy(copy.newSessionPartial, { ok: results.length - failed, failed })
+          : formatCopy(copy.newSessionDone, { count: results.length }));
+      } catch {
+        workspaceFlow.recover();
+      }
+    });
+  };
+  const showGroupMenu = async (): Promise<void> => {
+    try {
+      const id = await window.polyask.showGroupMenu();
+      const group = workspace.groups.find((candidate) => candidate.id === id);
+      if (group) workspaceFlow.changeSelection(group.sites);
+    } catch {
+      setAnnouncement(copy.workspaceActionFailed);
+    }
+  };
+  const showMoreMenu = async (): Promise<void> => {
+    const commands: CommandId[] = [
+      ...(broadcast.failureCount + broadcast.cancelledCount > 0 ? ["retry-failed" as const] : []),
+      ...(selected.size > 0 ? ["collect-answers" as const] : []),
+      "open-archive",
+      ...(synthesis.pending ? ["collect-synthesis" as const] : []),
+      ...(selected.size > 0 ? ["new-session" as const] : []),
+      "open-settings"
+    ];
+    try {
+      const command = await window.polyask.showCommandMenu(commands);
+      if (command) executeCommand(command, commandActions.current);
+    } catch {
+      setAnnouncement(copy.workspaceActionFailed);
+    }
+  };
 
   commandActions.current = {
     "open-sites": () => {
-      changeSurface("sites");
-      changeDrawerOpen(true);
+      openPanel("sites", "keyboard");
     },
     "open-site-health": () => {
-      changeSurface("sites");
-      changeDrawerOpen(true);
+      openPanel("health", "keyboard");
     },
     "focus-prompt": () => {
       changeSurface("sites");
@@ -270,6 +324,8 @@ function App(): React.JSX.Element {
     "set-think": () => { void workspaceFlow.changeTier("think"); },
     "set-fast": () => { void workspaceFlow.changeTier("fast"); },
     "collect-answers": () => { void collectAndCopy(); },
+    "open-archive": () => changeSurface("archive"),
+    "collect-synthesis": () => { void collectSynthesis(); },
     "retry-failed": () => { void actionLock.current!.run(broadcast.retry); },
     "new-session": () => { void startNewSession(); },
     "open-settings": () => changeSurface("settings")
@@ -304,11 +360,11 @@ function App(): React.JSX.Element {
         auxiliaryBusy={auxiliaryBusy}
         layoutMode={layout.mode}
         selectedCount={selected.size}
-        totalSites={sites.length || 9}
-        activeCount={activeCount}
         failureCount={broadcast.failureCount}
         cancelledCount={broadcast.cancelledCount}
-        drawerOpen={drawerOpen}
+        scopeLabel={scopeLabel}
+        healthAttention={healthAttention}
+        panelTab={panelState?.tab ?? null}
         pageControl={layout.pageCount > 1 ? (
           <PageTabs
             copy={copy}
@@ -350,15 +406,9 @@ function App(): React.JSX.Element {
         onTierChange={workspaceFlow.changeTier}
         onLayoutChange={setMode}
         onExpandedChange={setPromptExpanded}
-        onToggleDrawer={() => {
-          changeDrawerOpen(!drawerOpen);
-        }}
-        onNewSession={() => { void startNewSession(); }}
-        onRetryFailed={() => { void actionLock.current!.run(broadcast.retry); }}
-        onCollectAnswers={() => { void collectAndCopy(); }}
-        onOpenArchive={() => changeSurface("archive")}
-        onCollectSynthesis={() => { void collectSynthesis(); }}
-        onOpenSettings={() => changeSurface("settings")}
+        onOpenPanel={(tab) => openPanel(tab, "pointer")}
+        onShowGroupMenu={() => { void showGroupMenu(); }}
+        onOpenMore={() => { void showMoreMenu(); }}
         onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
       <div className="sr-only" aria-live="polite">{announcement}</div>
@@ -368,8 +418,10 @@ function App(): React.JSX.Element {
           sites={sites}
           selected={selected}
           groups={workspace.groups}
+          statuses={statuses}
           open={drawerOpen}
-          onClose={() => changeDrawerOpen(false)}
+          state={panelState ?? lastOpenPanel.current}
+          onStateChange={changePanelState}
           onSelectionChange={workspaceFlow.changeSelection}
           onSaveGroup={workspaceFlow.saveGroup}
           onDeleteGroup={workspaceFlow.deleteGroup}

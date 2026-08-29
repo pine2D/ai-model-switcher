@@ -12,7 +12,7 @@ import {
 } from "../src/main/layout";
 import { resolveFocusedSite } from "../src/shared/site-pages";
 import { SITES } from "../src/main/sites";
-import { reserveWorkspaceArea } from "../src/main/workspace-layout";
+import { drawerWidthForDensity, reserveWorkspaceArea } from "../src/main/workspace-layout";
 
 const area = { x: 0, y: 0, width: 1440, height: 900 };
 const keys = SITES.map((site) => site.key);
@@ -169,4 +169,10 @@ test("opening the scope drawer reserves width instead of covering site views", (
   assert.ok(placements.every((item) => item.bounds.x >= 280));
   assert.ok(placements.every((item) => item.bounds.width > 0));
   assert.deepEqual(reserveWorkspaceArea(area, 0), area);
+});
+
+test("the single workspace panel reserves one fixed width at every density", () => {
+  assert.equal(drawerWidthForDensity("compact", true), 320);
+  assert.equal(drawerWidthForDensity("comfortable", true), 320);
+  assert.equal(drawerWidthForDensity("compact", false), 0);
 });

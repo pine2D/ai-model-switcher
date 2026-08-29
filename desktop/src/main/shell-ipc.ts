@@ -7,6 +7,7 @@ import {
 } from "electron";
 
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
+import type { DesktopCopy } from "../shared/copy";
 import type { ArchiveFilters, ArchiveInput, ArchivePatch } from "../shared/archive";
 import { parseDisplayPreferences, type DisplayPreferences } from "../shared/display";
 import type { RuntimeInfo } from "../shared/runtime";
@@ -25,6 +26,7 @@ import { SynthesisService } from "./synthesis-service";
 import { SyncEngine } from "./sync-engine";
 import { registerSyncIpc } from "./sync-ipc";
 import { isTrustedShellUrl, safeExternalUrl } from "./security";
+import { confirmNewSession, showCommandMenu, showGroupMenu } from "./native-menus";
 import { SITES } from "./sites";
 import { statusForResult } from "./status";
 import { ViewManager } from "./view-manager";
@@ -37,6 +39,7 @@ interface ShellIpcEvent {
 
 interface ShellIpcOptions {
   readonly runtime: RuntimeInfo;
+  readonly copy: DesktopCopy;
   readonly window: BrowserWindow;
   readonly manager: ViewManager;
   readonly workspace: WorkspaceService;
@@ -69,7 +72,10 @@ const HANDLERS = [
   "polyask:set-tier",
   "polyask:save-group",
   "polyask:delete-group",
-  "polyask:new-session"
+  "polyask:new-session",
+  "polyask:show-group-menu",
+  "polyask:show-command-menu",
+  "polyask:confirm-new-session"
 ] as const;
 
 const LISTENERS = [
@@ -220,6 +226,22 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   ipcMain.handle("polyask:new-session", (event, value: unknown) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
     return workspace.newSession(value);
+  });
+  ipcMain.handle("polyask:show-group-menu", (event) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    const groups = workspace.getState().groups;
+    return showGroupMenu(window, groups, options.copy);
+  });
+  ipcMain.handle("polyask:show-command-menu", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    return showCommandMenu(window, value, options.copy);
+  });
+  ipcMain.handle("polyask:confirm-new-session", async (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > SITE_KEYS.length) {
+      throw new Error("invalid_site_count");
+    }
+    return confirmNewSession(window, Number(value), options.copy);
   });
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) {

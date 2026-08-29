@@ -31,7 +31,20 @@ export const WORKSPACE_COPY = {
     confirmDeleteGroup: "Delete {group}?",
     confirmDelete: "Delete",
     cancelDelete: "Keep",
-    workspaceActionFailed: "Workspace action failed"
+    workspaceActionFailed: "Workspace action failed",
+    workbench: "Workbench",
+    closeWorkbench: "Close workbench",
+    selectSites: "Select sites",
+    customScope: "Custom",
+    sitesCompact: "Sites",
+    chooseSavedGroup: "Choose a saved group",
+    moreActions: "More actions",
+    siteStatusSummary: "Page and adapter readiness",
+    backToSiteStatus: "Back to site status",
+    newSessionConfirmTitle: "Start new sessions?",
+    newSessionConfirmMessage: "This will leave the current conversations on {count} selected sites and open a blank conversation on each.",
+    newSessionConfirmAction: "Start new sessions",
+    newSessionKeepCurrent: "Keep current conversations"
   },
   zhCN: {
     selectedSummary: "已选择 {selected} / {total}",
@@ -65,7 +78,20 @@ export const WORKSPACE_COPY = {
     confirmDeleteGroup: "删除{group}？",
     confirmDelete: "删除",
     cancelDelete: "保留",
-    workspaceActionFailed: "工作区操作失败"
+    workspaceActionFailed: "工作区操作失败",
+    workbench: "工作台",
+    closeWorkbench: "关闭工作台",
+    selectSites: "选择站点",
+    customScope: "自定义",
+    sitesCompact: "站点",
+    chooseSavedGroup: "选择已存分组",
+    moreActions: "更多操作",
+    siteStatusSummary: "页面与适配器就绪情况",
+    backToSiteStatus: "返回站点状态",
+    newSessionConfirmTitle: "要新建会话吗？",
+    newSessionConfirmMessage: "这会离开 {count} 个已选站点中的当前对话，并分别打开空白会话。",
+    newSessionConfirmAction: "新建会话",
+    newSessionKeepCurrent: "保留当前对话"
   },
   zhTW: {
     selectedSummary: "已選取 {selected} / {total}",
@@ -99,6 +125,19 @@ export const WORKSPACE_COPY = {
     confirmDeleteGroup: "刪除{group}？",
     confirmDelete: "刪除",
     cancelDelete: "保留",
-    workspaceActionFailed: "工作區操作失敗"
+    workspaceActionFailed: "工作區操作失敗",
+    workbench: "工作台",
+    closeWorkbench: "關閉工作台",
+    selectSites: "選擇網站",
+    customScope: "自訂",
+    sitesCompact: "網站",
+    chooseSavedGroup: "選擇已儲存群組",
+    moreActions: "更多操作",
+    siteStatusSummary: "頁面與轉接器就緒狀況",
+    backToSiteStatus: "返回網站狀態",
+    newSessionConfirmTitle: "要新增對話嗎？",
+    newSessionConfirmMessage: "這會離開 {count} 個已選網站中的目前對話，並分別開啟空白對話。",
+    newSessionConfirmAction: "新增對話",
+    newSessionKeepCurrent: "保留目前對話"
   }
 } as const;

@@ -55,6 +55,9 @@ export interface PolyAskDesktopApi {
   saveGroup(input: { readonly name: string; readonly sites: readonly SiteKey[] }): Promise<WorkspaceState>;
   deleteGroup(id: string): Promise<WorkspaceState>;
   newSession(sites: readonly SiteKey[]): Promise<NewSessionSiteResult[]>;
+  showGroupMenu(): Promise<string | null>;
+  showCommandMenu(commands: readonly CommandId[]): Promise<CommandId | null>;
+  confirmNewSession(count: number): Promise<boolean>;
   connectSync(): Promise<SyncStatus>;
   syncNow(): Promise<SyncStatus>;
   disconnectSync(): Promise<SyncStatus>;
@@ -102,6 +105,9 @@ const api: PolyAskDesktopApi = Object.freeze({
     ipcRenderer.invoke("polyask:save-group", input),
   deleteGroup: (id: string) => ipcRenderer.invoke("polyask:delete-group", id),
   newSession: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:new-session", sites),
+  showGroupMenu: () => ipcRenderer.invoke("polyask:show-group-menu"),
+  showCommandMenu: (commands: readonly CommandId[]) => ipcRenderer.invoke("polyask:show-command-menu", commands),
+  confirmNewSession: (count: number) => ipcRenderer.invoke("polyask:confirm-new-session", count),
   connectSync: () => ipcRenderer.invoke("polyask:sync-connect"),
   syncNow: () => ipcRenderer.invoke("polyask:sync-now"),
   disconnectSync: () => ipcRenderer.invoke("polyask:sync-disconnect"),
