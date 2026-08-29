@@ -49,17 +49,23 @@ export interface VersionedSyncValue {
   readonly deletedAt?: number;
 }
 
+export interface SyncTemplateValue extends VersionedSyncValue {
+  readonly id: string;
+  readonly name?: unknown;
+  readonly text?: unknown;
+}
+
 export interface StateFragment {
   readonly schema: number;
   readonly deviceId: string;
   readonly settings: Readonly<Record<string, VersionedSyncValue>>;
-  readonly templates: Readonly<Record<string, VersionedSyncValue & { readonly id: string }>>;
+  readonly templates: Readonly<Record<string, SyncTemplateValue>>;
   readonly groups: Readonly<Record<string, VersionedSyncValue & { readonly id: string }>>;
 }
 
 export interface MergedState {
   readonly settings: Readonly<Record<string, VersionedSyncValue>>;
-  readonly templates: readonly (VersionedSyncValue & { readonly id: string })[];
+  readonly templates: readonly SyncTemplateValue[];
   readonly groups: readonly (VersionedSyncValue & { readonly id: string })[];
   readonly materialized: StateFragment;
   readonly readOnly: boolean;
@@ -113,7 +119,7 @@ export function mergeHistoryRecords(records: readonly (StoredHistory | null | un
 
 export function mergeStateFragments(fragments: readonly unknown[]): MergedState {
   const settings: Record<string, VersionedSyncValue> = {};
-  const templates = new Map<string, VersionedSyncValue & { id: string }>();
+  const templates = new Map<string, SyncTemplateValue>();
   const groups = new Map<string, VersionedSyncValue & { id: string }>();
   let readOnly = false;
   let corrupt = 0;

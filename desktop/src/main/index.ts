@@ -27,12 +27,14 @@ import {
 import type { LayoutState, SiteStatus } from "../shared/protocol";
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
+import type { PromptLibraryState } from "../shared/prompt-library";
 import type { WorkspaceState } from "../shared/workspace";
 import { ArchiveService } from "./archive-service";
 import { BroadcastCoordinator } from "./broadcast";
 import { CollectionService } from "./collection-service";
 import { DesktopDatabase } from "./database";
 import { HistoryService } from "./history-service";
+import { PromptLibraryService } from "./prompt-library-service";
 import {
   applyPortableImportIdentity,
   finalizePortableDataImport,
@@ -130,7 +132,7 @@ let desktopDatabase: DesktopDatabase | null = null;
 
 if (app.isPackaged) app.commandLine.removeSwitch("remote-debugging-port");
 
-type ShellPayload = SiteStatus | LayoutState | DisplayPreferences | WorkspaceState | SyncStatus;
+type ShellPayload = SiteStatus | LayoutState | DisplayPreferences | WorkspaceState | SyncStatus | PromptLibraryState;
 
 function sendToShell(channel: string, payload: ShellPayload): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
@@ -341,6 +343,7 @@ async function createWindow(): Promise<void> {
   deviceId();
   const archives = new ArchiveService(database.archives, { deviceId });
   const history = new HistoryService(database.history, { deviceId });
+  const promptLibrary = new PromptLibraryService(database.state, database.meta, history);
   const synthesis = new SynthesisService({
     sites: SITES,
     archives,
@@ -370,6 +373,7 @@ async function createWindow(): Promise<void> {
     onWorkspace: (state) => {
       manager.setSelection(state.selectedSites);
       sendToShell("polyask:workspace-state", state);
+      sendToShell("polyask:prompt-library", promptLibrary.getState());
     }
   });
   createMenu();
@@ -383,6 +387,7 @@ async function createWindow(): Promise<void> {
     collection,
     archives,
     history,
+    promptLibrary,
     synthesis,
     sync,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,

@@ -7,6 +7,7 @@ import {
 import type { DisplayPreferences } from "./display";
 import { validateImages, type DesktopImage } from "./images";
 import type { PendingSynthesis } from "./synthesis";
+import type { PromptLibraryState } from "./prompt-library";
 import type { RuntimeInfo } from "./runtime";
 import type { SyncStatus } from "./sync";
 import type { SiteDiagnosticCheck } from "./site-health";
@@ -139,6 +140,7 @@ export interface BootstrapState {
   readonly layout: LayoutState;
   readonly display: DisplayPreferences;
   readonly workspace: WorkspaceState;
+  readonly promptLibrary: PromptLibraryState;
   readonly pendingSynthesis: PendingSynthesis | null;
   readonly sync: SyncStatus;
 }

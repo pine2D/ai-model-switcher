@@ -12,6 +12,7 @@ import { describeStatus } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
 import type { SiteHealth } from "../shared/site-health";
+import type { PromptLibraryState } from "../shared/prompt-library";
 import { ArchiveSurface } from "./archive-surface";
 import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
@@ -26,6 +27,7 @@ import {
 } from "./display-preferences";
 import { ImagePicker } from "./image-picker";
 import { PageTabs } from "./page-tabs";
+import { clearDraft, loadDraft, saveDraft } from "./prompt-draft";
 import { usePresence } from "./presence";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
@@ -63,6 +65,7 @@ const INITIAL_SYNC: SyncStatus = {
   readOnly: false, oauthConfigured: false, secureTokenStorage: true
 };
 const INITIAL_RUNTIME: RuntimeInfo = { version: "", distribution: "installed" };
+const INITIAL_LIBRARY: PromptLibraryState = { templates: [], history: [] };
 
 applyDisplayDensity(document.documentElement, INITIAL_DISPLAY);
 
@@ -83,7 +86,7 @@ function App(): React.JSX.Element {
   const [health, setHealth] = useState<Partial<Record<string, SiteHealth>>>({});
   const [healthChecking, setHealthChecking] = useState(false);
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => loadDraft(window.localStorage).text);
   const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [panelState, setPanelState] = useState<WorkspacePanelState>(null);
@@ -92,6 +95,7 @@ function App(): React.JSX.Element {
   const [commandMode, setCommandMode] = useState<CommandPaletteMode>("commands");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
+  const [promptLibrary, setPromptLibrary] = useState<PromptLibraryState>(INITIAL_LIBRARY);
   const [announcement, setAnnouncement] = useState("");
   const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
   const drawerOpen = panelState !== null;
@@ -137,6 +141,7 @@ function App(): React.JSX.Element {
     layoutPage.current = state.layout.page;
     setLayout(state.layout);
     workspaceFlow.accept(state.workspace);
+    setPromptLibrary(state.promptLibrary);
     synthesis.acceptPending(state.pendingSynthesis);
     setSyncStatus(state.sync);
   };
@@ -173,6 +178,7 @@ function App(): React.JSX.Element {
     const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
     const offCommand = window.polyask.onCommand((id) => executeCommand(id, commandActions.current));
     const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
+    const offPromptLibrary = window.polyask.onPromptLibrary(setPromptLibrary);
     const offSync = window.polyask.onSyncStatus(setSyncStatus);
     return () => {
       offStatus();
@@ -181,12 +187,14 @@ function App(): React.JSX.Element {
       offFocusPrompt();
       offCommand();
       offWorkspace();
+      offPromptLibrary();
       offSync();
     };
   }, [copy]);
 
   const composerExpanded = promptExpanded || imageTrayOpen;
   useEffect(() => window.polyask.setComposerExpanded(composerExpanded), [composerExpanded]);
+  useEffect(() => { saveDraft(window.localStorage, text); }, [text]);
 
   const scopeLabel = useMemo(
     () => scopeDisplayName(workspace.selectedSites, workspace.groups, copy),
@@ -239,12 +247,16 @@ function App(): React.JSX.Element {
         return;
       }
       imageSelection.invalidateAndClose();
-      await broadcast.send({
+      const completed = await broadcast.send({
         text: prompt,
         tier: workspace.tier,
         sites: [...selected],
         images
       });
+      if (completed && [...completed.results.values()].some((result) => result.ok)) {
+        clearDraft(window.localStorage);
+        setText("");
+      }
     });
   };
 
@@ -405,6 +417,8 @@ function App(): React.JSX.Element {
         copy={copy}
         commands={availableCommands}
         groups={workspace.groups}
+        library={promptLibrary}
+        draft={text}
         isMac={navigator.userAgent.includes("Mac")}
         mode={commandMode}
         onModeChange={setCommandMode}
@@ -414,6 +428,21 @@ function App(): React.JSX.Element {
           if (!group) return;
           workspaceFlow.changeSelection(group.sites);
           changeSurface("sites");
+        }}
+        onInsertPrompt={(value) => {
+          setText(value);
+          changeSurface("sites");
+          queueMicrotask(() => promptRef.current?.focus());
+        }}
+        onSaveTemplate={(input) => {
+          void window.polyask.savePromptTemplate(input)
+            .then(setPromptLibrary)
+            .catch(() => setAnnouncement(copy.promptLibrarySaveFailed));
+        }}
+        onDeleteTemplate={(id) => {
+          void window.polyask.deletePromptTemplate(id)
+            .then(setPromptLibrary)
+            .catch(() => setAnnouncement(copy.promptLibraryDeleteFailed));
         }}
         onClose={() => changeSurface("sites")}
       />

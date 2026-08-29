@@ -19,6 +19,18 @@ export class HistoryRepository {
     return readJson<StoredHistory>(row);
   }
 
+  list(limit = 30): StoredHistory[] {
+    const bounded = Math.max(1, Math.min(100, Math.floor(limit)));
+    const rows = this.database.prepare(`
+      SELECT body FROM history WHERE deleted_at IS NULL
+      ORDER BY sort_time DESC, id LIMIT ?
+    `).all(bounded);
+    return rows.flatMap((row) => {
+      const value = readJson<StoredHistory>(row);
+      return value && isHistoryRecord(value) && !("deletedAt" in value) ? [value] : [];
+    });
+  }
+
   put(record: StoredHistory, enqueue = true): StoredHistory {
     if (!isHistoryRecord(record)) throw new Error("invalid_history");
     const write = () => {

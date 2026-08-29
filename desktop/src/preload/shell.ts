@@ -9,6 +9,7 @@ import type {
 } from "../shared/archive";
 import type { SiteKey } from "../shared/contracts";
 import type { CommandId } from "../shared/commands";
+import type { PromptLibraryState, PromptTemplate } from "../shared/prompt-library";
 import type { DisplayPreferences } from "../shared/display";
 import type {
   BootstrapState,
@@ -60,6 +61,8 @@ export interface PolyAskDesktopApi {
   showGroupMenu(): Promise<string | null>;
   showCommandMenu(commands: readonly CommandId[]): Promise<CommandId | null>;
   confirmNewSession(count: number): Promise<boolean>;
+  savePromptTemplate(input: { readonly name: string; readonly text: string }): Promise<PromptLibraryState>;
+  deletePromptTemplate(id: string): Promise<PromptLibraryState>;
   connectSync(): Promise<SyncStatus>;
   syncNow(): Promise<SyncStatus>;
   disconnectSync(): Promise<SyncStatus>;
@@ -73,6 +76,7 @@ export interface PolyAskDesktopApi {
   onFocusPrompt(listener: () => void): () => void;
   onCommand(listener: (id: CommandId) => void): () => void;
   onWorkspaceState(listener: (value: WorkspaceState) => void): () => void;
+  onPromptLibrary(listener: (value: PromptLibraryState) => void): () => void;
   onSyncStatus(listener: (value: SyncStatus) => void): () => void;
 }
 
@@ -112,6 +116,9 @@ const api: PolyAskDesktopApi = Object.freeze({
   showGroupMenu: () => ipcRenderer.invoke("polyask:show-group-menu"),
   showCommandMenu: (commands: readonly CommandId[]) => ipcRenderer.invoke("polyask:show-command-menu", commands),
   confirmNewSession: (count: number) => ipcRenderer.invoke("polyask:confirm-new-session", count),
+  savePromptTemplate: (input: Pick<PromptTemplate, "name" | "text">) =>
+    ipcRenderer.invoke("polyask:prompt-template-save", input),
+  deletePromptTemplate: (id: string) => ipcRenderer.invoke("polyask:prompt-template-delete", id),
   connectSync: () => ipcRenderer.invoke("polyask:sync-connect"),
   syncNow: () => ipcRenderer.invoke("polyask:sync-now"),
   disconnectSync: () => ipcRenderer.invoke("polyask:sync-disconnect"),
@@ -127,6 +134,8 @@ const api: PolyAskDesktopApi = Object.freeze({
   onCommand: (listener: (id: CommandId) => void) => subscribe("polyask:command", listener),
   onWorkspaceState: (listener: (value: WorkspaceState) => void) =>
     subscribe("polyask:workspace-state", listener),
+  onPromptLibrary: (listener: (value: PromptLibraryState) => void) =>
+    subscribe("polyask:prompt-library", listener),
   onSyncStatus: (listener: (value: SyncStatus) => void) => subscribe("polyask:sync-status", listener)
 });
 

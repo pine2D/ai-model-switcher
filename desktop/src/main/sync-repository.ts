@@ -8,6 +8,11 @@ import {
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import type { Tier } from "../shared/protocol";
 import {
+  isStoredPromptTemplate,
+  promptTemplatesToStateFragment,
+  type StoredPromptTemplate
+} from "../shared/prompt-library";
+import {
   compareSyncVersion,
   isHistoryRecord,
   mergeHistoryRecords,
@@ -90,7 +95,18 @@ export class SyncRepository {
         ? value
         : { id: value.id, name: value.name, hosts: value.sites.flatMap((key) => hostFor(key) ?? []), updatedAt: value.updatedAt, deviceId: value.deviceId }
     ]));
-    return { schema: SYNC_SCHEMA, deviceId, settings, templates: previous?.templates ?? {}, groups };
+    const localTemplates = this.database.state.list<unknown>("template:").filter(isStoredPromptTemplate);
+    const templates = mergeStateFragments([
+      previous ?? { schema: SYNC_SCHEMA, deviceId, settings: {}, templates: {}, groups: {} },
+      {
+        schema: SYNC_SCHEMA,
+        deviceId,
+        settings: {},
+        templates: promptTemplatesToStateFragment(localTemplates, deviceId),
+        groups: {}
+      }
+    ]).materialized.templates;
+    return { schema: SYNC_SCHEMA, deviceId, settings, templates, groups };
   }
 
   applyStateFragments(remoteStates: Readonly<Record<string, StateFragment>>): { readonly changed: boolean; readonly readOnly: boolean; readonly corrupt: number } {
@@ -117,6 +133,13 @@ export class SyncRepository {
       const currentGroup = this.database.state.get<WorkspaceGroup>(`group:${next.id}`);
       if (JSON.stringify(next) === JSON.stringify(currentGroup)) continue;
       this.database.state.put(`group:${next.id}`, next, next.updatedAt, false);
+      changed = true;
+    }
+    for (const template of Object.values(merged.materialized.templates)) {
+      if (!isStoredPromptTemplate(template)) continue;
+      const currentTemplate = this.database.state.get<StoredPromptTemplate>(`template:${template.id}`);
+      if (JSON.stringify(template) === JSON.stringify(currentTemplate)) continue;
+      this.database.state.put(`template:${template.id}`, template, template.updatedAt, false);
       changed = true;
     }
     return { changed, readOnly: merged.readOnly, corrupt: merged.corrupt };

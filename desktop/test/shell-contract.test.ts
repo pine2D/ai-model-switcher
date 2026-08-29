@@ -224,6 +224,19 @@ test("archive mutations and history persistence stay behind trusted main-process
   assert.match(preload, /archiveMarkdown/);
 });
 
+test("prompt templates and recent history use a trusted synchronized library bridge", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const main = readFileSync("src/main/index.ts", "utf8");
+  assert.match(ipc, /polyask:prompt-template-save/);
+  assert.match(ipc, /polyask:prompt-template-delete/);
+  assert.match(ipc, /trustedShell\(event\)/);
+  assert.match(preload, /savePromptTemplate/);
+  assert.match(preload, /deletePromptTemplate/);
+  assert.match(preload, /onPromptLibrary/);
+  assert.match(main, /PromptLibraryService/);
+});
+
 test("assisted synthesis state and mutations stay behind the trusted shell bridge", () => {
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");

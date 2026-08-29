@@ -23,6 +23,7 @@ import { BroadcastCoordinator } from "./broadcast";
 import { ArchiveService } from "./archive-service";
 import { CollectionService } from "./collection-service";
 import { HistoryService } from "./history-service";
+import { PromptLibraryService } from "./prompt-library-service";
 import { SynthesisService } from "./synthesis-service";
 import { SyncEngine } from "./sync-engine";
 import { registerSyncIpc } from "./sync-ipc";
@@ -49,6 +50,7 @@ interface ShellIpcOptions {
   readonly collection: CollectionService;
   readonly archives: ArchiveService;
   readonly history: HistoryService;
+  readonly promptLibrary: PromptLibraryService;
   readonly synthesis: SynthesisService;
   readonly sync: SyncEngine;
   readonly shellEntry: string;
@@ -77,7 +79,9 @@ const HANDLERS = [
   "polyask:new-session",
   "polyask:show-group-menu",
   "polyask:show-command-menu",
-  "polyask:confirm-new-session"
+  "polyask:confirm-new-session",
+  "polyask:prompt-template-save",
+  "polyask:prompt-template-delete"
 ] as const;
 
 const LISTENERS = [
@@ -96,7 +100,7 @@ function strictId(value: unknown): string {
 }
 
 export function registerShellIpc(options: ShellIpcOptions): () => void {
-  const { window, manager, workspace, coordinator, collection, archives, history, synthesis, sync } = options;
+  const { window, manager, workspace, coordinator, collection, archives, history, promptLibrary, synthesis, sync } = options;
   const trustedShell = (event: ShellIpcEvent) =>
     event.sender.id === window.webContents.id &&
     event.senderFrame?.parent === null &&
@@ -105,6 +109,11 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     const state = workspace.getState();
     manager.setSelection(state.selectedSites);
     if (!window.isDestroyed()) window.webContents.send("polyask:workspace-state", state);
+    return state;
+  };
+  const publishPromptLibrary = () => {
+    const state = promptLibrary.getState();
+    if (!window.isDestroyed()) window.webContents.send("polyask:prompt-library", state);
     return state;
   };
   const disposeSyncIpc = registerSyncIpc({ sync, runtime: options.runtime, trusted: trustedShell });
@@ -119,6 +128,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       layout: manager.getLayout(),
       display: manager.getDisplayPreferences(),
       workspace: workspace.getState(),
+      promptLibrary: promptLibrary.getState(),
       pendingSynthesis: synthesis.getPending(),
       sync: sync.status()
     };
@@ -149,6 +159,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
         if (result.ok) manager.watchGeneration(request.runId, result.site);
         if (result.ok && !historyRecorded) {
           history.record(request.text);
+          publishPromptLibrary();
           historyRecorded = true;
         }
       }
@@ -246,6 +257,16 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       throw new Error("invalid_site_count");
     }
     return confirmNewSession(window, Number(value), options.copy);
+  });
+  ipcMain.handle("polyask:prompt-template-save", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    promptLibrary.save(value);
+    return publishPromptLibrary();
+  });
+  ipcMain.handle("polyask:prompt-template-delete", (event, value: unknown) => {
+    if (!trustedShell(event)) throw new Error("untrusted_sender");
+    promptLibrary.delete(value);
+    return publishPromptLibrary();
   });
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) {

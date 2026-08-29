@@ -26,11 +26,16 @@ test("command palette is a keyboard-first full surface", () => {
       copy={getCopy("en")}
       commands={COMMANDS}
       groups={[]}
+      library={{ templates: [], history: [] }}
+      draft=""
       isMac={false}
       mode="commands"
       onModeChange={noop}
       onExecute={noop}
       onApplyGroup={noop}
+      onInsertPrompt={noop}
+      onSaveTemplate={noop}
+      onDeleteTemplate={noop}
       onClose={noop}
     />
   );
@@ -50,11 +55,16 @@ test("shortcut reference lists registered accelerators and aliases", () => {
       copy={getCopy("zh-CN")}
       commands={COMMANDS}
       groups={[]}
+      library={{ templates: [], history: [] }}
+      draft=""
       isMac={false}
       mode="shortcuts"
       onModeChange={noop}
       onExecute={noop}
       onApplyGroup={noop}
+      onInsertPrompt={noop}
+      onSaveTemplate={noop}
+      onDeleteTemplate={noop}
       onClose={noop}
     />
   );
@@ -63,6 +73,33 @@ test("shortcut reference lists registered accelerators and aliases", () => {
   assert.match(html, /Alt\+K/);
   assert.match(html, /F1/);
   assert.match(html, /Alt\+1/);
+});
+
+test("command palette exposes the prompt library without motion", () => {
+  const html = renderToStaticMarkup(
+    <CommandPalette
+      copy={getCopy("zh-CN")}
+      commands={COMMANDS}
+      groups={[]}
+      library={{
+        templates: [{ id: "one", name: "审校", text: "Review this", updatedAt: 1, deviceId: "a" }],
+        history: []
+      }}
+      draft="Draft"
+      isMac={false}
+      mode="library"
+      onModeChange={noop}
+      onExecute={noop}
+      onApplyGroup={noop}
+      onInsertPrompt={noop}
+      onSaveTemplate={noop}
+      onDeleteTemplate={noop}
+      onClose={noop}
+    />
+  );
+  assert.match(html, /提问库/);
+  assert.match(html, /审校/);
+  assert.doesNotMatch(html, /command-results/);
 });
 
 test("site health summarizes only the selected scope and keeps detail actions explicit", () => {

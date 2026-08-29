@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { PromptHistoryItem } from "../shared/prompt-library";
 import { utf8Preview, type HistoryRecord } from "../shared/sync";
 import type { HistoryRepository } from "./history-repository";
 
@@ -36,5 +37,13 @@ export class HistoryService {
       schema: 1
     };
     return this.repository.put(record) as HistoryRecord;
+  }
+
+  list(limit = 30): PromptHistoryItem[] {
+    return this.repository.list(limit).flatMap((record) => "deletedAt" in record ? [] : [{
+      id: record.id,
+      text: record.text,
+      lastUsedAt: record.lastUsedAt
+    }]);
   }
 }
