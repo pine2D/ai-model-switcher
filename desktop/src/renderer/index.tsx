@@ -381,6 +381,13 @@ function App(): React.JSX.Element {
     if (drawerOpen) changeDrawerOpen(false);
     setMode("focus", site);
   };
+  const openLatestReleasePage = (): Promise<void> => window.polyask.openExternal(LATEST_RELEASE_URL);
+  const checkForUpdates = (): void => {
+    changeSurface("sites");
+    void openLatestReleasePage()
+      .then(() => setAnnouncement(copy.updatePageOpened))
+      .catch(() => setAnnouncement(copy.updatePageFailed));
+  };
 
   commandActions.current = {
     "open-command-palette": () => openCommandSurface("commands"),
@@ -418,11 +425,7 @@ function App(): React.JSX.Element {
       changeSurface("settings");
     },
     "open-shortcuts": () => openCommandSurface("shortcuts"),
-    "check-updates": () => {
-      void window.polyask.openExternal(LATEST_RELEASE_URL)
-        .then(() => setAnnouncement(copy.updatePageOpened))
-        .catch(() => setAnnouncement(copy.updatePageFailed));
-    }
+    "check-updates": checkForUpdates
   };
   const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
 
@@ -441,7 +444,7 @@ function App(): React.JSX.Element {
     return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onCheckUpdates={openLatestReleasePage} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
   }
   if (surface === "commands") {
     return (

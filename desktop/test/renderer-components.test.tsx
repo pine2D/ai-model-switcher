@@ -99,7 +99,7 @@ test("command palette exposes the prompt library without motion", () => {
   );
   assert.match(html, /提问库/);
   assert.match(html, /审校/);
-  assert.doesNotMatch(html, /command-results/);
+  assert.doesNotMatch(html, /<div id="command-results"/);
 });
 
 test("site health summarizes only the selected scope and keeps detail actions explicit", () => {

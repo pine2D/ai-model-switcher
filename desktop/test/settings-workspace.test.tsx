@@ -196,12 +196,16 @@ test("settings expose an explicit local-only completion notification preference"
       status={status()}
       completionNotifications={true}
       onCompletionNotificationsChange={noop}
+      onCheckUpdates={noop}
       onStatus={noop}
       onAnnounce={noop}
       onClose={noop}
     />
   );
-  assert.match(html, /回答完成通知/);
+  assert.match(html, /回答状态通知/);
   assert.match(html, /checked=""/);
   assert.match(html, /仅保存在这台设备/);
+  assert.match(html, /<label class="settings-card preference-card"/);
+  assert.match(html, /应用更新/);
+  assert.match(html, />检查更新</);
 });

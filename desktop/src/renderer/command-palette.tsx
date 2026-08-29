@@ -6,9 +6,11 @@ import type { PromptLibraryState } from "../shared/prompt-library";
 import type { ActiveWorkspaceGroup } from "../shared/workspace";
 import { CloseIcon } from "./icons";
 import { commandItems, searchCommands, type PaletteCommand, type PaletteGroup } from "./command-search";
+import { pageTabKeyAction } from "./keyboard";
 import { PromptLibrary } from "./prompt-library";
 
 export type CommandPaletteMode = "commands" | "library" | "shortcuts";
+const PALETTE_MODES: readonly CommandPaletteMode[] = ["commands", "library", "shortcuts"];
 
 interface CommandPaletteProps {
   readonly copy: DesktopCopy;
@@ -48,6 +50,7 @@ export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const results = useMemo(() => searchCommands(query, props.commands, props.copy, {
     groups: props.groups,
     isMac: props.isMac
@@ -60,7 +63,7 @@ export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
   useEffect(() => {
     if (props.mode === "commands") inputRef.current?.focus();
     else panelRef.current?.focus();
-  }, [props.mode]);
+  }, []);
   useEffect(() => setActiveIndex(0), [query, props.mode]);
   useEffect(() => {
     document.getElementById(`command-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
@@ -88,15 +91,34 @@ export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
       run(visible[activeIndex]);
     }
   };
+  const onTabKeyDown = (event: React.KeyboardEvent, index: number): void => {
+    const action = pageTabKeyAction(event.key, index, PALETTE_MODES.length);
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    tabRefs.current[action.focus]?.focus();
+    if (action.activate) props.onModeChange(PALETTE_MODES[action.focus]);
+  };
 
   return (
     <main className="command-surface" aria-label={props.mode === "commands" ? props.copy.commandPalette : props.mode === "library" ? props.copy.promptLibrary : props.copy.keyboardShortcuts} aria-keyshortcuts="Escape" onKeyDown={onKeyDown}>
       <section className="command-palette" ref={panelRef} tabIndex={-1}>
         <header>
           <div className="command-view-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={props.mode === "commands"} onClick={() => props.onModeChange("commands")}>{props.copy.showCommands}</button>
-            <button type="button" role="tab" aria-selected={props.mode === "library"} onClick={() => props.onModeChange("library")}>{props.copy.showPromptLibrary}</button>
-            <button type="button" role="tab" aria-selected={props.mode === "shortcuts"} onClick={() => props.onModeChange("shortcuts")}>{props.copy.keyboardShortcuts}</button>
+            {PALETTE_MODES.map((mode, index) => (
+              <button
+                type="button"
+                id={`command-tab-${mode}`}
+                role="tab"
+                aria-selected={props.mode === mode}
+                aria-controls={mode === "library" ? "prompt-library-panel" : "command-results"}
+                tabIndex={props.mode === mode ? 0 : -1}
+                ref={(element) => { tabRefs.current[index] = element; }}
+                key={mode}
+                onClick={() => props.onModeChange(mode)}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
+              >{mode === "commands" ? props.copy.showCommands : mode === "library" ? props.copy.showPromptLibrary : props.copy.keyboardShortcuts}</button>
+            ))}
           </div>
           <button type="button" className="command-close" title={props.copy.closeCommandPalette} aria-label={props.copy.closeCommandPalette} onClick={props.onClose}><CloseIcon /></button>
         </header>
@@ -126,7 +148,7 @@ export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
           onInsert={props.onInsertPrompt}
           onSave={props.onSaveTemplate}
           onDelete={props.onDeleteTemplate}
-        /> : <div id="command-results" className="command-results" role="listbox" aria-label={props.mode === "commands" ? props.copy.commandPalette : props.copy.keyboardShortcuts}>
+        /> : <div id="command-results" className="command-results" role="listbox" aria-labelledby={`command-tab-${props.mode}`}>
           {visible.length ? visible.map((item, index) => (
             <button
               type="button"

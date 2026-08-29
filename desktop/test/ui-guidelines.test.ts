@@ -87,8 +87,39 @@ test("the high-frequency command surface opens without motion", () => {
   assert.doesNotMatch(renderer("index.tsx"), /surface-stage[^\n]*CommandPalette/);
 });
 
+test("the command surface keeps scrolling inside the result list", () => {
+  const css = renderer("styles.css");
+  assert.match(css, /\.command-surface\s*{[^}]*--command-block-pad:[^}]*overflow:\s*hidden/s);
+  assert.match(css, /\.command-palette\s*{[^}]*max-height:\s*min\(680px,\s*calc\(100vh - 2 \* var\(--command-block-pad\)\)\)/s);
+  assert.match(css, /\.command-results\s*{[^}]*overflow:\s*auto/s);
+});
+
 test("Drive idle success color requires an active connection", () => {
   const css = renderer("settings.css");
   assert.match(css, /\.sync-state\[data-connected="true"\]\[data-state="idle"\] i\s*\{\s*background:\s*var\(--success\);\s*\}/);
   assert.doesNotMatch(css, /\.sync-state\[data-state="idle"\] i\s*\{/);
+});
+
+test("custom tab lists support arrow-key focus and explicit panels", () => {
+  const command = renderer("command-palette.tsx");
+  const drawer = renderer("workspace-drawer.tsx");
+  for (const source of [command, drawer]) {
+    assert.match(source, /pageTabKeyAction/);
+    assert.match(source, /onKeyDown/);
+    assert.match(source, /tabIndex=/);
+    assert.match(source, /aria-controls=/);
+  }
+});
+
+test("answer comparison contains long unbroken content", () => {
+  assert.match(renderer("styles.css"), /\.archive-compare-paragraph\s*>\s*p[^}]*overflow-wrap:\s*anywhere/s);
+});
+
+test("manual update feedback stays visible on the active surface", () => {
+  const settings = renderer("settings-workspace.tsx");
+  const app = renderer("index.tsx");
+  assert.match(settings, /setFeedback\(props\.copy\.updatePageOpened\)/);
+  assert.match(settings, /setFeedback\(props\.copy\.updatePageFailed\)/);
+  assert.match(app, /const checkForUpdates = \(\): void => \{[\s\S]*changeSurface\("sites"\)/);
+  assert.match(app, /"check-updates": checkForUpdates/);
 });

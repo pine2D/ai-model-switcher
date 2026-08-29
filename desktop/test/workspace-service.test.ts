@@ -39,6 +39,19 @@ test("workspace defaults to all sites and persists strict selection and tier", (
   }
 });
 
+test("workspace persists every selection size from zero through nine", () => {
+  const { database, service } = fixture();
+  try {
+    for (let count = 0; count <= SITES.length; count += 1) {
+      const expected = SITES.slice(0, count).map((site) => site.key);
+      assert.deepEqual(service.setSelection(expected).selectedSites, expected);
+      assert.deepEqual(service.getState().selectedSites, expected);
+    }
+  } finally {
+    database.close();
+  }
+});
+
 test("workspace groups reject invalid values and deletion writes a tombstone", () => {
   const { database, service, setNow } = fixture();
   try {

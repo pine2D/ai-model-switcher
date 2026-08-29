@@ -22,6 +22,7 @@ interface SettingsWorkspaceProps {
   readonly onStatus: (value: SyncStatus) => void;
   readonly onAnnounce: (value: string) => void;
   readonly onClose: () => void;
+  readonly onCheckUpdates?: () => void | Promise<void>;
   readonly completionNotifications?: boolean;
   readonly onCompletionNotificationsChange?: (enabled: boolean) => void;
   readonly initialSection?: "overview" | "drive-diagnostics";
@@ -111,6 +112,20 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
       props.onAnnounce(props.copy.syncDiagnosticsCopyFailed);
     }
   };
+  const checkUpdates = async (): Promise<void> => {
+    if (busy || !props.onCheckUpdates) return;
+    setActionBusy(true);
+    try {
+      await props.onCheckUpdates();
+      setFeedback(props.copy.updatePageOpened);
+      props.onAnnounce(props.copy.updatePageOpened);
+    } catch {
+      setFeedback(props.copy.updatePageFailed);
+      props.onAnnounce(props.copy.updatePageFailed);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   return (
     <main className="settings-workspace" aria-busy={busy}>
@@ -177,13 +192,13 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             })}
           >{props.copy.syncClear}</button>
         </section>
-        <section className="settings-card preference-card" aria-labelledby="completion-notifications-title">
-          <div>
-            <h2 id="completion-notifications-title">{props.copy.completionNotifications}</h2>
+        <label className="settings-card preference-card">
+          <span className="preference-copy">
+            <strong id="completion-notifications-title" className="preference-title">{props.copy.completionNotifications}</strong>
             <p>{props.copy.completionNotificationsDescription}</p>
             <small>{props.copy.localPreference}</small>
-          </div>
-          <label className="preference-switch">
+          </span>
+          <span className="preference-switch">
             <input
               type="checkbox"
               name="completion-notifications"
@@ -192,7 +207,12 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
               onChange={(event) => props.onCompletionNotificationsChange?.(event.target.checked)}
             />
             <span aria-hidden="true" />
-          </label>
+          </span>
+        </label>
+        <section className="settings-card update-card" aria-labelledby="app-updates-title">
+          <h2 id="app-updates-title">{props.copy.appUpdates}</h2>
+          <p>{props.copy.appUpdatesDescription}</p>
+          <button type="button" disabled={busy || !props.onCheckUpdates} onClick={() => { void checkUpdates(); }}>{props.copy.checkForUpdates}</button>
         </section>
       </div>
       <footer className="archive-status" role="status" aria-live="polite">{feedback}</footer>

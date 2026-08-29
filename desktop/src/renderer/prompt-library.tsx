@@ -30,7 +30,7 @@ export function PromptLibrary(props: PromptLibraryProps): React.JSX.Element {
     setName("");
   };
   return (
-    <section className="prompt-library" aria-label={props.copy.promptLibrary}>
+    <section id="prompt-library-panel" className="prompt-library" role="tabpanel" aria-labelledby="command-tab-library">
       <label className="command-search">
         <span className="sr-only">{props.copy.promptLibrarySearch}</span>
         <input type="search" autoComplete="off" value={query} placeholder={props.copy.promptLibrarySearch} onChange={(event) => setQuery(event.target.value)} />

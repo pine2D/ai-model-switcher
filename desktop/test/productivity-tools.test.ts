@@ -42,3 +42,10 @@ test("completion notifications are opt-in, unfocused, deduplicated and contain n
   notifier.accept({ site: "claude", phase: "failed", unread: true }, "Claude");
   assert.equal(shown.length, 1);
 });
+
+test("notification copy names both completion and failure states accurately", async () => {
+  const { PRODUCTIVITY_COPY } = await import("../src/shared/productivity-copy");
+  assert.equal(PRODUCTIVITY_COPY.zhCN.completionNotifications, "回答状态通知");
+  assert.match(PRODUCTIVITY_COPY.zhCN.completionNotificationFailed, /回答失败/);
+  assert.equal(PRODUCTIVITY_COPY.en.completionNotifications, "Answer status notifications");
+});
