@@ -55,6 +55,7 @@ interface ShellIpcOptions {
   readonly sync: SyncEngine;
   readonly shellEntry: string;
   readonly applyDisplay: (value: DisplayPreferences) => DisplayPreferences;
+  readonly setCompletionNotifications: (enabled: boolean) => void;
 }
 
 const HANDLERS = [
@@ -91,6 +92,7 @@ const LISTENERS = [
   "polyask:set-surface",
   "polyask:set-layout",
   "polyask:set-page",
+  "polyask:set-completion-notifications",
   "polyask:site-response"
 ] as const;
 
@@ -298,6 +300,10 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (!trustedShell(event)) return;
     const page = parsePageIndex(value);
     if (page !== null) manager.setPage(page);
+  });
+  ipcMain.on("polyask:set-completion-notifications", (event, value: unknown) => {
+    if (!trustedShell(event) || typeof value !== "boolean") return;
+    options.setCompletionNotifications(value);
   });
   ipcMain.on("polyask:site-response", (event, envelope: SiteResponseEnvelope) => {
     if (manager.owns(event.sender)) manager.receiveResponse(event.sender, envelope);

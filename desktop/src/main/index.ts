@@ -7,6 +7,7 @@ import {
   BrowserWindow,
   dialog,
   Menu,
+  Notification,
   screen,
   type MenuItemConstructorOptions
 } from "electron";
@@ -18,7 +19,7 @@ import {
   commandAliasForInput,
   type CommandId
 } from "../shared/commands";
-import { getCopy } from "../shared/copy";
+import { formatCopy, getCopy } from "../shared/copy";
 import { parseDesktopUiState } from "../shared/desktop-ui-state";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
@@ -32,6 +33,7 @@ import type { WorkspaceState } from "../shared/workspace";
 import { ArchiveService } from "./archive-service";
 import { BroadcastCoordinator } from "./broadcast";
 import { CollectionService } from "./collection-service";
+import { CompletionNotifier } from "./completion-notifier";
 import { DesktopDatabase } from "./database";
 import { HistoryService } from "./history-service";
 import { PromptLibraryService } from "./prompt-library-service";
@@ -310,6 +312,17 @@ async function createWindow(): Promise<void> {
     window.setMenuBarVisibility(false);
   }
   mainWindow = window;
+  const completionNotifier = new CompletionNotifier({
+    copy: {
+      title: copy.appTitle,
+      complete: (site) => formatCopy(copy.completionNotificationComplete, { site }),
+      failed: (site) => formatCopy(copy.completionNotificationFailed, { site })
+    },
+    focused: () => window.isFocused(),
+    show: (notification) => {
+      if (Notification.isSupported()) new Notification({ ...notification, silent: true }).show();
+    }
+  });
   const guardShellNavigation = (event: Electron.Event, url: string) => {
     if (!isTrustedShellUrl(url, MAIN_WINDOW_WEBPACK_ENTRY)) event.preventDefault();
   };
@@ -319,7 +332,11 @@ async function createWindow(): Promise<void> {
   const runtimeGates = startRuntimeGates(window);
   const manager = new ViewManager(
     window,
-    (status) => sendToShell("polyask:site-status", status),
+    (status) => {
+      sendToShell("polyask:site-status", status);
+      const site = SITES.find((candidate) => candidate.key === status.site);
+      completionNotifier.accept(status, site?.label ?? status.site);
+    },
     (layout) => sendToShell("polyask:layout", layout),
     runtimeGates.record,
     {
@@ -391,7 +408,8 @@ async function createWindow(): Promise<void> {
     synthesis,
     sync,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
-    applyDisplay: (value) => applyDisplayPreferences(manager, value)
+    applyDisplay: (value) => applyDisplayPreferences(manager, value),
+    setCompletionNotifications: (enabled) => completionNotifier.setEnabled(enabled)
   });
   window.on("move", () => uiStateStore.schedule(manager.getUiState()));
   window.on("maximize", () => uiStateStore.schedule(manager.getUiState()));

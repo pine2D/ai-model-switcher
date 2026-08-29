@@ -22,6 +22,8 @@ interface SettingsWorkspaceProps {
   readonly onStatus: (value: SyncStatus) => void;
   readonly onAnnounce: (value: string) => void;
   readonly onClose: () => void;
+  readonly completionNotifications?: boolean;
+  readonly onCompletionNotificationsChange?: (enabled: boolean) => void;
   readonly initialSection?: "overview" | "drive-diagnostics";
 }
 
@@ -174,6 +176,23 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
               return next;
             })}
           >{props.copy.syncClear}</button>
+        </section>
+        <section className="settings-card preference-card" aria-labelledby="completion-notifications-title">
+          <div>
+            <h2 id="completion-notifications-title">{props.copy.completionNotifications}</h2>
+            <p>{props.copy.completionNotificationsDescription}</p>
+            <small>{props.copy.localPreference}</small>
+          </div>
+          <label className="preference-switch">
+            <input
+              type="checkbox"
+              name="completion-notifications"
+              aria-labelledby="completion-notifications-title"
+              checked={!!props.completionNotifications}
+              onChange={(event) => props.onCompletionNotificationsChange?.(event.target.checked)}
+            />
+            <span aria-hidden="true" />
+          </label>
         </section>
       </div>
       <footer className="archive-status" role="status" aria-live="polite">{feedback}</footer>

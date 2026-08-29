@@ -186,3 +186,22 @@ test("Drive diagnostics command opens the healthy six-stage section on demand", 
   assert.match(html, />连接诊断</);
   assert.match(html, /报告仅包含应用与连接状态/);
 });
+
+test("settings expose an explicit local-only completion notification preference", () => {
+  const html = renderToStaticMarkup(
+    <SettingsWorkspace
+      copy={getCopy("zh-CN")}
+      locale="zh-CN"
+      runtime={runtime}
+      status={status()}
+      completionNotifications={true}
+      onCompletionNotificationsChange={noop}
+      onStatus={noop}
+      onAnnounce={noop}
+      onClose={noop}
+    />
+  );
+  assert.match(html, /回答完成通知/);
+  assert.match(html, /checked=""/);
+  assert.match(html, /仅保存在这台设备/);
+});

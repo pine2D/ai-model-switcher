@@ -237,6 +237,20 @@ test("prompt templates and recent history use a trusted synchronized library bri
   assert.match(main, /PromptLibraryService/);
 });
 
+test("completion notifications are boolean-only and update checks open the official release page", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const main = readFileSync("src/main/index.ts", "utf8");
+  assert.match(ipc, /polyask:set-completion-notifications/);
+  assert.match(ipc, /typeof value !== "boolean"/);
+  assert.match(preload, /setCompletionNotifications/);
+  assert.match(main, /CompletionNotifier/);
+  assert.match(renderer, /github\.com\/pine2D\/polyask\/releases\/latest/);
+  assert.match(renderer, /nextSiteForStatus/);
+  assert.doesNotMatch(main, /autoUpdater/);
+});
+
 test("assisted synthesis state and mutations stay behind the trusted shell bridge", () => {
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");

@@ -87,6 +87,22 @@
 .danger-zone input { height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: #fafafd; }
 .danger-zone button { margin-top: 7px; border-color: var(--danger); color: var(--danger); }
 .danger-zone button:hover:not(:disabled) { color: white; background: var(--danger); }
+.preference-card { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.preference-card p { max-width: 560px; }
+.preference-card small { color: var(--muted); font-size: 10px; }
+.preference-switch { position: relative; flex: 0 0 auto; }
+.preference-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.preference-switch span {
+  width: 38px; height: 22px; display: block; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--border); cursor: pointer;
+}
+.preference-switch span::after {
+  content: ""; width: 16px; height: 16px; margin: 2px; display: block; border-radius: 50%;
+  background: var(--panel); transform: translateX(0); transition: transform 160ms var(--ease-out);
+}
+.preference-switch input:checked + span { border-color: var(--accent); background: var(--accent); }
+.preference-switch input:checked + span::after { transform: translateX(16px); }
+.preference-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 860px) {
   .settings-body { grid-template-columns: 1fr; }
   .sync-overview { grid-template-columns: 1fr; }

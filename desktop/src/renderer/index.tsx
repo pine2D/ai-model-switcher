@@ -21,6 +21,10 @@ import { CommandBar } from "./command-bar";
 import { CommandPalette, type CommandPaletteMode } from "./command-palette";
 import { executeCommand } from "./command-dispatcher";
 import {
+  loadCompletionNotifications,
+  saveCompletionNotifications
+} from "./completion-notification-preference";
+import {
   applyDisplayDensity,
   applyDisplayPreferences,
   loadDisplayPreferences,
@@ -31,6 +35,7 @@ import { clearDraft, loadDraft, saveDraft } from "./prompt-draft";
 import { usePresence } from "./presence";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
+import { nextSiteForStatus } from "./site-navigation";
 import { WorkspaceDrawer } from "./workspace-drawer";
 import {
   openWorkspacePanel,
@@ -66,6 +71,7 @@ const INITIAL_SYNC: SyncStatus = {
 };
 const INITIAL_RUNTIME: RuntimeInfo = { version: "", distribution: "installed" };
 const INITIAL_LIBRARY: PromptLibraryState = { templates: [], history: [] };
+const LATEST_RELEASE_URL = "https://github.com/pine2D/polyask/releases/latest";
 
 applyDisplayDensity(document.documentElement, INITIAL_DISPLAY);
 
@@ -96,6 +102,9 @@ function App(): React.JSX.Element {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(INITIAL_SYNC);
   const [runtime, setRuntime] = useState<RuntimeInfo>(INITIAL_RUNTIME);
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryState>(INITIAL_LIBRARY);
+  const [completionNotifications, setCompletionNotifications] = useState(() =>
+    loadCompletionNotifications(window.localStorage)
+  );
   const [announcement, setAnnouncement] = useState("");
   const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
   const drawerOpen = panelState !== null;
@@ -195,6 +204,10 @@ function App(): React.JSX.Element {
   const composerExpanded = promptExpanded || imageTrayOpen;
   useEffect(() => window.polyask.setComposerExpanded(composerExpanded), [composerExpanded]);
   useEffect(() => { saveDraft(window.localStorage, text); }, [text]);
+  useEffect(() => {
+    saveCompletionNotifications(window.localStorage, completionNotifications);
+    window.polyask.setCompletionNotifications(completionNotifications);
+  }, [completionNotifications]);
 
   const scopeLabel = useMemo(
     () => scopeDisplayName(workspace.selectedSites, workspace.groups, copy),
@@ -335,7 +348,8 @@ function App(): React.JSX.Element {
   const showMoreMenu = async (): Promise<void> => {
     const moreIds: readonly CommandId[] = [
       "retry-failed", "collect-answers", "open-archive", "collect-synthesis",
-      "new-session", "open-command-palette", "open-shortcuts", "open-settings"
+      "next-unfinished", "next-failed", "new-session", "check-updates",
+      "open-command-palette", "open-shortcuts", "open-settings"
     ];
     const commands = moreIds.filter((id) => !!commandActions.current[id]);
     try {
@@ -355,6 +369,17 @@ function App(): React.JSX.Element {
     requestedPage.current = { page, inputMethod: "keyboard" };
     setPageInputMethod("keyboard");
     window.polyask.setPage(page);
+  };
+  const nextUnfinished = nextSiteForStatus(
+    workspace.selectedSites, layout.focused, statuses, "unfinished"
+  );
+  const nextFailed = nextSiteForStatus(
+    workspace.selectedSites, layout.focused, statuses, "failed"
+  );
+  const focusSite = (site: SiteDefinition["key"]): void => {
+    changeSurface("sites");
+    if (drawerOpen) changeDrawerOpen(false);
+    setMode("focus", site);
   };
 
   commandActions.current = {
@@ -381,6 +406,8 @@ function App(): React.JSX.Element {
     ...(broadcast.failureCount + broadcast.cancelledCount > 0 ? {
       "retry-failed": () => { changeSurface("sites"); void actionLock.current!.run(broadcast.retry); }
     } : {}),
+    ...(nextUnfinished ? { "next-unfinished": () => focusSite(nextUnfinished) } : {}),
+    ...(nextFailed ? { "next-failed": () => focusSite(nextFailed) } : {}),
     ...(selected.size > 0 ? { "new-session": () => { changeSurface("sites"); void startNewSession(); } } : {}),
     "open-settings": () => {
       setSettingsSection("overview");
@@ -390,7 +417,12 @@ function App(): React.JSX.Element {
       setSettingsSection("drive-diagnostics");
       changeSurface("settings");
     },
-    "open-shortcuts": () => openCommandSurface("shortcuts")
+    "open-shortcuts": () => openCommandSurface("shortcuts"),
+    "check-updates": () => {
+      void window.polyask.openExternal(LATEST_RELEASE_URL)
+        .then(() => setAnnouncement(copy.updatePageOpened))
+        .catch(() => setAnnouncement(copy.updatePageFailed));
+    }
   };
   const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
 
@@ -409,7 +441,7 @@ function App(): React.JSX.Element {
     return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
   }
   if (surface === "commands") {
     return (

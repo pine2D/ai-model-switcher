@@ -1,6 +1,7 @@
 import { ARCHIVE_COPY } from "./archive-copy";
 import { COMMAND_COPY } from "./command-copy";
 import { PROMPT_LIBRARY_COPY } from "./prompt-library-copy";
+import { PRODUCTIVITY_COPY } from "./productivity-copy";
 import { SYNC_COPY } from "./sync-copy";
 import { SYNTHESIS_COPY } from "./synthesis-copy";
 import { WORKSPACE_COPY } from "./workspace-copy";
@@ -10,6 +11,7 @@ export const COPY = {
     ...ARCHIVE_COPY.en,
     ...COMMAND_COPY.en,
     ...PROMPT_LIBRARY_COPY.en,
+    ...PRODUCTIVITY_COPY.en,
     ...SYNC_COPY.en,
     ...SYNTHESIS_COPY.en,
     ...WORKSPACE_COPY.en,
@@ -130,6 +132,7 @@ export const COPY = {
     ...ARCHIVE_COPY.zhCN,
     ...COMMAND_COPY.zhCN,
     ...PROMPT_LIBRARY_COPY.zhCN,
+    ...PRODUCTIVITY_COPY.zhCN,
     ...SYNC_COPY.zhCN,
     ...SYNTHESIS_COPY.zhCN,
     ...WORKSPACE_COPY.zhCN,
@@ -250,6 +253,7 @@ export const COPY = {
     ...ARCHIVE_COPY.zhTW,
     ...COMMAND_COPY.zhTW,
     ...PROMPT_LIBRARY_COPY.zhTW,
+    ...PRODUCTIVITY_COPY.zhTW,
     ...SYNC_COPY.zhTW,
     ...SYNTHESIS_COPY.zhTW,
     ...WORKSPACE_COPY.zhTW,
