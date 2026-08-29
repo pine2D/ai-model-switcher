@@ -9,6 +9,7 @@ import { validateImages, type DesktopImage } from "./images";
 import type { PendingSynthesis } from "./synthesis";
 import type { RuntimeInfo } from "./runtime";
 import type { SyncStatus } from "./sync";
+import type { SiteDiagnosticCheck } from "./site-health";
 import type { WorkspaceState } from "./workspace";
 
 export type Tier = "think" | "fast" | null;
@@ -46,7 +47,13 @@ export interface CollectSiteCommand {
   readonly deadline: number;
 }
 
-export type SiteCommand = SubmitSiteCommand | CollectSiteCommand;
+export interface DiagnoseSiteCommand {
+  readonly source: "AMS";
+  readonly cmd: "diagnose";
+  readonly deadline: number;
+}
+
+export type SiteCommand = SubmitSiteCommand | CollectSiteCommand | DiagnoseSiteCommand;
 
 export interface SiteResult {
   readonly ok: boolean;
@@ -64,6 +71,11 @@ export interface SiteCollectionResult {
   readonly code?: string;
 }
 
+export interface SiteDiagnosticResponse {
+  readonly checks?: readonly SiteDiagnosticCheck[];
+  readonly code?: string;
+}
+
 export interface CollectedAnswer {
   readonly site: SiteKey;
   readonly host: string;
@@ -73,7 +85,7 @@ export interface CollectedAnswer {
   readonly code?: string;
 }
 
-export type SiteCommandResponse = SiteResult | SiteCollectionResult;
+export type SiteCommandResponse = SiteResult | SiteCollectionResult | SiteDiagnosticResponse;
 
 export interface CollectionRequest {
   readonly sites: readonly SiteKey[];

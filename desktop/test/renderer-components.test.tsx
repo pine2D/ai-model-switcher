@@ -10,6 +10,7 @@ import { CommandPalette } from "../src/renderer/command-palette";
 import { ImagePicker } from "../src/renderer/image-picker";
 import { PageTabs } from "../src/renderer/page-tabs";
 import { SiteFrames } from "../src/renderer/site-frames";
+import { SiteHealthPanel } from "../src/renderer/site-health";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { WorkspaceActions } from "../src/renderer/workspace-actions";
 import { getCopy } from "../src/shared/copy";
@@ -62,6 +63,42 @@ test("shortcut reference lists registered accelerators and aliases", () => {
   assert.match(html, /Alt\+K/);
   assert.match(html, /F1/);
   assert.match(html, /Alt\+1/);
+});
+
+test("site health summarizes only the selected scope and keeps detail actions explicit", () => {
+  const copy = getCopy("zh-CN");
+  const html = renderToStaticMarkup(
+    <SiteHealthPanel
+      copy={copy}
+      sites={SITES.slice(0, 2)}
+      statuses={{
+        claude: { site: "claude", phase: "ready" },
+        chatgpt: { site: "chatgpt", phase: "failed", code: "load_failed" }
+      }}
+      health={{
+        claude: { site: "claude", state: "ready", checks: [{ name: "输入框", ok: true }] },
+        chatgpt: {
+          site: "chatgpt",
+          state: "error",
+          page: "error",
+          recent: { phase: "failed", code: "load_failed" },
+          checks: [{ name: "输入框", ok: false }]
+        }
+      }}
+      detail="chatgpt"
+      checking={false}
+      onDetail={noop}
+      onCheck={noop}
+      onFocus={noop}
+      onReload={noop}
+      onBack={noop}
+    />
+  );
+  assert.match(html, /页面加载失败/);
+  assert.match(html, /输入框/);
+  assert.match(html, /重新检查/);
+  assert.match(html, /聚焦站点/);
+  assert.match(html, /重新加载 ChatGPT/);
 });
 
 test("bootstrap loading is a polite busy state without a retry action", () => {
@@ -329,10 +366,15 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
         deviceId: "device-a"
       }]}
       statuses={{}}
+      health={{}}
+      healthChecking={false}
       onStateChange={noop}
       onSelectionChange={noop}
       onSaveGroup={async () => true}
       onDeleteGroup={noop}
+      onCheckHealth={noop}
+      onFocusSite={noop}
+      onReloadSite={noop}
     />
   );
 
@@ -347,6 +389,51 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
   assert.match(html, /name="group-name"/);
   assert.doesNotMatch(html, /name="group-name"[^>]*disabled/);
   assert.match(html, /group-save-hint/);
+});
+
+test("workspace health lists only sites in the current scope", () => {
+  const html = renderToStaticMarkup(
+    <WorkspaceDrawer
+      open={true}
+      state={{ tab: "health", detail: null, inputMethod: "keyboard" }}
+      copy={getCopy("en")}
+      sites={SITES}
+      selected={new Set(["claude", "gemini"])}
+      groups={[]}
+      statuses={{}}
+      health={{}}
+      healthChecking={false}
+      onStateChange={noop}
+      onSelectionChange={noop}
+      onSaveGroup={async () => true}
+      onDeleteGroup={noop}
+      onCheckHealth={noop}
+      onFocusSite={noop}
+      onReloadSite={noop}
+    />
+  );
+  assert.equal([...html.matchAll(/data-health-state="unknown"/g)].length, 2);
+  assert.match(html, />Claude</);
+  assert.match(html, />Gemini</);
+  assert.doesNotMatch(html, />ChatGPT</);
+});
+
+test("site reload is disabled while a send is active", () => {
+  const site = SITES[0]!;
+  const html = renderToStaticMarkup(
+    <SiteFrames
+      copy={getCopy("en")}
+      sites={[site]}
+      statuses={{ [site.key]: { site: site.key, phase: "sending" } }}
+      layout={{ mode: "overview", focused: site.key, page: 0, pageCount: 1, placements: [{ key: site.key, bounds: { x: 0, y: 0, width: 100, height: 80 } }] }}
+      selected={new Set([site.key])}
+      onToggle={noop}
+      onFocus={noop}
+      onReload={noop}
+    />
+  );
+  assert.match(html, /<button type="button" disabled=""[^>]*aria-label="Reload Claude"/);
+  assert.match(html, /title="Reload is unavailable while this site is working"/);
 });
 
 test("site frames render only the active selected page with accessible actions", () => {

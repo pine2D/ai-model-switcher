@@ -5,9 +5,11 @@ import type {
   SiteCommandResponse,
   SiteCommandEnvelope,
   SiteCollectionResult,
+  SiteDiagnosticResponse,
   SiteResponseEnvelope,
   SiteResult
 } from "../shared/protocol";
+import { normalizeDiagnosticChecks } from "../shared/site-health";
 
 type SendResponse = (response: unknown) => void;
 type RuntimeListener = (
@@ -72,6 +74,12 @@ function normalizeCollection(value: unknown): SiteCollectionResult {
   };
 }
 
+function normalizeDiagnostic(value: unknown): SiteDiagnosticResponse {
+  if (!value || typeof value !== "object") return { code: "not_ready" };
+  const checks = normalizeDiagnosticChecks((value as Record<string, unknown>).checks);
+  return checks.length ? { checks } : { code: "not_ready" };
+}
+
 function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
   const listener = listeners[0];
   if (!listener) return Promise.resolve({ ok: false, code: "adapter_unavailable" });
@@ -84,16 +92,20 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(command.cmd === "collect" ? normalizeCollection(value) : normalizeResult(value));
+      resolve(command.cmd === "collect"
+        ? normalizeCollection(value)
+        : command.cmd === "diagnose" ? normalizeDiagnostic(value) : normalizeResult(value));
     };
     const timer = setTimeout(
-      () => finish(command.cmd === "collect" ? { code: "not_ready" } : { ok: false, code: "submit_unconfirmed" }),
+      () => finish(command.cmd === "submitPrompt"
+        ? { ok: false, code: "submit_unconfirmed" }
+        : { code: "not_ready" }),
       remaining
     );
     try {
       const message = command.cmd === "collect"
         ? { source: "AMS", cmd: "collectAnswer" }
-        : command;
+        : command.cmd === "diagnose" ? { source: "AMS", cmd: "diagnose" } : command;
       const asyncResponse = listener(message, {}, finish) === true;
       if (!asyncResponse && !settled) finish({ ok: false, code: "invalid_response" });
     } catch {

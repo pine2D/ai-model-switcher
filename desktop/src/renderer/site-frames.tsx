@@ -1,6 +1,7 @@
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { LayoutState, SiteStatus } from "../shared/protocol";
+import { siteReloadAllowed } from "../shared/site-health";
 import { describeStatus, visibleStatus } from "../shared/status-copy";
 import { FocusIcon, ReloadIcon } from "./icons";
 
@@ -35,6 +36,7 @@ export function SiteFrames(props: SiteFramesProps): React.JSX.Element {
           if (!site) return null;
           const statusText = describeStatus(copy, status);
           const attentionText = visibleStatus(copy, status);
+          const reloadBlocked = !siteReloadAllowed(status.phase);
           return (
             <article
               className={`tile-frame phase-${status.phase}`}
@@ -56,7 +58,7 @@ export function SiteFrames(props: SiteFramesProps): React.JSX.Element {
                 {attentionText && <span className="site-state priority-p0" title={statusText}>{attentionText}</span>}
                 <span className="tile-actions priority-p2">
                   <button type="button" title={formatCopy(copy.focusSite, { site: site.label })} aria-label={formatCopy(copy.focusSite, { site: site.label })} onClick={() => onFocus(site.key)}><FocusIcon /></button>
-                  <button type="button" title={formatCopy(copy.reloadSite, { site: site.label })} aria-label={formatCopy(copy.reloadSite, { site: site.label })} onClick={() => onReload(site.key)}><ReloadIcon /></button>
+                  <button type="button" disabled={reloadBlocked} title={reloadBlocked ? copy.healthReloadBlocked : formatCopy(copy.reloadSite, { site: site.label })} aria-label={formatCopy(copy.reloadSite, { site: site.label })} onClick={() => onReload(site.key)}><ReloadIcon /></button>
                 </span>
               </div>
             </article>

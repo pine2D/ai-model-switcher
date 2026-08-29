@@ -179,6 +179,22 @@ test("workspace surfaces detach site views without destroying their web contents
   assert.match(readFileSync("src/main/shell-ipc.ts", "utf8"), /"commands"/);
 });
 
+test("site health and guarded reload cross the trusted typed bridge", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8") + readFileSync("src/main/site-health-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const sitePreload = readFileSync("src/preload/site.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  assert.match(ipc, /polyask:site-health/);
+  assert.match(ipc, /polyask:reload-site/);
+  assert.match(ipc, /trustedShell\(event\)/);
+  assert.match(preload, /checkSiteHealth/);
+  assert.match(preload, /reloadSite\(site: SiteKey\): Promise<boolean>/);
+  assert.match(sitePreload, /cmd === "diagnose"/);
+  assert.match(manager, /siteReloadAllowed/);
+  assert.match(manager, /this\.pageStatus\.get\(site\)/);
+  assert.match(manager, /this\.runStatus\.get\(site\)/);
+});
+
 test("archive mutations and history persistence stay behind trusted main-process IPC", () => {
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");

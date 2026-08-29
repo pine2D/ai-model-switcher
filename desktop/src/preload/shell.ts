@@ -23,6 +23,7 @@ import type {
 } from "../shared/protocol";
 import type { WorkspaceState } from "../shared/workspace";
 import type { SyncStatus } from "../shared/sync";
+import type { SiteHealth } from "../shared/site-health";
 import type {
   SynthesisCandidate,
   SynthesisSendRequest,
@@ -62,7 +63,8 @@ export interface PolyAskDesktopApi {
   syncNow(): Promise<SyncStatus>;
   disconnectSync(): Promise<SyncStatus>;
   clearRemoteSync(confirmation: string): Promise<SyncStatus>;
-  reloadSite(site: SiteKey): void;
+  checkSiteHealth(sites: readonly SiteKey[]): Promise<SiteHealth[]>;
+  reloadSite(site: SiteKey): Promise<boolean>;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
@@ -112,7 +114,8 @@ const api: PolyAskDesktopApi = Object.freeze({
   syncNow: () => ipcRenderer.invoke("polyask:sync-now"),
   disconnectSync: () => ipcRenderer.invoke("polyask:sync-disconnect"),
   clearRemoteSync: (confirmation: string) => ipcRenderer.invoke("polyask:sync-clear", confirmation),
-  reloadSite: (site: SiteKey) => ipcRenderer.send("polyask:reload-site", site),
+  checkSiteHealth: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:site-health", sites),
+  reloadSite: (site: SiteKey) => ipcRenderer.invoke("polyask:reload-site", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>

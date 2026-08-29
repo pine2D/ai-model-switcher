@@ -11,6 +11,7 @@ import type { BootstrapState, DesktopSurface, LayoutState, SiteStatus } from "..
 import { describeStatus } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
+import type { SiteHealth } from "../shared/site-health";
 import { ArchiveSurface } from "./archive-surface";
 import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
@@ -73,11 +74,14 @@ function App(): React.JSX.Element {
   const requestedPage = useRef<{ readonly page: number; readonly inputMethod: "keyboard" | "pointer" } | null>(null);
   const actionLock = useRef<ExclusiveActionLock | null>(null);
   const commandActions = useRef<CommandActions>({});
+  const healthRequest = useRef(0);
   const lastOpenPanel = useRef<OpenWorkspacePanelState>(openWorkspacePanel("sites", "pointer"));
   if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
+  const [health, setHealth] = useState<Partial<Record<string, SiteHealth>>>({});
+  const [healthChecking, setHealthChecking] = useState(false);
   const [layout, setLayout] = useState<LayoutState>(INITIAL_LAYOUT);
   const [text, setText] = useState("");
   const [auxiliaryBusy, setAuxiliaryBusy] = useState(false);
@@ -101,6 +105,7 @@ function App(): React.JSX.Element {
   const openPanel = (tab: WorkspacePanelTab, inputMethod: "pointer" | "keyboard"): void => {
     changeSurface("sites");
     changePanelState(openWorkspacePanel(tab, inputMethod));
+    if (tab === "health") void refreshSiteHealth(workspace.selectedSites);
   };
   const changeDrawerOpen = (value: boolean): void => {
     changePanelState(value ? openWorkspacePanel("sites", "pointer") : null);
@@ -186,9 +191,29 @@ function App(): React.JSX.Element {
     () => scopeDisplayName(workspace.selectedSites, workspace.groups, copy),
     [copy, workspace.groups, workspace.selectedSites]
   );
+  const refreshSiteHealth = async (keys: readonly SiteHealth["site"][]): Promise<void> => {
+    if (!keys.length) return;
+    const request = ++healthRequest.current;
+    setHealthChecking(true);
+    try {
+      const results = await window.polyask.checkSiteHealth(keys);
+      if (request !== healthRequest.current) return;
+      setHealth((current) => ({
+        ...current,
+        ...Object.fromEntries(results.map((result) => [result.site, result]))
+      }));
+    } catch {
+      if (request === healthRequest.current) setAnnouncement(copy.healthRequestFailed);
+    } finally {
+      if (request === healthRequest.current) setHealthChecking(false);
+    }
+  };
   const healthAttention = useMemo(
-    () => Object.values(statuses).filter((status) => ["warning", "failed", "crashed"].includes(status.phase)).length,
-    [statuses]
+    () => new Set([
+      ...Object.values(statuses).filter((status) => selected.has(status.site) && ["warning", "failed", "crashed"].includes(status.phase)).map((status) => status.site),
+      ...Object.values(health).filter((item) => item && selected.has(item.site) && ["sign-in", "error"].includes(item.state)).map((item) => item!.site)
+    ]).size,
+    [health, selected, statuses]
   );
   const unsupportedSites = useMemo(() => {
     if (!images.length) return [];
@@ -457,12 +482,28 @@ function App(): React.JSX.Element {
           selected={selected}
           groups={workspace.groups}
           statuses={statuses}
+          health={health}
+          healthChecking={healthChecking}
           open={drawerOpen}
           state={panelState ?? lastOpenPanel.current}
           onStateChange={changePanelState}
           onSelectionChange={workspaceFlow.changeSelection}
           onSaveGroup={workspaceFlow.saveGroup}
           onDeleteGroup={workspaceFlow.deleteGroup}
+          onCheckHealth={(keys) => { void refreshSiteHealth(keys); }}
+          onFocusSite={(site) => {
+            changePanelState(null);
+            setMode("focus", site);
+          }}
+          onReloadSite={(site) => {
+            void window.polyask.reloadSite(site).then((ok) => {
+              const definition = sites.find((candidate) => candidate.key === site);
+              setAnnouncement(ok
+                ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
+                : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
+              if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
+            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+          }}
         />
       ) : null}
       <SiteFrames
@@ -473,7 +514,7 @@ function App(): React.JSX.Element {
         selected={selected}
         onToggle={workspaceFlow.toggleSite}
         onFocus={(site) => setMode("focus", site)}
-        onReload={(site) => window.polyask.reloadSite(site)}
+        onReload={(site) => { void window.polyask.reloadSite(site); }}
       />
     </main>
   );

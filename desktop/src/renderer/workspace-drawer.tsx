@@ -3,9 +3,10 @@ import { useEffect } from "react";
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import type { DesktopCopy } from "../shared/copy";
 import type { SiteStatus } from "../shared/protocol";
-import { describeStatus } from "../shared/status-copy";
+import type { SiteHealth } from "../shared/site-health";
 import type { ActiveWorkspaceGroup } from "../shared/workspace";
-import { BackIcon, CloseIcon, HealthIcon, ScopeIcon } from "./icons";
+import { CloseIcon, HealthIcon, ScopeIcon } from "./icons";
+import { SiteHealthPanel } from "./site-health";
 import {
   escapeWorkspacePanel,
   showWorkspaceDetail,
@@ -19,12 +20,17 @@ interface WorkspaceDrawerProps {
   readonly selected: ReadonlySet<SiteKey>;
   readonly groups: readonly ActiveWorkspaceGroup[];
   readonly statuses: Readonly<Record<string, SiteStatus>>;
+  readonly health: Readonly<Partial<Record<SiteKey, SiteHealth>>>;
+  readonly healthChecking: boolean;
   readonly open: boolean;
   readonly state: OpenWorkspacePanelState;
   readonly onStateChange: (state: OpenWorkspacePanelState | null) => void;
   readonly onSelectionChange: (sites: readonly SiteKey[]) => void;
   readonly onSaveGroup: (name: string) => Promise<boolean>;
   readonly onDeleteGroup: (id: string) => void;
+  readonly onCheckHealth: (sites: readonly SiteKey[]) => void;
+  readonly onFocusSite: (site: SiteKey) => void;
+  readonly onReloadSite: (site: SiteKey) => void;
 }
 
 export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element {
@@ -38,7 +44,7 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
   const detailSite = props.state.detail
     ? props.sites.find((site) => site.key === props.state.detail)
     : null;
-  const detailStatus = detailSite ? props.statuses[detailSite.key] : null;
+  const selectedSites = props.sites.filter((site) => props.selected.has(site.key));
 
   return (
     <aside
@@ -62,27 +68,19 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
         <div id="workspace-sites-panel" role="tabpanel" aria-labelledby="workspace-sites-tab"><WorkspaceSites {...props} /></div>
       ) : (
         <div id="workspace-health-panel" role="tabpanel" aria-labelledby="workspace-health-tab">
-          {detailSite ? (
-            <section className="site-status-detail">
-              <button type="button" className="detail-back" onClick={() => props.onStateChange({ ...props.state, detail: null })}><BackIcon />{props.copy.backToSiteStatus}</button>
-              <h2>{detailSite.label}</h2>
-              <p>{detailStatus ? describeStatus(props.copy, detailStatus) : props.copy.loading}</p>
-            </section>
-          ) : (
-            <section className="site-status-overview" aria-label={props.copy.siteStatusSummary}>
-              <p>{props.copy.siteStatusSummary}</p>
-              <div className="site-status-list">
-                {props.sites.map((site) => {
-                  const status = props.statuses[site.key];
-                  return (
-                    <button type="button" key={site.key} data-phase={status?.phase ?? "loading"} onClick={() => props.onStateChange(showWorkspaceDetail(props.state, site.key))}>
-                      <span>{site.label}</span><small>{status ? describeStatus(props.copy, status) : props.copy.loading}</small>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+          <SiteHealthPanel
+            copy={props.copy}
+            sites={selectedSites}
+            statuses={props.statuses}
+            health={props.health}
+            detail={detailSite?.key ?? null}
+            checking={props.healthChecking}
+            onDetail={(site) => props.onStateChange(showWorkspaceDetail(props.state, site))}
+            onCheck={props.onCheckHealth}
+            onFocus={props.onFocusSite}
+            onReload={props.onReloadSite}
+            onBack={() => props.onStateChange({ ...props.state, detail: null })}
+          />
         </div>
       )}
     </aside>

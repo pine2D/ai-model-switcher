@@ -26,6 +26,7 @@ import { HistoryService } from "./history-service";
 import { SynthesisService } from "./synthesis-service";
 import { SyncEngine } from "./sync-engine";
 import { registerSyncIpc } from "./sync-ipc";
+import { registerSiteHealthIpc } from "./site-health-ipc";
 import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { confirmNewSession, showCommandMenu, showGroupMenu } from "./native-menus";
 import { SITES } from "./sites";
@@ -86,7 +87,6 @@ const LISTENERS = [
   "polyask:set-surface",
   "polyask:set-layout",
   "polyask:set-page",
-  "polyask:reload-site",
   "polyask:site-response"
 ] as const;
 
@@ -108,6 +108,7 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     return state;
   };
   const disposeSyncIpc = registerSyncIpc({ sync, trusted: trustedShell });
+  const disposeSiteHealthIpc = registerSiteHealthIpc({ manager, trusted: trustedShell });
 
   ipcMain.handle("polyask:bootstrap", (event) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
@@ -274,17 +275,13 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     const page = parsePageIndex(value);
     if (page !== null) manager.setPage(page);
   });
-  ipcMain.on("polyask:reload-site", (event, value: unknown) => {
-    if (trustedShell(event) && typeof value === "string" && SITE_KEYS.includes(value as SiteKey)) {
-      manager.reload(value as SiteKey);
-    }
-  });
   ipcMain.on("polyask:site-response", (event, envelope: SiteResponseEnvelope) => {
     if (manager.owns(event.sender)) manager.receiveResponse(event.sender, envelope);
   });
 
   return () => {
     disposeSyncIpc();
+    disposeSiteHealthIpc();
     for (const channel of HANDLERS) ipcMain.removeHandler(channel);
     for (const channel of LISTENERS) ipcMain.removeAllListeners(channel);
   };

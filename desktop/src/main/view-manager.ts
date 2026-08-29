@@ -14,6 +14,7 @@ import {
 import type {
   LayoutState,
   CollectSiteCommand,
+  DiagnoseSiteCommand,
   DesktopSurface,
   SiteCollectionResult,
   SiteResponseEnvelope,
@@ -21,6 +22,13 @@ import type {
   SiteStatus,
   SubmitSiteCommand
 } from "../shared/protocol";
+import {
+  buildSiteHealth,
+  siteReloadAllowed,
+  type SiteHealth,
+  type SiteHealthPageState,
+  type SiteHealthRunPhase
+} from "../shared/site-health";
 import {
   paginateSiteKeys,
   resolveFocusedSite,
@@ -227,12 +235,18 @@ export class ViewManager {
     this.setPage(page);
   }
 
-  reload(site: SiteKey): void {
+  reload(site: SiteKey): boolean {
     const view = this.views.get(site);
-    if (!view) return;
+    if (!view || view.webContents.isDestroyed()) return false;
+    if (!siteReloadAllowed(this.currentStatus(site).phase)) return false;
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
     view.webContents.reload();
+    return true;
+  }
+
+  checkHealth(sites: readonly SiteKey[]): Promise<SiteHealth[]> {
+    return Promise.all(sites.map((site) => this.checkSiteHealth(site)));
   }
 
   async navigate(site: SiteKey, url: string): Promise<void> {
@@ -288,6 +302,41 @@ export class ViewManager {
     return this.commands.send(view.webContents, command, {
       timeoutResult: { code: "not_ready" }
     }).then((result) => "ok" in result ? { code: "not_ready" } : result);
+  }
+
+  private async checkSiteHealth(site: SiteKey): Promise<SiteHealth> {
+    const definition = SITES.find((candidate) => candidate.key === site);
+    const view = this.views.get(site);
+    const pageStatus = this.pageStatus.get(site) ?? { site, phase: "loading" as const };
+    const runStatus = this.runStatus.get(site);
+    const finish = (checks: unknown, navigation: ReturnType<typeof navigationDisposition>): SiteHealth => {
+      const health = buildSiteHealth({ site, phase: pageStatus.phase, navigation, checks });
+      const page: SiteHealthPageState = pageStatus.phase === "failed" || pageStatus.phase === "crashed"
+        ? "error"
+        : pageStatus.phase === "loading" || pageStatus.phase === "ready" ? pageStatus.phase : "unknown";
+      const recentPhases: readonly SiteHealthRunPhase[] = ["sending", "submitted", "warning", "cancelled", "failed"];
+      const recent = runStatus && recentPhases.includes(runStatus.phase as SiteHealthRunPhase)
+        ? { phase: runStatus.phase as SiteHealthRunPhase, ...(runStatus.code ? { code: runStatus.code } : {}) }
+        : undefined;
+      return { ...health, page, ...(recent ? { recent } : {}) };
+    };
+    if (!definition || !view || view.webContents.isDestroyed()) {
+      return finish(undefined, "block");
+    }
+    const navigation = navigationDisposition(definition, view.webContents.getURL());
+    if (navigation !== "site" || pageStatus.phase === "loading" || ["failed", "crashed"].includes(pageStatus.phase)) {
+      return finish(undefined, navigation);
+    }
+    const command: DiagnoseSiteCommand = {
+      source: "AMS",
+      cmd: "diagnose",
+      deadline: Date.now() + 2_500
+    };
+    const response = await this.commands.send(view.webContents, command, {
+      timeoutResult: { code: "not_ready" }
+    });
+    const checks = "checks" in response ? response.checks : undefined;
+    return finish(checks, navigation);
   }
 
   receiveResponse(sender: WebContents, envelope: SiteResponseEnvelope): void {
