@@ -9,9 +9,9 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 - 群发对比：选择多个 AI 站点，统一设置模型档位后发送问题。支持最多 4 张 PNG 或 JPEG 图片，总大小不超过 10 MiB。
 - 网页上下文（Chrome 扩展）：通过右键菜单将所选文字或页面正文带入提示词工作区，核对来源后再发送到所选 AI 站点。
 - 模型切换：通过悬浮控件、扩展弹窗或快捷键切换深度思考和快速模式。
-- 回答整理：将各站最新回答汇总为 Markdown 后复制或导出；保存到结果库后，可搜索、收藏、添加标签和备注，并标记最佳答案。
+- 回答整理：将各站最新回答汇总为 Markdown 后复制或导出；保存到结果库后，可搜索、收藏、添加标签和备注，标记最佳答案，并对照两份回答。
 - 辅助综合：从一条已保存结果中选择多个回答，预览组合提示词后交给指定 AI 在新会话中综合，再将综合结果采集回原记录。
-- 数据同步：两端可通过 Google Drive 合并站点范围、分组、提问历史和结果库；扩展另同步设置与模板。
+- 数据同步：两端可通过 Google Drive 合并站点范围、分组、提问历史、提示词模板和结果库；扩展另同步显示与操作设置。
 - 迁移与本机数据控制（Chrome 扩展）：支持迁移包导入/导出，可分别清空提问历史或结果库，也可重置全部本机数据。重置会断开 Google Drive，但不会删除云端数据。
 
 ## 支持站点与映射
@@ -88,9 +88,13 @@ npm start
 
 Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点铺满，2 个左右并排，3 个横向三分，4 个为 2×2；选择 5–9 个站点时均衡分页：依次采用 3+2、3+3、4+3、4+4、3+3+3。聚焦模式在当前页放大一个主站，右侧保留最多 3 个实时次要视图；空间不足时会自动采用聚焦模式。换页、切换布局或主站都不会销毁、重载页面或中断回答。
 
+命令栏左侧的「工作区」统一管理站点选择、保存的分组和只读站点状态；站点详情可重新检查、聚焦或单独重载，不会增加右侧面板。Google Drive 连接诊断保留在设置页，可分阶段检查授权与同步状态，并复制不含令牌、账号、对话正文或本机路径的诊断报告。
+
 「视图」菜单可切换紧凑/舒适界面密度，以及 90%/100% 站点页面缩放。默认的「适应」缩放在九宫格和次要站使用 90%，聚焦主站保持 100%。Windows 和 Linux 默认隐藏菜单栏，按 `Alt` 可临时显示。
 
-桌面端可用 `Alt+1` / `Alt+2` / `Alt+3` 直接切换站点页；即使焦点位于 AI 页面中也能使用，不存在的页码会被忽略。`Cmd/Ctrl+Shift+P` 可将焦点送回提问框，`Cmd/Ctrl+PageUp` / `Cmd/Ctrl+PageDown` 可在已选站点间切换聚焦，`Cmd/Ctrl+Shift+PageUp` / `Cmd/Ctrl+Shift+PageDown` 可切换上一组或下一组站点。页签也支持方向键移动焦点、`Enter` 或空格确认；键盘换页不播放位移动画。
+桌面端按 `Alt+K` 或 `F1` 可打开命令面板，并搜索全部命令、保存的站点组、提示词模板和最近提问。`Alt+S` 打开站点与分组，`Alt+H` 打开站点状态，`Alt+1` / `Alt+2` / `Alt+3` 直接切换站点页；`Alt+Q` 聚焦提问框，`Alt+T` / `Alt+Y` 选择档位，`Alt+C` 收集回答，`Alt+R` 重试失败站点，`Alt+N` 新建会话。Windows/Linux 使用 `Ctrl+,` 打开设置，macOS 使用 `Cmd+,`。这些快捷键在焦点位于 AI 页面时仍可使用；不存在的页码和当前不可用的命令会被忽略。页签支持方向键移动焦点、`Enter` 或空格确认。
+
+未发送的提问草稿只保存在本机，发送成功后自动清除。回答完成或失败时，后台页只更新状态徽标，不自动切页或抢占焦点；系统通知默认关闭，启用后也不会包含提问或回答正文。
 
 桌面端命令栏可选择或粘贴最多 4 张 PNG/JPEG 图片（总计不超过 10 MiB），并将同一批图片群发到 Claude、ChatGPT、DeepSeek、豆包、Kimi 和元宝。若当前范围包含 Gemini、千问或智谱，发送前会明确列出不兼容站点并引导调整范围，不会静默漏发。
 
@@ -102,11 +106,11 @@ Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点�
 
 Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。只有用户点击“连接 Google Drive”才会打开授权页；启动和周期同步不会在未连接时擅自发起授权。浏览器回调页只表示已收到授权，应用完成首次 Drive 访问验证后才显示“已连接”；令牌交换和 Drive 请求超时后会保持未连接并提示检查网络或代理。Release 产物由 CI 注入同一 Desktop 客户端的 Client ID 与 Client Secret，并在授权码交换和刷新令牌时提交完整凭据。Desktop 应用无法真正保密嵌入的 Client Secret；它不作为安全边界，但仍通过 GitHub Actions Secret 管理，避免进入仓库和构建日志。本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId` 与 `clientSecret`，也可同时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 和 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 后执行 `npm run configure-oauth`。
 
-Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一次 Gemini，为验证后页面停滞提供受控恢复路径；该机制仍待 Windows 真机复测。若 DeepSeek 提示“当前设备环境异常”，请先用同一账号和网络在最新版 Edge/Chrome 复测；PolyAsk 不通过伪装 User-Agent、关闭网页安全机制或复制浏览器 Cookie 绕过站点登录策略。详细诊断边界见 `docs/desktop-m0.md`。
+Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一次 Gemini；若页面仍未就绪，可在站点状态详情中单独重新加载。若 DeepSeek 提示“当前设备环境异常”，请先用同一账号和网络在最新版 Edge/Chrome 复测；PolyAsk 不通过伪装 User-Agent、关闭网页安全机制或复制浏览器 Cookie 绕过站点登录策略。详细诊断边界见 `docs/desktop-m0.md`。
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
-执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和便携 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Gemini 已在 WSLg 完成首次登录与群发，真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 安装体验和签名仍待验证。详细边界见 `docs/desktop-m0.md`。
+执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和便携 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Windows 便携版覆盖升级和系统 150% 缩放已经实机验证；macOS、原生 Ubuntu、Windows 125% 缩放与多显示器仍作为有相应环境时的兼容性抽检。Desktop 目前仍未签名。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
 

@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.22.0] - 2026-08-30
+
 ### 新增
 
 - Desktop 新增统一命令面板、快捷键速查和保存站点组的快速切换
@@ -22,10 +24,12 @@
 - Desktop 将站点选择、分组和站点状态统一收纳到命令栏左侧工作台
 - Desktop 更准确地区分已发送、生成中、已完成和失败状态，不再根据提交成功推断回答完成
 - Desktop 后台状态变化不再自动切页或抢占当前焦点
+- Desktop 已完成 Windows 便携版覆盖升级与系统 150% 缩放实机验证
+- Desktop 仍为未签名预览版；macOS、Linux 原生安装及 Windows 125% / 多显示器尚待兼容性抽检
 
 ### 修复
 
-- 优化 Desktop 自定义页签的键盘操作、设置项命中区域和长文本换行
+- 修复 Desktop 自定义页签键盘操作不完整、部分设置项不易点击和长文本溢出的问题
 - 修复窄屏命令面板出现内外两层滚动条的问题
 
 ## [0.21.0] - 2026-08-29
@@ -530,7 +534,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.21.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/pine2D/polyask/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/pine2D/polyask/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/pine2D/polyask/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/pine2D/polyask/compare/v0.19.0...v0.20.0
