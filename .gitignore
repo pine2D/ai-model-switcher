@@ -1,7 +1,14 @@
 .DS_Store
 
-# 本地工作文档与工具产物
-docs/superpowers/
+# 本地工作文档与工具产物；发布与开发契约继续跟踪
+/docs/*
+!/docs/adapters.md
+!/docs/audit-2026-07.md
+!/docs/console-windows.md
+!/docs/desktop-m0.md
+!/docs/desktop-oauth-security.md
+!/docs/release.md
+!/docs/verify.md
 .superpowers/
 .spec-workflow/
 .codegraph/
