@@ -7,9 +7,9 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 除特别标注外，下列能力同时适用于 Chrome 扩展和 Desktop 预览版。
 
 - 群发对比：选择多个 AI 站点，统一设置模型档位后发送问题。支持最多 4 张 PNG 或 JPEG 图片，总大小不超过 10 MiB。
-- 网页上下文（Chrome 扩展）：通过右键菜单将所选文字或页面正文带入提示词工作区，核对来源后再发送到所选 AI 站点。
-- 模型切换：通过悬浮控件、扩展弹窗或快捷键切换深度思考和快速模式。
-- 回答整理：将各站最新回答汇总为 Markdown 后复制或导出；保存到结果库后，可搜索、收藏、添加标签和备注，标记最佳答案，并对照两份回答。
+- 网页上下文（Chrome 扩展）：通过右键菜单将所选文字或页面正文带入提示词工作区，核对来源后再发送到所选 AI 站点。仅在你点击该菜单时读取当前页，不常驻监听。
+- 模型切换：两端都可用快捷键 `Alt+T` / `Alt+Y` 切换深度思考和快速模式；扩展另有 AI 页面上的悬浮控件和扩展弹窗，Desktop 另有命令栏和命令面板。
+- 回答整理：将各站最新回答汇总为 Markdown 后复制或导出；保存到结果库后，可搜索、收藏、添加标签和备注，标记最佳答案。逐段对照两份回答目前只有 Desktop 预览版提供。
 - 辅助综合：从一条已保存结果中选择多个回答，预览组合提示词后交给指定 AI 在新会话中综合，再将综合结果采集回原记录。
 - 数据同步：两端可通过 Google Drive 合并站点范围、分组、提问历史、提示词模板和结果库；扩展另同步显示与操作设置。
 - 迁移与本机数据控制（Chrome 扩展）：支持迁移包导入/导出，可分别清空提问历史或结果库，也可重置全部本机数据。重置会断开 Google Drive，但不会删除云端数据。
@@ -19,16 +19,18 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 | 站点 | 🧠 深度思考 | ⚡ 快速 |
 |---|---|---|
 | Claude (claude.ai) | Fable 5（Thinking 开 + Effort High） | Sonnet 5（默认设置） |
-| ChatGPT (chatgpt.com) | 最高 Intelligence 档（Extra High 或 Pro） | Instant |
+| ChatGPT (chatgpt.com) | GPT-5.6 Sol + 档位列表最高项（Extra High 或 Pro） | GPT-5.6 Sol + 档位列表最低项（Instant） |
 | Gemini (gemini.google.com) | 3.1 Pro + Thinking: Extended | 3.6 Flash |
 | DeepSeek (chat.deepseek.com) | Expert + DeepThink 开 | Instant + DeepThink 关 |
 | 豆包 (doubao.com) | 专家 | 快速 |
 | 千问 (qianwen.com) | Qwen3.7-千问 + 思考研究 | Qwen3.8-Max + 快速 |
 | Kimi (kimi.com) | K3 + Thinking Max | K3 + Thinking Standard |
-| 元宝 (yuanbao.tencent.com) | Deep Thinking 开 | Deep Thinking 关 |
+| 元宝 (yuanbao.tencent.com) | Thinking（模型菜单；旧版界面为 Deep Thinking 开） | Instant（模型菜单；旧版界面为 Deep Thinking 关） |
 | 智谱清言 (chatglm.cn) | 深度思考：深度 | 快速 |
 
-> AI 站点改版后，模型切换可能暂时失效。可在扩展弹窗中运行只读诊断，或在控制台的站点选择窗里巡检所选站点并「复制诊断报告」，通过设置页的反馈入口提交问题。结果库的「站点健康统计」会按站点汇总历次收集失败，帮助发现某站是否已改版。
+元宝的 Expert 属工具执行档，不参与深/快映射；停在 Expert 时读不出当前档位。
+
+> AI 站点改版后，模型切换可能暂时失效。Chrome 扩展可在扩展弹窗中运行只读诊断，或在控制台的站点选择窗里巡检所选站点并「复制诊断报告」，通过设置页的反馈入口提交问题；结果库的「站点健康统计」（扩展专有）会按站点汇总历次收集失败，帮助发现某站是否已改版。Desktop 预览版按 `Alt+H` 打开站点状态做实时检查，暂无跨记录的失败聚合。
 
 ## 安装
 
@@ -74,17 +76,9 @@ PolyAsk Portable/
 
 首次从 v0.19.0 或更早的免安装包切换时，请先完全退出 PolyAsk，再解压为上述完整结构并启动 `App/polyask-desktop.exe`。应用会询问是否复制现有 PolyAsk 数据；原有设置和登录状态仍保留在原位置，需要时可以继续使用旧版。若 `PolyAsk Data` 中已有无法确认用途的文件，应用会保留该目录并提示先移动或备份，不会直接覆盖。设置页会显示当前版本及「安装版」或「便携版」。
 
-### 从源码运行 Desktop
+## Desktop 预览版功能
 
 桌面端使用独立登录会话，不会读取或复制 Chrome 的 Cookie。首次运行后，需要分别登录各个 AI 站点。
-
-```bash
-cd desktop
-npm install
-npm test
-npm run typecheck
-npm start
-```
 
 Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点铺满，2 个左右并排，3 个横向三分，4 个为 2×2；选择 5–9 个站点时均衡分页：依次采用 3+2、3+3、4+3、4+4、3+3+3。聚焦模式在当前页放大一个主站，右侧保留最多 3 个实时次要视图；空间不足时会自动采用聚焦模式。换页、切换布局或主站都不会销毁、重载页面或中断回答。
 
@@ -92,9 +86,9 @@ Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点�
 
 「视图」菜单可切换紧凑/舒适界面密度，以及 90%/100% 站点页面缩放。默认的「适应」缩放在九宫格和次要站使用 90%，聚焦主站保持 100%。Windows 和 Linux 默认隐藏菜单栏，按 `Alt` 可临时显示。
 
-桌面端按 `Alt+K` 或 `F1` 可打开命令面板，并搜索全部命令、保存的站点组、提示词模板和最近提问。`Alt+S` 打开站点与分组，`Alt+H` 打开站点状态，`Alt+1` / `Alt+2` / `Alt+3` 直接切换站点页；`Alt+Q` 聚焦提问框，`Alt+T` / `Alt+Y` 选择档位，`Alt+C` 收集回答，`Alt+R` 重试失败站点，`Alt+N` 新建会话。Windows/Linux 使用 `Ctrl+,` 打开设置，macOS 使用 `Cmd+,`。这些快捷键在焦点位于 AI 页面时仍可使用；不存在的页码和当前不可用的命令会被忽略。页签支持方向键移动焦点、`Enter` 或空格确认。
+按 `Alt+K` 或 `F1` 可打开命令面板，并搜索全部命令、保存的站点组、提示词模板和最近提问；完整键位见下方「快捷键」。快捷键在焦点位于 AI 页面时仍可使用；不存在的页码和当前不可用的命令会被忽略。页签支持方向键移动焦点、`Enter` 或空格确认。
 
-未发送的提问草稿只保存在本机，发送成功后自动清除。回答完成或失败时，后台页只更新状态徽标，不自动切页或抢占焦点；系统通知默认关闭，启用后也不会包含提问或回答正文。
+未发送的提问草稿只保存在本机，发送成功后自动清除，不参与 Google Drive 同步。回答完成或失败时，后台页只更新状态徽标，不自动切页或抢占焦点；系统通知默认关闭，启用后也不会包含提问或回答正文。
 
 桌面端命令栏可选择或粘贴最多 4 张 PNG/JPEG 图片（总计不超过 10 MiB），并将同一批图片群发到 Claude、ChatGPT、DeepSeek、豆包、Kimi 和元宝。若当前范围包含 Gemini、千问或智谱，发送前会明确列出不兼容站点并引导调整范围，不会静默漏发。
 
@@ -104,15 +98,33 @@ Desktop 只显示当前勾选的站点，每页最多显示 4 个。1 个站点�
 
 桌面端设置页支持与扩展共用同一套 schema 1 Google Drive 数据：站点范围、分组、提问历史和结果库可在两种客户端之间合并，删除标记与新版本只读保护同样生效。断开连接只撤销授权并清理本机同步索引，不删除本机或云端记录；「删除云端数据」需输入 `DELETE`，且只删除 Drive 应用专属目录内标记为 PolyAsk 的文件。
 
-Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。只有用户点击“连接 Google Drive”才会打开授权页；启动和周期同步不会在未连接时擅自发起授权。浏览器回调页只表示已收到授权，应用完成首次 Drive 访问验证后才显示“已连接”；令牌交换和 Drive 请求超时后会保持未连接并提示检查网络或代理。Release 产物由 CI 注入同一 Desktop 客户端的 Client ID 与 Client Secret，并在授权码交换和刷新令牌时提交完整凭据。Desktop 应用无法真正保密嵌入的 Client Secret；它不作为安全边界，但仍通过 GitHub Actions Secret 管理，避免进入仓库和构建日志。本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId` 与 `clientSecret`，也可同时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 和 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 后执行 `npm run configure-oauth`。
+Desktop 使用 Google 的 Desktop app OAuth 客户端、系统浏览器、PKCE 和 `127.0.0.1` 随机端口回调，不能复用 Chrome 扩展客户端 ID。只有用户点击“连接 Google Drive”才会打开授权页；启动和周期同步不会在未连接时擅自发起授权。浏览器回调页只表示已收到授权，应用完成首次 Drive 访问验证后才显示“已连接”；令牌交换和 Drive 请求超时后会保持未连接并提示检查网络或代理。Release 产物由 CI 注入同一 Desktop 客户端的 Client ID 与 Client Secret，并在授权码交换和刷新令牌时提交完整凭据。Desktop 应用无法真正保密嵌入的 Client Secret；它不作为安全边界，但仍通过 GitHub Actions Secret 管理，避免进入仓库和构建日志。
 
 Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一次 Gemini；若页面仍未就绪，可在站点状态详情中单独重新加载。若 DeepSeek 提示“当前设备环境异常”，请先用同一账号和网络在最新版 Edge/Chrome 复测；PolyAsk 不通过伪装 User-Agent、关闭网页安全机制或复制浏览器 Cookie 绕过站点登录策略。详细诊断边界见 `docs/desktop-m0.md`。
 
 刷新令牌使用 Electron 异步 `safeStorage` 写入操作系统凭据保护层。Linux 若只能使用 `basic_text` 或安全存储不可用，桌面端不会把令牌写入磁盘，只在本次进程内保留并在设置页明确提示；重启后需重新登录。
 
+### 从源码运行 Desktop
+
+```bash
+cd desktop
+npm install
+npm test
+npm run typecheck
+npm start
+```
+
+本地开发可复制 `desktop/resources/oauth.example.json` 为 `desktop/resources/oauth.json` 并填入 `clientId` 与 `clientSecret`，也可同时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 和 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 后执行 `npm run configure-oauth`。
+
 执行 `npm run package` 可生成当前平台应用目录，执行 `npm run make` 可生成当前平台的可分发包。CI 在 Linux、Windows 和 macOS 上运行测试与类型检查；Release workflow 另构建 Windows x64 安装版和便携 ZIP、Linux x64、macOS x64/arm64 预览包，并为每个包生成 SHA-256。自动化不能替代真实账号登录与原生 UI 验收：Windows 便携版覆盖升级和系统 150% 缩放已经实机验证；macOS、原生 Ubuntu、Windows 125% 缩放与多显示器仍作为有相应环境时的兼容性抽检。Desktop 目前仍未签名。详细边界见 `docs/desktop-m0.md`。
 
 ## 快捷键
+
+两端键位不完全相同。**`Alt+Q` 在两端语义不同**：Chrome 扩展是打开或聚焦群发控制台，Desktop 是聚焦提问框。
+
+### Chrome 扩展
+
+浏览器级快捷键，可在 `chrome://extensions/shortcuts` 中修改：
 
 | 默认键 | 功能 |
 |---|---|
@@ -120,9 +132,7 @@ Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一
 | `Alt+Y` | 切换到快速模型 |
 | `Alt+Q` | 打开或聚焦群发控制台（已打开时会连同平铺窗口一起移到前台） |
 
-可在 `chrome://extensions/shortcuts` 中修改以上快捷键。
-
-控制台窗口内的固定键位：
+控制台窗口内的固定键位（不可改）：
 
 | 默认键 | 功能 |
 |---|---|
@@ -132,11 +142,31 @@ Gemini 完成 Google 两步验证并返回站点后，Desktop 会自动重载一
 | `Alt+P` | 聚焦问题输入框 |
 | `Alt+R` | 重试当前勾选的失败站点 |
 
+### Desktop 预览版
+
+| 默认键 | 功能 |
+|---|---|
+| `Alt+T` | 切换到深度思考 |
+| `Alt+Y` | 切换到快速模型 |
+| `Alt+Q` | 聚焦提问框 |
+| `Alt+K` 或 `F1` | 打开命令面板 |
+| `Alt+S` | 打开站点与分组 |
+| `Alt+H` | 打开站点状态 |
+| `Alt+1` / `Alt+2` / `Alt+3` | 直接切换到对应站点页 |
+| `Alt+C` | 收集回答 |
+| `Alt+N` | 为当前勾选站点新建会话 |
+| `Alt+R` | 重试失败站点 |
+| `Ctrl+,`（macOS `Cmd+,`） | 打开设置 |
+
 ## Google Drive 同步与迁移
 
 在扩展设置页连接 Google Drive 后，可同步设置、模板、分组、提问历史、AI 回答，以及结果库中的收藏、标签和备注；哪个回答被标为最佳也会同步。未发送的草稿和窗口布局不会同步。此功能不使用 Chrome Sync。
 
 - 扩展只申请 Google Drive 应用专属目录（`drive.appdata`）权限，不会读取或修改 Google Drive 中的其他文件。
+- **PolyAsk 不申请任何 AI 站点的网站访问权限。** 扩展只在 manifest 里静态声明的 9 个 AI 站点上运行内容脚本，安装后不会获得「读取和更改您在所有网站上的数据」这类常驻全站权限。
+- **右键菜单读取当前网页是一次性动作。** 只有你点击 PolyAsk 的右键菜单时，扩展才读取所选文字或当前页正文（仅限 http/https 页面，正文上限 30000 字符）。读到的内容进入提示词工作区，随你的提问发送给所选 AI 站点，也可能作为提问历史同步到 Google Drive。
+- **未发送的草稿保存在本机。** 提示词工作区里没发送的正文（包括带入的网页来源）会留在浏览器本机存储中，重开控制台时回填，不参与 Google Drive 同步；用设置页的「重置本机数据」可清除。
+- **「断开连接」不撤销 Google 授权（Chrome 扩展）。** 它只停止本机与 Google Drive 的同步并清理本机同步索引；若要彻底撤销 PolyAsk 对 Google 账号的访问，请到 [myaccount.google.com](https://myaccount.google.com/) 的「第三方应用和服务」中手动移除。Desktop 预览版的「断开连接」会主动撤销授权。
 - 所有同步到 Google Drive 的数据均为明文。迁移包中的全部导出数据也均为明文，包含上述数据。PolyAsk 不提供端到端加密。
 - PolyAsk 不限制提问历史和结果库的记录条数，但仍受 Google Drive 存储配额和 API 限制。
 - 导入迁移包时按记录合并，不会覆盖整个数据库。

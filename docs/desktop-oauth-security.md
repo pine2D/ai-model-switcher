@@ -9,6 +9,14 @@
 - Desktop 固定使用 PKCE S256、随机 `state`、系统浏览器、`127.0.0.1` 随机端口回调和 `drive.appdata` 最小权限。Refresh Token 只通过 Electron `safeStorage` 持久化。
 - Chrome 扩展使用独立的 Chrome Extension OAuth Client，并由 `chrome.identity` 管理令牌，不使用 Desktop Client Secret。
 
+### 已知并接受的风险：打包版仍读诊断环境变量
+
+`desktop/src/main/runtime-gates.ts` 对 `POLYASK_DIAGNOSTICS_FILE` 与 `POLYASK_SOAK_REPORT` **没有 `app.isPackaged` 门禁**，正式安装包同样认这两个变量。`POLYASK_SOAK_REPORT` 命中时会对该路径建目录、覆写清空已有内容、每 60 秒追加采样，超时后自动退出应用。
+
+危害边界：攻击前提已经是「同用户代码执行 / 能持久化环境变量」，能造成的是以应用身份截断任意可写路径的文件、外加定时自退出这一级别的同用户骚扰性拒绝服务；**不涉及凭据，也不提权**。不修的原因是 `desktop/scripts` 下的 smoke、soak、runtime-runner 三个脚本依赖这两个变量对打包后产物做自动化验收，`docs/desktop-m0.md` 已写成既定口径并被 CI 依赖，照搬门禁会打断该验证链。
+
+这与已经收紧的 `sync-runtime.ts`（打包版不再优先读环境变量凭据，`environment: app.isPackaged ? undefined : process.env`）是同一种模式的两处实例——一处已收紧、一处未收紧，是权衡后的现状而非疏漏。要动它，得先给三个验收脚本换一条不依赖环境变量的通道。
+
 ## 凭据与环境隔离
 
 | 环境 | OAuth Client | 凭据入口 | 约束 |

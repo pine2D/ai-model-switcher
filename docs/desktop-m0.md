@@ -50,7 +50,7 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 - `i18n.js` 显式暴露只读的 `globalThis.__AMS_I18N__`。
 - `content/core.js`、三组适配器和 `diag.js` 从该命名空间取得 `t()`，从而既能继续作为 MV3 classic script 使用，也能被桌面 preload 打包为独立模块。
 - Desktop compatibility shim 仅实现适配器需要的 `chrome.i18n`、`chrome.storage` 和 `chrome.runtime.onMessage` 子集。
-- `content/pill.js` 不进入桌面 preload。
+- 两条方向相反的豁免：`content/pill.js`（扩展专用悬浮控件）不进入桌面 preload；`content/generation.js`（Desktop 专属只读生成态探针，被 `desktop/src/preload/site.ts` 的 `readGeneration()` 独占消费）不进扩展 manifest。两条都由 `scripts/test-desktop-shared-runtime.js` 显式守着，`content/core.js` 一旦拆分会立刻红。`generation.js` 必须排在全部适配器之后 require——它按已填充的注册表逐 host 挂默认实现，早了就静默缺席。
 
 ### 消息流
 
@@ -58,16 +58,18 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 2. Main process 创建 epoch 和绝对 deadline，向所选 Site preload 分发同一请求。
 3. Site preload 把请求交给现有 runtime listener，并返回 `{ host, ok, code, ... }`。
 4. Main process 校验响应来源的 `webContents.id` 与登记站点，更新 Shell 状态。
-5. 超时、端口中断、`submit_unconfirmed` 都进入失败终态；只有现有 Kimi `submitted()` 契约允许确认未提交后重试一次。
+5. 超时、端口中断、`submit_unconfirmed` 都进入失败终态。扩展侧那条「基于 Kimi 只读 `submitted()` 的自动重试一次」**尚未迁到 Desktop**：目前 Desktop 一律不自动重发，交给用户点重试。
 
 ## 安全约束
 
 - 远程页面永不获得 `ipcRenderer`、`contextBridge`、文件系统、Shell 或任意 main-process 方法。
 - IPC 采用固定 channel 和数据白名单；main process 同时校验 sender、站点 key、当前 host 和请求结构。
-- 顶层导航限制为站点精确 host 及明确登录域；新窗口默认阻止，M0 不自动向系统浏览器转交外部链接。
-- 每个远程 Session 设置权限请求处理器，M0 默认拒绝通知、摄像头、麦克风、地理位置和 MIDI。
+- 顶层导航限制为站点精确 host 及明确登录域。**新窗口一律 deny**；其中只有「目标属该站登录域、且当前顶层仍在本站」时，才把它改写成本视图的顶层导航——弹窗不携带来源帧，一律不按主帧记账，所以子帧的 `window.open` 不能借这条路径提权。
+- 每个远程 Session 的权限请求处理器**只放行显式白名单**（`clipboard-sanitized-write`、`fullscreen`、`pointerLock`），其余一律拒绝——包括通知、摄像头、麦克风、地理位置、MIDI、`clipboard-read` 与 `window-management`。白名单是 `desktop/src/main/view-manager.ts` 的 `SITE_PERMISSION_ALLOWLIST`，两个 handler 都读它，改动须同步本节。
+- 站点视图开启 `safeDialogs`，限制页面用 `alert`/`confirm` 刷屏冻住整个单窗口；**未启用 `disableDialogs`**——站点自身的确认框仍要能用，关掉它之前需要真机验证九站登录与离开确认。
 - 不关闭 Chromium sandbox，不忽略证书错误，不允许 HTTP 内容。
 - 打包时启用 Cookie Encryption、ASAR Integrity、OnlyLoadAppFromAsar，并关闭 RunAsNode 和生产环境调试入口。
+- Shell 的 CSP 写在 `desktop/src/renderer/index.html` 的 meta 里，`connect-src` 收窄到 `'self' ws://localhost:*`，并补齐 `base-uri` / `form-action`。这是折中：**生产包里仍留着 localhost 的 ws**，因为 webpack HMR 需要它而 meta 是静态的。要按环境彻底移除，得把 `index.html` 改成 HtmlWebpackPlugin 模板，或改由 main 进程 `onHeadersReceived` 下发生产 CSP 响应头（meta 与响应头取交集）——两条都是独立改动，别直接删 `ws:` 把 HMR 打断。
 
 ## 最小界面
 
@@ -139,9 +141,10 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 - 权限固定为 `https://www.googleapis.com/auth/drive.appdata`。列举、变更订阅、下载、上传和删除全部限定在 `appDataFolder`；清云只处理 `appProperties.app === "polyask"` 的文件。
 - 刷新令牌只通过 Electron 异步 `safeStorage` 持久化。Linux 后端为 `basic_text`、`unknown` 或安全存储不可用时，只保留进程内令牌并提示重启后需重新登录。
 - 同步复用扩展 schema 1：每设备一个 state 文件、每设备/文本哈希一份 history 文件、每归档一份 archive 文件。状态按 `updatedAt` 后 `deviceId` 合并，同时间 tombstone 优先；远端正文必须与 Drive metadata 的 id/device 一致。
-- 只有设置页的“连接 Google Drive”会发起系统浏览器授权；未连接时，启动、15 分钟周期任务和本机变更均保持静默。本机变更 3 秒防抖；429/5xx 指数退避，410 自动全量重扫，401 只刷新令牌重试一次。OAuth 令牌与 Drive 网络请求均有 30 秒截止时间；超时保持未连接或待同步状态，并给出网络/代理检查提示。未来 schema 进入只读兼容模式，仍允许下载但禁止上传。
+- 只有设置页的“连接 Google Drive”会发起系统浏览器授权；未连接时，启动、15 分钟周期任务和本机变更均保持静默。本机变更 3 秒防抖；429/5xx 指数退避，410 自动全量重扫，401 只刷新令牌重试一次。服务端 `Retry-After` **只用于延长退避，不会缩短**；`0` 与已过期的时间点视为无效（否则 `?? ` 不吃 0 会把 `nextAt` 设成当前时刻，按网络往返轰炸一个已经在限流的 Drive）。OAuth 令牌交换与 Drive 网络请求均有 30 秒截止时间；**系统浏览器回调的等待上限另有 5 分钟**（`oauth-pkce` 的 `timeoutMs` 默认值，`oauth-session` 未显式传参），等待期间设置页可随时关闭。超时保持未连接或待同步状态，并给出网络/代理检查提示。未来 schema 进入只读兼容模式，仍允许下载但禁止上传。
 - 回调页只说明“已收到授权，正在验证”，不提前声称 Drive 已连接；应用只有在首次 Drive 访问验证成功后才写入“已连接”状态，授权或验证超时仍保持未连接。失败提示会区分授权码、OAuth 客户端配置、回调地址、刷新令牌与首次 Drive 鉴权；只保留经过格式校验的 Google 错误代码与有限诊断类别，不记录授权码、访问令牌、原始响应正文或账号信息。
-- 断开连接会撤销 OAuth、清本机 Drive 索引并保留本机数据、云端数据与待同步 outbox。「删除云端数据」必须在设置页逐字输入 `DELETE`，完成后断开连接；中断时保留进度，可重新进入操作。
+- 断开连接会撤销 OAuth、清本机 Drive 索引并保留本机数据、云端数据与待同步 outbox；撤销失败只落 `revoke_failed` 提示，不阻塞后续操作。**「授权成功但首次 Drive 校验失败」也要能撤销**：此时令牌已落盘而状态不是 connected，设置页据 `SyncStatus.hasStoredToken`（源自 `SyncConfig.tokenStored`）额外给出断开入口；该字段刻意做成可选，也**不进** `sync-diagnostics` 的白名单快照，因此不会出现在报障报告里。**不要在校验失败分支里无条件 `disconnect()`**——网络抖动会把用户强制踢回重新授权。「删除云端数据」必须在设置页逐字输入 `DELETE`，完成后断开连接；**可被「断开连接」取消**。清理失败或被中断时释放清理标记、保留已删除计数基线，同步与断开立即恢复可用，用户重点一次「删除云端数据」即可重跑——清理进行中同步会以 `clear_pending` 早退（不再静默空跑）。
+- 同步失败分类收在 `desktop/src/main/sync-failures.ts` 的 `classifySyncFailure`（错误 → `{state, reason}` 的纯函数映射），由 `sync-engine.ts` 的 `fail()` 调用。**新增 reason 只改这一个文件，且必须同步三处**：`shared/sync-diagnostics.ts` 的 `SAFE_REASONS`（不进白名单就不会出现在报障报告里）、`renderer/sync-status.ts` 的 `describeSync`、`shared/copy.ts` 的三语。漏一处就是 UI 裸露英文码或报告丢 reason 行。
 
 开发时将 `resources/oauth.example.json` 复制为被 Git 忽略的 `resources/oauth.json` 并填入同一个 Desktop 客户端的 `clientId` 与 `clientSecret`，或同时设置 `POLYASK_GOOGLE_DESKTOP_CLIENT_ID` 和 `POLYASK_GOOGLE_DESKTOP_CLIENT_SECRET` 后执行 `npm run configure-oauth`。Release workflow 分别从 GitHub Actions Repository Variable 与 Repository Secret 生成该文件；Forge 将其复制到产物，归档脚本会拒绝凭据缺失或格式无效的发行包。未配置的本地构建仍可运行，但设置页会禁用连接并说明原因。
 
@@ -176,19 +179,19 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 ## 当前实现状态
 
-已完成 M0 纵向切片、动态选站布局和工作台交互：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、每页最多 4 站的 Grid/Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层，以及跨视图统一命令。界面只挂载当前页的已选站点；1–4 站动态排布，5–9 站均衡分页且保留每页聚焦记忆，页签可靠区分已发送、生成中、完成和失败。左侧工作台统一站点选择、保存分组和只读健康检查；Drive 连接诊断留在设置页并可复制经过负向泄漏约束的报告。命令面板、快捷键速查、提问模板、最近提问、本地草稿、下一未完成/失败站点、可选后台通知、手动更新入口和结果双选对照均已落地。群发结果区分失败与取消，并可按原发送范围重试；任意数量的已选站点使用同一套结果和重试逻辑。命令栏支持最多 4 张 PNG/JPEG 图片的选择、粘贴、预览和兼容范围校验。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁站点视图，支持搜索、收藏、标签、备注、最佳答案、双回答段落对照和 Markdown 预览/导出。辅助综合同样复用单窗口结果库，并只允许当前已勾选的站点作为综合目标。Google Drive 同步已迁移 schema 1 数据、原生 OAuth/PKCE、操作系统令牌保护、增量同步、退避、网络截止时间、未来格式只读和受保护的云端清理；未连接时后台同步不发起授权，首次 Drive 验证成功后才标记已连接。Gemini 完成 Google 验证并返回后会执行一次受控重载。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
+已完成 M0 纵向切片、动态选站布局和工作台交互：Electron 43 + Forge 7 + TypeScript + React 脚手架、单 `BrowserWindow`、9 个持久化 `WebContentsView`、每页最多 4 站的 Grid/Focus、安全导航和权限策略、隔离 preload、现有适配器加载、绝对 deadline/epoch 群发、页面与群发状态分层，以及跨视图统一命令。界面只挂载当前页的已选站点；1–4 站动态排布，5–9 站均衡分页且保留每页聚焦记忆，页签可靠区分已发送、生成中、完成和失败。左侧工作台统一站点选择、保存分组和只读健康检查；Drive 连接诊断留在设置页并可复制经过负向泄漏约束的报告。命令面板、快捷键速查、提问模板、最近提问、本地草稿、下一未完成/失败站点、可选后台通知、手动更新入口和结果双选对照均已落地。群发结果区分失败与取消，并可按原发送范围重试；任意数量的已选站点使用同一套结果和重试逻辑。命令栏支持最多 4 张 PNG/JPEG 图片（合计 ≤10 MiB）的选择、粘贴、预览和兼容范围校验；这三个数字与扩展共用一套限额，改动落点清单见 `docs/adapters.md` 的「图片载荷」。重试沿用同一 `runId`，生成监控随之续跑：仍在生成的站点保留计时与 15 分钟观测期限，只有被重试的站点重新计时；点过取消后整轮监控作废，之后的重试只监控被重试的站点（其余站点此时已回报 cancelled，本就在重试集合内）。两端 Markdown 导出的综合结果段落格式逐行一致（`**目标 AI**` 标签 + 站点显示名，档位挂在目标行末）。回答可并行采集并定格到单窗口结果库；结果库临时 detach 而不销毁站点视图，支持搜索、收藏、标签、备注、最佳答案、双回答段落对照和 Markdown 预览/导出。辅助综合同样复用单窗口结果库，并只允许当前已勾选的站点作为综合目标。Google Drive 同步已迁移 schema 1 数据、原生 OAuth/PKCE、操作系统令牌保护、增量同步、退避、网络截止时间、未来格式只读和受保护的云端清理；未连接时后台同步不发起授权，首次 Drive 验证成功后才标记已连接。Gemini 完成 Google 验证并返回后会执行一次受控重载。取消会锁定当前群发直至请求结算，并只重建仍在执行的对应站点视图。
 
 2026-08-24 在 WSL2/WSLg 完成 Linux 冒烟：应用持续运行，DevTools 枚举得到 1 个 PolyAsk shell 和 9 个 AI 顶层 page target，九站均进入真实页面。人工验证进一步确认九站均可登录，Gemini 首次登录与群发成功；除 Kimi 因站点当时要求付费订阅而拒绝对话外，其余 8 站均成功提交并实时显示回答。该 Kimi 结果属于站点业务限制，不是容器、登录或群发链路故障。
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 会校验 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session 和安全 webPreferences；当前页最多挂载 4 个正尺寸视图，后台页会话保持存活但不占用视图树。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版、程序/数据分离的便携 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
+打包产物的自动 smoke 会校验 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session，并**回读每个站点视图实际生效的 webPreferences**（`sandbox`、`contextIsolation`、`nodeIntegration`、`webSecurity`）——任一项不达标即记 `insecure_site`；回读走 Electron 未在类型声明里公开的 `getLastWebPreferences`，读不到时按不安全处理（宁可红，不可假绿）。当前页最多挂载 4 个正尺寸视图，后台页会话保持存活但不占用视图树。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版、程序/数据分离的便携 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
 
 2026-08-25 已创建独立 Desktop OAuth Client ID，并通过 Repository Variable 进入 Release 构建。2026-08-27 Windows 真机确认授权码交换返回 `invalid_request / client_secret`：旧包只携带 Client ID，未提交该 Desktop 客户端生成的 Client Secret。当前构建链改为成对注入并审计 Client ID 与 Client Secret，授权码交换和刷新请求都会提交完整凭据；修正版仍需 Windows 真机完成 Drive 联网闭环。
 
 尚未完成 M0 退出验收：真实 Desktop OAuth/Drive 联网同步、Windows/macOS/原生 Ubuntu 真机安装、Kimi 可对话账号复测、正式 60 分钟稳定性、读屏与高对比度检查、其余系统缩放组合，以及各平台签名和 macOS 公证。
 
-运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞。完整 `npm audit` 仍报告 Electron Forge 构建链的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包不进入应用运行依赖，但正式发布前必须重新评估并清零或形成明确处置记录。
+运行依赖执行 `npm audit --omit=dev` 为 0 项已知漏洞——但 `--omit=dev` **结构性看不到 electron 本身**（按 npm 惯例它总是 devDependency，却是随每个发行包分发的实际运行时）。CI 的 verify 作业另跑 `node desktop/scripts/audit-runtime.mjs`，对完整 `npm audit` 报告只挑 electron 本身与非 Forge 工具链的 `@electron/*` 包判 high/critical 是否为零，当前为 0 项。完整 `npm audit` 仍报告 Electron Forge 构建链（`@electron-forge/*`、`@electron/packager`、`@electron/rebuild`、`@electron/node-gyp`）的上游传递依赖公告，当前稳定版没有非破坏性全量修复；这些包只在打包期跑、不进 `app.asar`，但正式发布前仍需重新评估并清零或形成明确处置记录。
 
 ## 开发命令
 

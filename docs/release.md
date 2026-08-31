@@ -9,13 +9,15 @@
 bash scripts/prepare-release.sh auto   # 晋升 CHANGELOG，同步 manifest、Desktop package/lock 与比较链接（只改文件，不 commit）
 # 1. 人工审阅发版 diff，做下面的「脚本查不出的人工项」
 bash scripts/verify.sh
-cd desktop && npm test && npm run typecheck && npm audit --omit=dev
+cd desktop && npm test && npm run typecheck && npm audit --omit=dev && node scripts/audit-runtime.mjs
 cd .. && bash scripts/release.sh --build-only   # 本机校验 Chrome ZIP 与 Release notes
 # 2. commit 并 push main
 bash scripts/release.sh --publish      # 推 v* tag；Release workflow 构建并发布全部资产
 ```
 
-`--publish` 只在**工作区干净、分支为 main 且跟踪 origin/main、HEAD 已完整推送、exact-HEAD 的 CI 成功、tag 不存在**时才推 tag。Release workflow 再校验同一提交确实位于 `origin/main` 且 CI 成功，之后并行构建各平台。**已发布 tag 不覆盖；要改内容必须升新版本。** 脚本用法跑 `-h`。
+两条 audit 都要跑：`npm audit --omit=dev` 覆盖 react / react-dom / electron-squirrel-startup 这三项真正的运行时 npm 依赖，`node scripts/audit-runtime.mjs` 补上前者结构性看不到的 electron 本身（按 npm 惯例它总是 devDependency，却随每个发行包分发）。CI 的 verify 作业已把两者都接进去，这里是让本机发版前流程口径一致。
+
+`--publish` 只在**工作区干净、分支为 main 且跟踪 origin/main、HEAD 已完整推送、exact-HEAD 的 CI 成功、tag 不存在、「未发布」段无遗留条目**时才推 tag。Release workflow 再校验同一提交确实位于 `origin/main` 且 CI 成功，之后并行构建各平台。**已发布 tag 不覆盖；要改内容必须升新版本。** 脚本用法跑 `-h`。
 
 `prepare-release.sh auto` 只读取当前版本 tag 之后已经提交的 Conventional Commits。待发布改动尚未提交时，应根据 `[未发布]` 内容显式传入 `patch`、`minor` 或 `major`；不要让 `auto` 猜测尚未进入 Git 历史的改动。
 
@@ -65,7 +67,8 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 ## 脚本查不出的人工项
 
 - 在 English / 简体中文 / 繁體中文下逐页看 popup、console、scope、compose、archive、options：切换语言后无截断、异常换行或缺失的 `aria-label`。
-- 核对 `README.md`、`CHANGELOG.md`、扩展说明和设置页是否覆盖本版新增功能、限制、**权限**、隐私行为及最新模型映射；删除已失效的入口与描述。改过权限的版本必须同时看 options 的 `#privacy` 区。
+- 核对 `README.md`、`CHANGELOG.md`、扩展说明和设置页是否覆盖本版新增功能、限制、**权限**与隐私行为；删除已失效的入口与描述。改过权限的版本必须同时看 options 的 `#privacy` 区。
+- **模型映射逐站勾选**：拿 `README.md` 的映射表对着 `content/adapters-*.js` 的 `think()`/`fast()`/`state()` 九站过一遍（站点 A/B 灰度期要写清两条路径，不能只写新的）。同一轮顺手核对「核心功能」各 bullet 的双端标注——README 的前置句是「除特别标注外双端通用」，漏标一个单端功能就是对外文档说谎。
 - **破坏性操作、明文存储、权限范围、不可撤销后果、数据保留规则不得弱化**；按钮、确认文案与实际动作必须一致。特别是「本机重置不删 Drive 数据」「删除是 tombstone」这两条承诺语义。
 - 发版前跑 `node scripts/probe-drift.js`（后台标签冻结时加 `--activate`），要求**覆盖 9/9 站**且 `!` 警报逐条处置；复核用 `--dry`（警报会被本轮落盘的快照消费，直接复跑只会看到绿）。
 - 报障链路依赖两个 GitHub label：`release-watch` 由 `scripts/watch-releases.js` 自建；**`site-breakage` 必须在仓库里手工建过一次**（`gh label create site-breakage --color d73a4a --description "站点适配失灵"`），issue 模板引用不存在的 label 会静默丢弃、无任何报错。换仓库/fork 后要重建。
@@ -74,7 +77,7 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 - 按 `docs/desktop-oauth-security.md` 检查 Google Auth Platform 与 Drive API 指标；无法由发版、用户增长或集中测试解释的异常先调查再发布。
 - 在能取得原生机器时，至少运行一次本版 Windows `.exe` 安装包和便携 ZIP，并安装 Linux `.deb` 和两种 macOS 架构包；未完成的原生验收必须写进 Release 限制，不得用 CI 构建成功替代。
 - 核对 Release 资产恰好包含 6 个主包、6 个 `.sha256` 和版本说明；下载后抽查 SHA-256。Windows Squirrel 的 `.nupkg`/`RELEASES` 是更新元数据，当前不作为用户下载资产发布。
-- **对 `CLAUDE.md` 与四份专题文档（`docs/adapters.md`、`docs/console-windows.md`、`docs/verify.md`、`docs/release.md`）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**四份 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。
+- **对 `CLAUDE.md` 与全部入库 docs（以 `git ls-files docs/` 为准，当前 7 份）逐条做「一小时测试」**：删掉它，接下来一小时我的行为会变吗？不会就删。重点扫五类——解释性长文、已失效的工具/站点说明、软性叮嘱、偶发流程、同一规则的重复措辞。**入库 docs 一起过，只查常驻文件会让专题文档单向膨胀。** 真删掉一整份 docs 时，`CLAUDE.md`/`README.md`/`CHANGELOG.md`/其它 docs 里指向它的引用要一并删——`verify.sh` 见到悬空引用会直接红。
 
 ## 用户可见文案
 
@@ -94,7 +97,9 @@ Release workflow 在每个 Desktop runner 上执行 `npm run configure-oauth`，
 
 加错文件的后果：别的页面拿不到 key，而 `test-content-l10n.js` 要么报缺键、要么根本不覆盖；右键菜单还会不跟随用户选的语言。
 
-新增用户可见错误码除三语词条外，还要补四张翻译表（见 `docs/console-windows.md` 错误码全表）。
+- 新增用户可见错误码除三语词条外，还要补**五张**扩展翻译表；两端都会出现的码另补 `desktop/src/shared/status-copy.ts` 与 `desktop/src/shared/copy.ts`（见 `docs/console-windows.md` 错误码全表）。
+- **凡日期/数字格式化一律传 `document.documentElement.lang`**，不要留空让它取浏览器默认 locale——用户在设置页选了简中而浏览器是英文时，日期会用错格式。现有四处（`console/status.js`、`console/archive-detail.js`、`console/archive-stats.js`、`options/sync.js`）都这么写；`options/sync.js` 用的是 `?.` 可选链，因为 `scripts/test-sync-feedback.js` 的 document 桩没有 `documentElement`，改成裸访问会把那条测试链路吞成 `sync_error`。
+- **`i18n.js` 的 `_resolveAuto` 与 `desktop/src/shared/copy.ts` 的 `resolveLocale` 必须逐档一致**：两边都是前缀匹配（不是 `includes`），`zh` / `zh-cn` / `zh-hans` → 简体，`zh-tw` / `zh-hk` / `zh-mo` / `zh-hant` → 繁体，未命中的一律落 `en`（**不兜底成简体**）。改任一个都要同步另一个，否则同一 locale 在内容脚本与 Desktop 外壳会显示不同语言。
 
 ## Git 惯例
 

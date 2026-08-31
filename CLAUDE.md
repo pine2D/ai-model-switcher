@@ -2,7 +2,7 @@
 
 发布物包括 Chrome MV3 扩展和 `desktop/` Electron 预览包。**核心是群发到 9 个真实 AI 页面并排比较**；切档可报错，群发不能断。两端均有图片、结果库、辅助综合和 Drive 同步；扩展保持原生 JS、无构建、classic script。
 
-<!-- 最后与代码核对：2026-08-30 · manifest v0.22.0。发版前重跑核对并更新这行。
+<!-- 最后与代码核对：2026-08-31 · manifest v0.22.0。发版前重跑核对并更新这行。
      本文件控制在 11 KB 内；新增硬约束先挤旧项或外迁 docs/。 -->
 
 ## 先读哪份（下面几份不常驻上下文，动到对应部分再读）
@@ -24,17 +24,17 @@
 - **删除一律 tombstone**：写 `deletedAt` + 入 outbox，不物理删；清空历史也要留标记，否则其它设备会同步回来。本机重置不删 Drive 数据；要改先改承诺文案。
 - **判定阈值绝不贴着实测值写**：`findComposer` 的高度阈值是 `>=16` 不是 `>=20`。标称 20px 的编辑器在开了显示缩放的机器上实测 19.999998px，零余量的 `>=20` 筛掉唯一真编辑器 → `findComposer` 返回 null → 整条群发链空跑到 44s 截止线（v0.15.2 事故根因）。**凡拿实测值定阈值，一律留 ≥20% 余量**（标称 20 → 写 16）。
 - **`deadline` 是绝对时间戳、全链路透传**：`bg/broadcast.js` 算出 → content `submitPrompt` → `adapter.submit`/`attach` → `confirmSubmitted`。**循环等待、以及 ≥1s 的固定等待，一律夹取**：`Math.min(x, Math.max(0, deadline - Date.now()))`。唯一例外是「让编辑器/菜单渲染跟上」的毫秒级 sleep（inject 后 150ms、点击后 250/400ms）——既有惯例可不夹取，但单条 ≤500ms，且不得在一条路径上叠成秒级。console 客户端兜底必须严格大于后台预算。
-- **只产 `code`，不产用户可见文案**：bg/content 返回错误码，console 翻译；bg 轮询认 `r.code`，**绝不正则匹配文案**。新增码须补四张翻译表与三语词条（位置见 `docs/console-windows.md`），否则会裸露英文 reason。
+- **只产 `code`，不产用户可见文案**：bg/content 返回错误码，console 翻译；bg 轮询认 `r.code`，**绝不正则匹配文案**。新增可见码须补**五张**扩展翻译表与三语词条（位置见 `docs/console-windows.md`）；两端都会出现的码还要补 `desktop/src/shared/status-copy.ts` 与 `desktop/src/shared/copy.ts` 三语。漏一处就裸露英文 reason。
 - **适配器协议**：每站必需 `{think, fast, state, diagnose}` 四项，其余钩子可选、不实现 = 该能力静默降级（不是报错）。`state`/`diagnose`/`answer`/`submitted` **只读同步，不得开菜单**。`return false` = 落回 core 通用链；`throw` = 通用链对本站不安全，core 直接失败**不回退**。全表与九站映射见 `docs/adapters.md`。
 - **切档控件缺失一律 `throw`，不要静默 `return`**——静默 return 会让 `runMode` 误报「已切到」并弹假成功 toast。例外只有 4 处（DeepSeek 首屏 radio、Claude 无-effort-入口回退、Gemini 两处），全部写死在适配器里；加新例外前先读 `docs/adapters.md` 的例外清单及其理由。
-- **站点 UI 三条通用规则**：① 控件正在下沉到二级子菜单（顶层只留当前值），写新逻辑默认「顶层找不到 → 找子菜单入口 → 展开 → 再找」，别假设一层列表；② 同一页面里不同语义的列表可能共用同一个 role（ChatGPT 的 Model 与 Effort 都是 `[role=menuitemradio]`），取列表必须校验语义，否则「最高档」被点成末位模型；③ **每个菜单动作自己 `escMenus()` 收尾**，子菜单不关会罩住输入框，并让后续动作点空。
+- **站点 UI 三条通用规则**（细节与反例见 `docs/adapters.md`）：① 控件在下沉到二级子菜单，默认「顶层找不到 → 展开子菜单 → 再找」，别假设一层列表；② 同一 role 可能承载不同语义的列表，取列表必须校验语义，否则「最高档」被点成末位模型；③ **每个菜单动作自己 `escMenus()` 收尾**，子菜单不关会罩住输入框并让后续动作点空。
 - **群发取消（epoch）**：`_sendEpoch` / `cancelPendingSends()`。新写的长流程必须在每个 `await` 后核对 epoch，否则用户关了控制台、后台还在往站点输入框里打字。现成写法：`bg/broadcast.js` 轮询循环每轮核对，`background.js` 的 collect 在入口前后各核对一次。
 - **compose ↔ console 一次性交接只走 `console/run-meta.js`**：写 `storage.session` 的 `amsPendingRun`，取出即删，且必须 `text` 匹配才认。**不要新增 storage.local 常驻键或点对点消息**——这条路径已返工八次，每次都是「交接窗口没关严，旧上下文漏进下一次发送」。
 - **新增持久化键要同时登记**同步白名单 / 跨设备投影 / 重置清单 /（若迁移）迁移类型 /（若设置页可见）`PREFS`；位置见 `docs/console-windows.md`。漏一处，同步/迁移/重置/回填会静默失效。
 - **不申请任何 AI 站点 host 权限**（站点访问只靠 `content_scripts.matches` 那 9 条），`host_permissions` 仅 `https://www.googleapis.com/*`。动权限必须同步 options 设置页 `#privacy` 区的隐私文案 + README + CHANGELOG。
-- **图片限额（张数 / 类型 / 单批大小，数值见 `docs/adapters.md`）改任何一个数**，就要同改 `content/upload.js` + `console/images.js` + README + 三语文案。
-- **加站点**：扩展同改 manifest matches + 适配器 + `console/sites.js`；desktop 另改 `desktop/src/main/sites.ts`。漏项会静默缺席，`test-site-selection.js` 会红。步骤见 `docs/adapters.md`。
-- **单文件 ≤300 行（JS）**：`scripts/verify.sh` 会失败。`bg/sync.js`、`bg/windows.js`、`content/core.js` 正好 300 行；动它们须按站点或职责拆分，不要靠压行/删注释续命。`scripts/` 同样受限。
+- **图片限额（张数 / 类型 / 单批大小，数值见 `docs/adapters.md`）改任何一个数**，九处落点一起改：扩展 `content/upload.js`、`console/images.js`、`console/console.html` 的 `accept`；desktop `src/shared/images.ts`、`src/renderer/image-picker.tsx` 的 `accept`、`src/shared/copy.ts` 三语；再加 `i18n.js` 词条、README、`docs/adapters.md` 与 `docs/desktop-m0.md` 的叙述。`scripts/test-image-limits.js` 对账全部落点。
+- **加站点**：扩展同改 manifest matches + 适配器 + `console/sites.js` + `bg/synthesis.js` 的 `SYNTHESIS_ALLOWED_SITES`；desktop 另改 `desktop/src/main/sites.ts`（顺序须与 `desktop/src/shared/contracts.ts` 的 `SITE_KEYS` 一致）与 `content/generation.js` 的停止键表。漏项会静默缺席，`test-site-selection.js` 会红。步骤见 `docs/adapters.md`。
+- **单文件 ≤300 行（JS）**：`scripts/verify.sh` 会失败。`bg/`、`content/`、`console/` 有多份已贴着上限（动手前 `wc -l` 一遍，别凭记忆行数）；要加行须按站点或职责拆分，不要靠压行/删注释续命。`scripts/` 同样受限。
 - **MV3 扩展页 CSP 是 `script-src 'self'`**：内联 `<script>` 与 `on*=` 被拦，连「防首帧闪烁的主题预应用」也必须外链（`console/theme.js` 放 `<head>` 内，外链脚本仍先于首帧执行；各页 head 顺序见 docs）。
 - **真机验证不可省，本机全绿 ≠ 用户环境可用**：适配器/切档/发送 bug 须重载扩展、刷新站点，再用生产 `__AMS` 回归。**本机不能复现时先问现象**：「输入框有无文字 / 是否发出 / 有无报错」，再定位 composer / inject / submit / state。两机差异见 `docs/verify.md`；本机跑通不能证明用户端已修复。
 - **`console.html` 的 `#live` 不可删**：群发进度、失败汇总、收集结果都写入。圆点变色对读屏不可见，这是唯一进度通道。
@@ -44,8 +44,9 @@
 ## 命令
 
 ```bash
-bash scripts/verify.sh               # 语法 + JSON + 300 行 + 文档/测试登记 + 全部 node 测试 + git diff --check
+bash scripts/verify.sh               # 语法 + JSON + 300 行 + OAuth 卫生 + 文档/测试登记 + workflow YAML + 扩展侧全部 node 测试 + git diff --check
 node scripts/test-<name>.js          # 单跑一个（改完仍要跑 verify.sh 全量）
+cd desktop && npm test && npm run typecheck   # Desktop 门禁：verify.sh 不跑它（详见 docs/desktop-m0.md）
 bash scripts/prepare-release.sh auto # 推导版本、晋升 CHANGELOG、同步扩展与 Desktop 版本（只改文件不 commit）
 bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--build-only 只验 Chrome 包）
 ```
@@ -53,7 +54,7 @@ bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--b
 ## 架构（先在这里定位入口文件）
 
 - **群发编排**：`background.js`（SW 入口）→ `bg/`（窗口/平铺/群发/伴侣窗/读页/辅助综合）。
-- **站点适配**：`content/core.js` + `content/{md,upload,pill,diag,adapters-intl,adapters-cn,adapters-cn2}.js`。
+- **站点适配**：`content/core.js` + `content/{md,upload,pill,diag,generation,adapters-intl,adapters-cn,adapters-cn2}.js`（`pill.js` 只进扩展、`generation.js` 只进 Desktop preload，两条豁免见 `docs/adapters.md`）。
 - **数据与同步**：`bg/` 的 8 个数据模块；`store` 使用 IndexedDB `polyask`。
 - **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
 - **桌面预览版**：`desktop/src/{main,preload,renderer}/`；复用 content 适配器，独立打包、独立会话。
@@ -64,4 +65,4 @@ bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--b
 
 - 提交用 `git-commit` skill（Conventional Commits，可带 AI 署名 trailer）；仓库无 user 配置，用内联身份提交。
 - 持续维护 `CHANGELOG.md` 的「未发布」段，所有用户可感知变更都要记。发版流程见 `docs/release.md`。
-- 本地工作目录（`docs/superpowers/`、`.superpowers/`、`.spec-workflow/`、`.codegraph/`、`.serena/`、`dist/`、`scratchpad/`）已 gitignore——别把需要入库的东西放进去，也别在文档里假设克隆者有 `scratchpad/`。
+- `docs/` 默认 gitignore，只有 `.gitignore` 白名单里那几份契约文档入库；其余 `docs/*.md` 与 `.superpowers/`、`.spec-workflow/`、`.codegraph/`、`.serena/`、`dist/`、`scratchpad/` 克隆者都拿不到——别把需要入库的东西放进去（要入库就补白名单），也别在入库文档里引用未入库的路径（`verify.sh` 的文档引用检查按 `git ls-files` 判定，会直接红）。

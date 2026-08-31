@@ -1,19 +1,23 @@
 # 验证：离线回归 + 真机（chrome-dbg）
 
-**离线回归清单、测试写法（源码字符串断言 / `XXX_START` 标记块）、chrome-dbg 真机流程、探针工具与坑都在这里**；`CLAUDE.md` 只留 `verify.sh` 一条命令和「改适配器/切档/发送必须真机复现」一句硬约束。冲突以 `CLAUDE.md` 为准。
+**离线回归清单、测试写法（源码字符串断言 / `XXX_START` 标记块）、chrome-dbg 真机流程、探针工具与坑都在这里**；`CLAUDE.md` 只留两条门禁命令和「改适配器/切档/发送必须真机复现」一句硬约束。冲突以 `CLAUDE.md` 为准。
 
 **顺序不能反：先离线（`bash scripts/verify.sh`），再真机。** 反过来会得到「真机试通了但 CI 红」的返工。
 
 ## 离线回归
 
-- `scripts/` 下的 `test-*.js` 都是**对源码字符串做断言的 node 脚本**（`fs.readFileSync` + 正则 / `indexOf` / `vm`），无构建无框架。改 UI 的 class/id/顺序/CSS 数值都可能打断看似无关的测试。`verify.sh` 另跑 `node --check`、JSON parse、300 行上限、三语检查、文档引用与测试登记检查、`git diff --check`。
+**两端有两条互不重叠的门禁**：`bash scripts/verify.sh` 只覆盖扩展侧（外加 Desktop OAuth 凭据卫生这一段）；Desktop 的 `npm test` / `npm run typecheck` 一条都不在里面，要单独跑（`cd desktop`，命令与验收边界见 `docs/desktop-m0.md`）。本节其余内容讲的都是扩展侧那条。
+
+- `scripts/` 下的 `test-*.js` 都是**对源码字符串做断言的 node 脚本**（`fs.readFileSync` + 正则 / `indexOf` / `vm`），无构建无框架。改 UI 的 class/id/顺序/CSS 数值都可能打断看似无关的测试。`verify.sh` 另跑 `node --check`、JSON parse、300 行上限、Desktop OAuth 凭据卫生、三语检查、文档引用与测试登记检查、workflow YAML 解析、`git diff --check`。
+- **workflow YAML 检查**优先用 `actionlint`（连 `runs-on` 拼错、`needs` 指向不存在的 job 都查），没装则退化到 python3 + PyYAML 的纯语法解析，两者都缺时打印警告跳过（不阻断 verify）。本机想拿最强校验就装一个 actionlint（apt/brew 都有）——YAML 错误只能在推 tag 后由 GitHub 暴露，而 tag 不可覆盖 = 烧掉一个版本号。
 - 需要在 node 里跑纯逻辑时，用 `// XXX_START` / `// XXX_END` 标记块让测试 `slice` 出源码片段执行（`console/scope.js` 是现例）。**不要为了测试给 classic script 加 module 导出。**
-- **每个 fix 必须留一个可离线跑的回归。** 适配器和 SW 改动无法在 CI 复现真机，所以回归的形式是：把出事那一刻的 DOM / 消息流做成假对象喂给源码。模板：`test-site-send-runtime.js`、`test-submit-recovery.js`、`test-intl-runtime.js`、`test-image-runtime.js`。真机验证**不能替代**它——只有它能防住下一个人改回去。
+- **每个 fix 必须留一个可离线跑的回归。** 适配器和 SW 改动无法在 CI 复现真机，所以回归的形式是：把出事那一刻的 DOM / 消息流做成假对象喂给源码。模板：`test-site-send-runtime.js`、`test-submit-recovery.js`、`test-intl-runtime.js`、`test-image-runtime.js`、`test-md-runtime.js`（自带最小 DOM 桩，是 `content/md.js` 这类纯序列化逻辑的现例）。真机验证**不能替代**它——只有它能防住下一个人改回去。
+- **`test-multi-image.js` 的虚拟时钟在「布防」时就推进 now**（`setTimeout: (fn, ms) => { now += ms || 0; queueMicrotask(fn); … }`，不是在触发时推进）。任何在 `content/core.js` 里新布防定时器的改动都会被它误杀——看到这个测试红而改动本身与图片无关时，先怀疑它。
 - **新测试写完必须加进 `verify.sh` 的清单，否则永远不会被执行**——现在 `verify.sh` 会自查：`scripts/test-*.js` 每个文件都必须在脚本里有一行 `node scripts/test-xxx.js`，否则直接红。确属被别的用例 `require` 的模块、不该单独跑的，在 `verify.sh` 里加一行 `# verify-skip: scripts/test-<名字>.js <理由>` 声明豁免——**理由不能省**，脚本按 `verify-skip: <路径> `（含尾空格）匹配，只写文件名等于没声明。
 - `scripts/test-sync-engine.js` 是唯一的豁免项：它 `module.exports` 一个函数，由 `scripts/test-sync-runtime.js` 末尾 `require` 后执行，**直接 `node scripts/test-sync-engine.js` 只定义不执行、静默退出 0**。它的断言有覆盖，跑 `test-sync-runtime.js` 即可（实测：改坏它的断言，`test-sync-runtime.js` 变红）。
-- **`CLAUDE.md` 路由过去的 `docs/*.md` 少一份是纯静默事故**（读文件失败不报错，下个会话空手上阵）。`verify.sh` 从 `CLAUDE.md`、`README.md`、`docs/*.md` 正文里正则提取所有 `docs/*.md` 形式的引用，逐个断言存在且非空——新增引用自动纳入，不用维护清单；反过来，正文里别写 `docs/` 加真实文件名样式的占位符，会被当成真引用（占位用 `docs/<名字>.md`）。
-- **站点三处登记已有防线**：`scripts/test-site-selection.js` 双向对账 `manifest.matches` / `SITES` / 适配器注册键，并反查僵尸适配器与孤儿匹配；适配器文件清单从 manifest 派生（漏挂某一卷会红）。加站点漏一处 `verify.sh` 直接红，读断言消息即知补哪份文件。
-- **平铺安全回归（核心用例）**：日常 normal 窗口开某站 → 触发 `openTile` → 断言该 normal 窗口 bounds 不变、登记的是新 popup；把登记污染成 normal id 后断言不被关、自愈为 popup。
+- **`CLAUDE.md` 路由过去的 `docs/*.md` 少一份是纯静默事故**（读文件失败不报错，下个会话空手上阵）。`verify.sh` 从 `CLAUDE.md`、`README.md`、`CHANGELOG.md`、**已入库的** `docs/*.md` 正文里正则提取所有 `docs/*.md` 形式的引用，逐个断言存在且非空、**且已被 Git 跟踪**——只判「工作区存在」会让本机留着未 `git add` 的同名文件时假绿，而 CI 走干净 checkout 才红，卡在一个本机复现不出的失败上。新增引用自动纳入，不用维护清单；反过来，正文里别写 `docs/` 加真实文件名样式的占位符，会被当成真引用（占位用 `docs/<名字>.md`）。
+- **站点四处登记已有防线**：`scripts/test-site-selection.js` 双向对账 `manifest.matches` / `console/sites.js` 的 `SITES` / 适配器注册键 / `desktop/src/main/sites.ts`，并反查僵尸适配器与孤儿匹配；适配器文件清单从 manifest 派生（漏挂某一卷会红）。同一份测试还循环断言九站 `think/fast/state/diagnose` 均为 function。加站点漏一处 `verify.sh` 直接红，读断言消息即知补哪份文件。
+- **平铺安全回归**：`scripts/test-tile-reflow.js` ⑥a 把登记污染成用户日常 `type:"normal"` 窗（跨浏览器重启 id 重排就会发生），断言全链路下该窗不被重排/关闭、并自愈成新 popup；⑥b 断言 `removeIfPopup`/`updateIfPopup` 对 `type:"normal"` 的类型校验（popup 正向各一条）。这是 popup-only 铁律三根支柱里唯一能离线跑的那两根。
 
 ## 真机环境（本机 chrome-dbg）
 
