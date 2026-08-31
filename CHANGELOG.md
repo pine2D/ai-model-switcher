@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.23.2] - 2026-08-31
+
 ### 新增
 
 - Desktop 站点状态详情新增「强制重载」（忽略缓存）动作，解决普通重载因命中过期缓存而「刷新无用」的问题
@@ -650,7 +652,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.23.1...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.23.2...HEAD
+[0.23.2]: https://github.com/pine2D/polyask/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/pine2D/polyask/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/pine2D/polyask/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/pine2D/polyask/compare/v0.21.0...v0.22.0
