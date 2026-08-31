@@ -800,7 +800,8 @@ test("status announcements use the site label, and command-palette page jumps an
   // F172: showPage (the command-palette / renderer-requested page jump) must announce
   // like the toolbar PageTabs does, since onLayout suppresses its own announcement
   // whenever requestedPage.current is set.
-  const app = readFileSync("src/renderer/index.tsx", "utf8");
+  // Windows CI 用 autocrlf checkout，源文件是 CRLF；下面的抽取标记内嵌 \n，必须先归一化换行
+  const app = readFileSync("src/renderer/index.tsx", "utf8").replace(/\r\n/g, "\n");
   assert.match(app, /sitesRef\.current\.find\(\(site\) => site\.key === status\.site\)\?\.label \?\? status\.site/);
   const subscribeEffect = app.slice(app.indexOf("useEffect(() => {\n    if (!bootstrapStarted"), app.indexOf("}, [copy]);") + "}, [copy]);".length);
   assert.match(subscribeEffect, /const offStatus = window\.polyask\.onStatus/);
