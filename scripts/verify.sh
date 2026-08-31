@@ -118,9 +118,11 @@ node scripts/test-icon-system.js
 echo "[test] 站点模型适配"
 node scripts/test-desktop-shared-runtime.js
 node scripts/test-intl-runtime.js
+node scripts/test-intl2-runtime.js
 node scripts/test-claude-model.js
 node scripts/test-qwen-adapter.js
 node scripts/test-site-send-runtime.js
+node scripts/test-cn-tier-runtime.js
 node scripts/test-submit-recovery.js
 node scripts/test-diag-runtime.js
 node scripts/test-generation-runtime.js
