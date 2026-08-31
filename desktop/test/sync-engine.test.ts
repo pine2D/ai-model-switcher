@@ -5,10 +5,14 @@ import { DesktopDatabase } from "../src/main/database";
 import { HistoryService } from "../src/main/history-service";
 import { SyncEngine, type SyncAuth, type SyncDrive } from "../src/main/sync-engine";
 import { SyncRepository } from "../src/main/sync-repository";
+import { describeSync } from "../src/renderer/sync-status";
+import { createSyncDiagnosticSnapshot } from "../src/shared/sync-diagnostics";
+import { getCopy } from "../src/shared/copy";
 import {
   compareSyncVersion,
   mergeHistoryRecords,
-  mergeStateFragments
+  mergeStateFragments,
+  type StateFragment
 } from "../src/shared/sync";
 
 test("sync merge uses updatedAt then deviceId and lets tombstones win ties", () => {
@@ -132,6 +136,9 @@ test("connection failures preserve the OAuth, token-storage, or Drive stage", as
   const cases = [
     { authError: "network_error", expectedState: "offline", expectedReason: "oauth_network" },
     { authError: "auth_failed", expectedState: "auth", expectedReason: "oauth_rejected" },
+    { authError: "oauth_denied", expectedState: "auth", expectedReason: "oauth_rejected" },
+    { authError: "oauth_state_mismatch", expectedState: "auth", expectedReason: "oauth_rejected" },
+    { authError: "oauth_code_missing", expectedState: "auth", expectedReason: "oauth_rejected" },
     { authError: "oauth_invalid_grant", expectedState: "auth", expectedReason: "oauth_invalid_grant" },
     { authError: "oauth_invalid_client", expectedState: "blocked", expectedReason: "oauth_invalid_client" },
     { authError: "oauth_redirect_mismatch", expectedState: "blocked", expectedReason: "oauth_redirect_mismatch" },
@@ -427,5 +434,225 @@ test("disconnect aborts the active pull before waiting for the serial queue", as
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(aborted, true);
     await Promise.all([syncing, disconnecting]);
+  } finally { database.close(); }
+});
+
+test("a failed cloud clear stays recoverable instead of pinning the sync engine", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  let signals = 0;
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async (_id, name, appProperties) => ({ id: `uploaded-${name}`, appProperties }),
+    clearAll: async (_onProgress, signal) => {
+      if (signal) signals += 1;
+      throw Object.assign(new Error("network_error"), { code: "network_error" });
+    }
+  };
+  const session = auth();
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: session, now: () => 6_000 });
+    await assert.rejects(() => engine.clearRemote());
+    assert.equal(signals, 1, "clearAll must receive a cancellation signal");
+    assert.equal(session.disconnected, false, "a failed clear must not revoke the token");
+    assert.equal(repository.config().clearRunning, false);
+    assert.equal(repository.config().connected, true);
+    const status = await engine.syncNow();
+    assert.equal(status.state, "idle");
+    assert.equal(status.lastSuccessAt, 6_000);
+  } finally { database.close(); }
+});
+
+test("a cloud clear whose revoke fails finishes disconnected with a revoke reason", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true, clearProgress: 4 });
+  const session: SyncAuth = {
+    configured: () => true,
+    securePersistence: () => true,
+    connect: async () => undefined,
+    disconnect: async () => { throw new Error("revoke_boom"); }
+  };
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => ({ id: "unused" }),
+    clearAll: async () => undefined
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: session }).clearRemote();
+    assert.equal(status.connected, false);
+    assert.equal(status.state, "auth");
+    assert.equal(status.reason, "revoke_failed");
+    assert.equal(describeSync(getCopy("en"), status), getCopy("en").syncReasonRevokeFailed);
+    assert.equal(status.hasStoredToken, undefined);
+    assert.equal(repository.config().clearRunning, false);
+    assert.equal(repository.config().clearProgress, 0);
+  } finally { database.close(); }
+});
+
+test("disconnect cancels a cloud clear that is still deleting files", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  let started!: () => void;
+  const clearStarted = new Promise<void>((resolve) => { started = resolve; });
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => ({ id: "unused" }),
+    clearAll: (_onProgress, signal) => new Promise((_resolve, reject) => {
+      started();
+      signal?.addEventListener("abort", () => reject(Object.assign(new Error("network_error"), { code: "network_error" })), { once: true });
+      setTimeout(() => reject(new Error("clear_ignored_cancellation")), 200).unref?.();
+    })
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: auth() });
+    const clearing = engine.clearRemote();
+    await clearStarted;
+    const disconnecting = engine.disconnect();
+    await assert.rejects(() => clearing, (error: unknown) => (error as { code?: string }).code === "network_error");
+    assert.equal((await disconnecting).connected, false);
+    assert.equal(repository.config().clearRunning, false);
+  } finally { database.close(); }
+});
+
+test("a stored authorization stays revocable after the first Drive check fails", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const drive: SyncDrive = {
+    getStartToken: async () => { throw Object.assign(new Error("network_timeout"), { code: "network_timeout" }); },
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => ({ id: "unused" }),
+    clearAll: async () => undefined
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: auth() });
+    const status = await engine.connect();
+    assert.equal(status.connected, false);
+    assert.equal(status.hasStoredToken, true);
+    assert.equal((await engine.disconnect()).hasStoredToken, undefined);
+  } finally { database.close(); }
+});
+
+test("a Retry-After hint extends but never shortens the upload backoff", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => [],
+    listChanges: async () => ({ changes: [], newStartPageToken: "next" }),
+    download: async () => null,
+    upsert: async () => { throw Object.assign(new Error("rate_limited"), { code: "rate_limited", retryAfter: 1 }); },
+    clearAll: async () => undefined
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: auth(), now: () => 10_000 }).syncNow();
+    assert.equal(status.state, "waiting");
+    assert.equal(repository.ready(11_000).length, 0, "a 1 ms Retry-After must not replace the exponential backoff");
+  } finally { database.close(); }
+});
+
+test("groups and selections naming unknown hosts are consumed without truncating the cloud copy", () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  const remote = {
+    "remote-state": {
+      schema: 1,
+      deviceId: "extension-device",
+      settings: {
+        "amsConsole.selected": {
+          value: { "claude.ai": true, "brand-new.example": true },
+          updatedAt: 5_000,
+          deviceId: "extension-device"
+        }
+      },
+      templates: {},
+      groups: {
+        mixed: { id: "mixed", name: "Mixed", hosts: ["claude.ai", "brand-new.example"], updatedAt: 5_000, deviceId: "extension-device" }
+      }
+    }
+  };
+  repository.applyStateFragments(remote as unknown as Record<string, StateFragment>);
+  try {
+    const fragment = repository.localStateFragment();
+    assert.equal(fragment.groups.mixed, undefined, "a partially understood group must not be re-uploaded truncated");
+    assert.deepEqual(fragment.settings["amsConsole.selected"].value, {
+      "brand-new.example": true,
+      "claude.ai": true
+    });
+  } finally { database.close(); }
+});
+
+test("a sync attempted during a pending cloud clear reports a translatable reason", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true, clearRunning: true });
+  const drive: SyncDrive = {
+    getStartToken: async () => { throw new Error("must_not_sync"); },
+    listFiles: async () => { throw new Error("must_not_sync"); },
+    listChanges: async () => { throw new Error("must_not_sync"); },
+    download: async () => { throw new Error("must_not_sync"); },
+    upsert: async () => { throw new Error("must_not_sync"); },
+    clearAll: async () => { throw new Error("must_not_sync"); }
+  };
+  try {
+    const status = await new SyncEngine({ repository, drive, auth: auth() }).syncNow();
+    assert.equal(status.reason, "clear_pending");
+    assert.equal(
+      createSyncDiagnosticSnapshot(status, { version: "0.22.0", distribution: "installed" }, 1_000).reason,
+      "clear_pending",
+      "a published reason must survive the diagnostics whitelist"
+    );
+    const messages = (["en", "zh-CN", "zh-TW"] as const).map((locale) => describeSync(getCopy(locale), status));
+    assert.deepEqual(messages, (["en", "zh-CN", "zh-TW"] as const).map((locale) => getCopy(locale).syncReasonClearPending));
+    assert.equal(new Set(messages).size, 3);
+  } finally { database.close(); }
+});
+
+test("the corrupt-file count reports the latest round instead of growing forever", async () => {
+  const database = DesktopDatabase.open(":memory:");
+  database.meta.put("deviceId", "desktop-device");
+  const repository = new SyncRepository(database);
+  repository.saveConfig({ connected: true });
+  let broken = true;
+  const drive: SyncDrive = {
+    getStartToken: async () => "start",
+    listFiles: async () => broken
+      ? [{ id: "mismatch", appProperties: { app: "polyask", schema: "1", kind: "history", id: "expected", device: "remote" } }]
+      : [],
+    listChanges: async () => ({ changes: [], newStartPageToken: null }),
+    download: async () => ({ schema: 1, id: "actual", textHash: "actual", text: "not a matching hash", preview: "", createdAt: 1, lastUsedAt: 1, updatedAt: 1, deviceId: "remote" }),
+    upsert: async (_id, name, appProperties) => ({ id: `uploaded-${name}`, appProperties }),
+    clearAll: async () => undefined
+  };
+  try {
+    const engine = new SyncEngine({ repository, drive, auth: auth() });
+    await engine.syncNow();
+    assert.equal(repository.config().errorCount, 1);
+    broken = false;
+    repository.saveConfig({ pageToken: undefined });
+    await engine.syncNow();
+    assert.equal(repository.config().errorCount, 0, "a clean round must clear the reported count");
   } finally { database.close(); }
 });

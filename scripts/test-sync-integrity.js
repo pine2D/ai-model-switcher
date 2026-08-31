@@ -147,7 +147,8 @@ async function main() {
     templates: { remote: { id: "remote", text: "r", updatedAt: 2, deviceId: "r" } }, groups: { gone: { id: "gone", updatedAt: 3, deletedAt: 3, deviceId: "r" } } });
   data.meta.set("deviceState", { schema: 1, deviceId: "local", settings: { amsTheme: { value: "local", updatedAt: 4, deviceId: "local" } },
     templates: { local: { id: "local", text: "l", updatedAt: 4, deviceId: "local" } }, groups: {} });
-  const exported = []; for await (const row of data.data.exportRecords()) exported.push(row);
+  const exportAll = async () => { const rows = []; for await (const row of data.data.exportRecords()) rows.push(row); return rows; };
+  const exported = await exportAll();
   assert.equal(exported.find((row) => row.kind === "setting").value.value, "local", "导出必须合并本地新 state 与远端物化快照");
   assert.deepEqual(exported.filter((row) => row.kind === "template").map((row) => row.value.id).sort(), ["local", "remote"]);
   assert.ok(exported.some((row) => row.kind === "group" && row.value.deletedAt === 3), "导出必须保留远端 tombstone");
@@ -157,6 +158,9 @@ async function main() {
   assert.equal(historyTombstone.deletedAt, historyTombstone.updatedAt);
   assert.equal(Object.hasOwn(historyTombstone, "text"), false, "历史 tombstone 不得保留正文");
   assert.equal(data.outbox.get(`history:${addedHistory.id}:local`).kind, "history");
+  const afterDelete = await exportAll();
+  assert.ok(afterDelete.some((row) => row.kind === "history" && row.value.id === addedHistory.id && Object.hasOwn(row.value, "deletedAt")),
+    "导出必须能带出历史 tombstone，不得对着无 text 的删除记录抛 reconnect_required");
 
   const disconnected = syncRuntime(); disconnected.outbox.clear();
   await disconnected.store.putMeta("materializedState", { schema: 1, settings: { amsTheme: { value: "remote", updatedAt: 1, deviceId: "r" } }, templates: {}, groups: {} });

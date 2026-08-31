@@ -29,9 +29,12 @@ function synthesisHarness() {
     local: { get(_defaults, done) { done({ amsConsole: { tier: "think" } }); } },
   } };
   const copy = { syn_defaultInstruction: "Compare answers", con_mdThink: "Think", con_mdFast: "Fast", syn_unknown: "Unknown" };
+  let uuidSeq = 0;
   const scope = vm.createContext({ document, chrome, location: { search: "?mode=synthesis" }, URLSearchParams, SITES: [
     { host: "a.test", label: "A", url: "https://a.test/new" }, { host: "b.test", label: "B", url: "https://b.test/new" }],
-  t: (key) => copy[key] || key, applyI18n() {}, window: { close() { closed++; } }, Date, Set, Promise, console });
+  t: (key) => copy[key] || key, applyI18n() {}, window: { close() { closed++; } },
+  crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++uuidSeq).padStart(12, "0")}` },
+  Date, Set, Promise, console });
   vm.runInContext(fs.readFileSync("console/synthesis-model.js", "utf8"), scope);
   vm.runInContext(fs.readFileSync("console/compose-synthesis.js", "utf8"), scope);
   return { elements, messages, session, closed: () => closed };
@@ -41,6 +44,7 @@ function synthesisHarness() {
   assert.equal(answers.querySelectorAll("input:checked").length, 2);
   assert.equal(target.value, "", "目标 AI 必须默认留空"); assert.equal(sendButton.disabled, true);
   assert.match(app.elements["syn-preview"].value, /# Candidate answers/); assert.equal(app.messages.length, 0, "显式发送前不得发起 AI 请求");
+  assert.match(app.elements["syn-preview"].value, /--- answer start · [0-9a-f-]{36} ---\nOne\n--- answer end · [0-9a-f-]{36} ---/, "预览必须带随机围栏，候选回答不能原样拼进去");
   target.value = "a.test"; await target.fire("change"); assert.equal(sendButton.disabled, false);
   await sendButton.fire("click");
   assert.deepEqual(app.messages.slice(0, 2).map((message) => message.action), ["historyAdd", "sendOneNewSession"]);

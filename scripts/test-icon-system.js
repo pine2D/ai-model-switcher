@@ -43,10 +43,12 @@ const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex"
 const svgBody = (svg) => svg.slice(svg.indexOf(">") + 1, svg.lastIndexOf("</svg>"))
   .replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
 
-const files = [
-  "popup/popup.html", "options/options.html", "console/console.html",
-  "console/compose.html", "console/archive.html",
-];
+// 从 Git 派生扩展页清单，排除 desktop/（独立打包、renderer 页不走这套 Lucide 契约）——
+// 硬编码列表曾漏过 console/scope.html，对它完全失明（新页零覆盖，供应链没有任何守卫）。
+const files = require("node:child_process")
+  .execFileSync("git", ["ls-files", "*.html"], { encoding: "utf8" })
+  .split("\n")
+  .filter((f) => f && !f.startsWith("desktop/"));
 let brandCount = 0, lucideCount = 0;
 const lucideNames = new Set();
 for (const file of files) {
@@ -71,7 +73,11 @@ for (const file of files) {
 }
 assert.equal(lucideCount, 31, "内联 Lucide 图标应恰好为 31 个");
 assert.equal(brandCount, 2, "data-brand-icon 应恰好为 2 个");
-assert.deepEqual([...lucideNames].sort(), Object.keys(LUCIDE_BODY_HASHES).sort(), "内联 Lucide 应恰好覆盖 27 个固定名称");
+assert.deepEqual(
+  [...lucideNames].sort(),
+  Object.keys(LUCIDE_BODY_HASHES).sort(),
+  `内联 Lucide 应恰好覆盖 ${Object.keys(LUCIDE_BODY_HASHES).length} 个固定名称`
+);
 for (const file of ["popup/popup.css", "console/console.css"]) {
   assert.ok(!fs.readFileSync(file, "utf8").includes("data:image/svg+xml"), `${file} 不得保留手写 data SVG`);
 }

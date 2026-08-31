@@ -27,6 +27,8 @@ const entry = { id: "arc", task: "Question", source: null, results: [{ host: "a.
   scope.module.render({ ...entry, results: entry.results.slice(0, 1) }); assert.equal(button.hidden, true);
   scope.module.render(entry); assert.equal(button.hidden, false); await button.fire("click");
   assert.equal(session.get("amsComposeSynthesis").archiveId, "arc");
+  assert.deepEqual(session.get("amsComposeSynthesis").results.map((result) => result.text), ["One", "Two"],
+    "交接给 compose 页的候选回答必须是原文；围栏由 SynthesisModel.build 统一施加一次，这里不能预先加围栏");
   assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1))), { source: "AMS_CONSOLE", action: "openCompose", mode: "synthesis" });
   session.set("amsPendingSynthesis", { archiveId: "arc", targetHost: "a.test", instruction: "Compare", sentAt: 1 });
   scope.module.render(entry); await root.querySelector(".syn-collect").fire("click");

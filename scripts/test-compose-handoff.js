@@ -5,14 +5,14 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 class El {
-  constructor() { this.events = {}; this.attributes = {}; this.value = ""; this.textContent = ""; this.hidden = false; this.disabled = false; this.focused = 0; }
+  constructor() { this.events = {}; this.attributes = {}; this.value = ""; this.textContent = ""; this.hidden = false; this.disabled = false; this.focused = 0; this.children = []; }
   addEventListener(type, listener) { (this.events[type] ||= []).push(listener); }
   fire(type, event) { return Promise.all((this.events[type] || []).map((listener) => listener({ preventDefault() {}, key: "", ...event }))); }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
-  replaceChildren() {}
-  appendChild() {}
-  append() {}
+  replaceChildren(...children) { this.children = children; }
+  appendChild(child) { this.children.push(child); return child; }
+  append(...children) { this.children.push(...children); }
   focus() { this.focused++; }
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -61,11 +61,12 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
     activeElement: null, getElementById: (id) => els[id], querySelectorAll: () => [], createElement: () => new El(),
     createTextNode: () => new El(), addEventListener() {}, hasFocus: () => false,
   };
+  let uid = 0;
   const context = vm.createContext({
     chrome, document,
     ComposeContext: { init: () => Promise.resolve(), payload: (task) => ({ text: `FULL:${task}`, task, source: null }) },
-    t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => "id" }, window: { close() { closed++; } }, console,
-    setTimeout(fn) { timers.push(fn); return timers.length - 1; }, clearTimeout(id) { timers[id] = null; },
+    t: (key) => key, applyI18n() {}, crypto: { randomUUID: () => `id-${++uid}` }, window: { close() { closed++; } }, console,
+    setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length - 1; }, clearTimeout(id) { if (timers[id]) timers[id] = null; },
   });
   vm.runInContext(fs.readFileSync("console/sites.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("console/run-meta.js", "utf8"), context);
@@ -74,7 +75,8 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
     ...els, messages, localWrites, sessionWrites, get closed() { return closed; },
     openConsoleDone(result) { assert.ok(openConsoleDone, "应已发出 openConsole"); openConsoleDone(result); },
     historyDone(result) { assert.ok(historyDone, "应已发出 historyAdd"); historyDone(result); },
-    timeout() { const timer = timers.find(Boolean); assert.ok(timer, "应已设置超时"); timer(); },
+    timeout() { const timer = timers.find(Boolean); assert.ok(timer, "应已设置超时"); timer.fn(); },
+    armedTimers() { return timers.filter(Boolean); },
     setSettings(next) { currentSettings = next; },
     setActive(el) { document.activeElement = el; },
   };
@@ -203,6 +205,49 @@ function harness({ localSetFails = false, localGetFails = false, initialLocalGet
   await focusBack["cmp-confirm"].fire("keydown", { key: "Escape" });
   assert.equal(focusBack["cmp-confirm"].hidden, true, "确认行应可 Escape 关闭");
   assert.equal(delOpener.focused, 2, "Escape 关闭确认行后焦点应回到「删除模板」");
+
+  // F113：删除确认必须绑定模板 id 而非下标——确认期间切换选中条目应撤销确认，不得错删/静默不删
+  const drift = harness();
+  await tick(); // 让初始化那次异步 renderLibrary()（等 composeContextReady）先跑完，别在建模板途中插队覆盖 templates
+  const addTemplate = async (h, text) => {
+    h["ch-text"].value = text;
+    h.setActive(h["cmp-save-template"]); await h["cmp-save-template"].fire("click");
+    h.setActive(h["cmp-template-name"]); h["cmp-template-name"].value = "";
+    await h["cmp-name-save"].fire("click");
+  };
+  await addTemplate(drift, "first template text");
+  await addTemplate(drift, "second template text");
+  const driftItems = drift["cmp-list"].children.slice();
+  assert.equal(driftItems.length, 2, "应渲染两条模板");
+  // F123：列表项不再是伪 listbox 的 option（没有方向键导航/aria-activedescendant 实现），改用朴素按钮 + aria-current
+  for (const item of driftItems) {
+    assert.equal(item.attributes.role, undefined, "列表项不应再声明 role=option");
+    assert.notEqual(item.attributes["aria-current"], undefined, "列表项应改用 aria-current 标记当前选中项");
+  }
+  assert.match(fs.readFileSync("console/compose.js", "utf8"), /elList\.removeAttribute\("role"\)/,
+    "列表容器应在运行时去掉静态 role=listbox（compose.html 不在本次改动范围内，靠 JS 收尾）");
+  await driftItems[0].fire("click"); // 选中「first」
+  drift.setActive(drift["cmp-delete-template"]);
+  await drift["cmp-delete-template"].fire("click");
+  assert.equal(drift["cmp-confirm"].hidden, false, "应展开删除确认行");
+  await driftItems[1].fire("click"); // 确认开着时改选「second」
+  assert.equal(drift["cmp-confirm"].hidden, true, "切换选中条目应撤销确认态，不得让确认停留在旧目标上");
+  assert.equal(drift["cmp-actions"].hidden, false, "撤销确认后应回到操作行");
+  await drift["cmp-confirm-yes"].fire("click"); // 即便旧监听仍挂着，撤销后再点也不该删任何东西
+  assert.equal(drift["cmp-list"].children.length, 2, "确认已撤销后再点确认不得删除任何模板");
+
+  // 正常路径：确认行开着且目标未漂移，点确认应且只应删除绑定的那一条，并设有 3.1s 自动撤销
+  const dropped = harness();
+  await tick();
+  await addTemplate(dropped, "keep me");
+  await addTemplate(dropped, "drop me");
+  await dropped["cmp-list"].children[1].fire("click"); // 选中「drop me」
+  dropped.setActive(dropped["cmp-delete-template"]);
+  await dropped["cmp-delete-template"].fire("click");
+  assert.equal(dropped.armedTimers().at(-1)?.ms, 3100, "删除确认应设置 3.1s 自动撤销，避免无限期挂着（跨设备漂移窗口）");
+  await dropped["cmp-confirm-yes"].fire("click");
+  assert.equal(dropped["cmp-list"].children.length, 1, "确认未漂移时点确认应正常删除");
+  assert.equal(dropped["cmp-list"].children[0].children[0].textContent, "keep me", "删除应只影响绑定的那一条，不影响其余模板");
 
   console.log("compose-handoff tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

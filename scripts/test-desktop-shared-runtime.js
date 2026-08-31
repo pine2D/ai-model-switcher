@@ -114,10 +114,40 @@ function diagMustResolveTranslationAcrossModuleBoundary() {
   assert.equal(S.adapters["example.com"].diagnose()[0].name, "desktop:diag_composer");
 }
 
+// pill.js：扩展专用三态悬浮控件，依赖 chrome.storage.onChanged 实时生效（content/pill.js:1），
+// 不进桌面 preload——docs/desktop-m0.md 已将其列为既有排除项。
+const EXTENSION_ONLY_CONTENT_SCRIPTS = new Set(["content/pill.js"]);
+// generation.js：桌面专用只读生成态探针，被 desktop/src/preload/site.ts 的 readGeneration()
+// 独占消费，不进扩展 manifest（其读取逻辑走 __AMS.adapters[key].generation()，扩展侧没有消费方）。
+const DESKTOP_ONLY_PRELOAD_SCRIPTS = new Set(["content/generation.js"]);
+
+function manifestAndDesktopPreloadShareContentScriptsExceptKnownExemptions() {
+  const manifest = JSON.parse(source("manifest.json"));
+  const manifestFiles = manifest.content_scripts[0].js;
+  const preloadSource = source("desktop/src/preload/site.ts");
+  const requireRe = /require\("\.\.\/\.\.\/\.\.\/(.+?)"\)/g;
+  const preloadFiles = [...preloadSource.matchAll(requireRe)].map((match) => match[1]);
+
+  assert.ok(manifestFiles.length > 5, "manifest content_scripts[0].js 读取失败或结构变了");
+  assert.ok(preloadFiles.length > 5, "desktop preload require 列表读取失败或结构变了");
+
+  const manifestSet = new Set(manifestFiles.filter((file) => !EXTENSION_ONLY_CONTENT_SCRIPTS.has(file)));
+  const preloadSet = new Set(preloadFiles.filter((file) => !DESKTOP_ONLY_PRELOAD_SCRIPTS.has(file)));
+
+  assert.deepEqual(
+    [...manifestSet].sort(),
+    [...preloadSet].sort(),
+    "manifest content_scripts 与 desktop preload/site.ts 的 require 列表（除 pill.js / generation.js 两条已知豁免外）必须一致——" +
+    "core.js 拆分或新增适配器文件时若只改一边，这里会红"
+  );
+  // diag.js 必须排在全部 adapters-*.js 之后：该顺序约束已由 scripts/test-diag-runtime.js 单独守着，此处只比较集合。
+}
+
 i18nMustExposeDesktopNamespace();
 coreMustResolveTranslationAcrossModuleBoundary();
 adapterMustResolveTranslation("content/adapters-intl.js", "claude.ai", "diag_modelEntry");
 adapterMustResolveTranslation("content/adapters-cn.js", "deepseek.com", "diag_deepThink");
 adapterMustResolveTranslation("content/adapters-cn2.js", "kimi.com", "diag_modelEntry");
 diagMustResolveTranslationAcrossModuleBoundary();
+manifestAndDesktopPreloadShareContentScriptsExceptKnownExemptions();
 console.log("desktop shared runtime tests passed");

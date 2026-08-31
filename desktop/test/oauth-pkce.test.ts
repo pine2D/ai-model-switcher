@@ -10,6 +10,7 @@ import {
   authorizeWithPkce,
   buildAuthorizationRequest,
   exchangeAuthorizationCode,
+  listenLoopback,
   loadOAuthClientCredentials,
   OAUTH_CALLBACK_HTML,
   refreshAccessToken,
@@ -71,12 +72,37 @@ test("desktop OAuth loads only a complete generated credential pair", async () =
   }), null);
 });
 
+test("packaged desktop builds ignore developer OAuth environment variables", async () => {
+  const source = await readFile(resolve(__dirname, "../src/main/sync-runtime.ts"), "utf8");
+  assert.match(source, /environment:\s*app\.isPackaged\s*\?\s*undefined\s*:\s*process\.env/);
+});
+
 test("the loopback page reports receipt without claiming Drive is connected", () => {
   assert.match(OAUTH_CALLBACK_HTML, /Authorization received/);
   assert.match(OAUTH_CALLBACK_HTML, /已收到授权/);
   assert.match(OAUTH_CALLBACK_HTML, /已收到授權/);
   assert.match(OAUTH_CALLBACK_HTML, /return to PolyAsk to see the result/i);
   assert.doesNotMatch(OAUTH_CALLBACK_HTML, /successfully connected/i);
+});
+
+test("the loopback receiver rejects a mismatched state before resolving, so the real callback still wins", async () => {
+  const receiver = await listenLoopback();
+  try {
+    receiver.expect("expected-state");
+
+    const rejected = await fetch(`http://127.0.0.1:${receiver.port}/?code=attacker-code&state=wrong-state`);
+    assert.equal(rejected.status, 404);
+
+    const accepted = fetch(`http://127.0.0.1:${receiver.port}/?code=real-code&state=expected-state`);
+    const callback = await receiver.receive;
+    assert.equal((await accepted).status, 200);
+
+    assert.equal(callback.code, "real-code");
+    assert.equal(callback.state, "expected-state");
+    assert.equal(callback.error, undefined);
+  } finally {
+    await receiver.close();
+  }
 });
 
 test("OAuth token exchange has a bounded network deadline", async () => {
@@ -261,6 +287,7 @@ test("authorization owns token exchange rejection while delayed receiver close r
       listen: async () => ({
         port: 43_123,
         receive,
+        expect: () => {},
         close: async () => {
           signalCloseStarted();
           await closeGate;
@@ -329,6 +356,45 @@ test("OAuth session carries the same Desktop credential pair through authorizati
   await session.connect();
 
   assert.equal(receivedSecret, DESKTOP_CLIENT_SECRET);
+});
+
+test("a rotated refresh token that fails to persist is still kept in memory for the next refresh", async () => {
+  const savedTokens: string[] = [];
+  const refreshCallsSawToken: string[] = [];
+  let refreshCount = 0;
+  const tokenStore = {
+    securePersistence: () => true,
+    load: async () => "stored-refresh",
+    save: async (value: string) => {
+      savedTokens.push(value);
+      throw Object.assign(new Error("denied"), { code: "EACCES" });
+    },
+    clear: async () => undefined
+  } as unknown as TokenStore;
+  const session = new OAuthSession({
+    credentials: {
+      clientId: "client.apps.googleusercontent.com",
+      clientSecret: DESKTOP_CLIENT_SECRET
+    },
+    scope: "https://www.googleapis.com/auth/drive.appdata",
+    tokenStore,
+    openExternal: async () => undefined,
+    refresh: async (_credentials, refreshToken) => {
+      refreshCount += 1;
+      refreshCallsSawToken.push(refreshToken);
+      return {
+        accessToken: `access-${refreshCount}`,
+        refreshToken: refreshCount === 1 ? "rotated-refresh" : null,
+        expiresAt: Date.now() + 60_000
+      };
+    }
+  });
+
+  assert.equal(await session.accessToken(true), "access-1");
+  assert.equal(await session.accessToken(true), "access-2");
+
+  assert.deepEqual(refreshCallsSawToken, ["stored-refresh", "rotated-refresh"]);
+  assert.deepEqual(savedTokens, ["rotated-refresh"]);
 });
 
 test("OAuth session distinguishes secure token-storage failures", async () => {

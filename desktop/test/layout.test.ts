@@ -150,7 +150,7 @@ test("overview requires every tile to meet width and height floors", () => {
 test("focus changes swap only the current and requested sites", () => {
   assert.deepEqual(
     swapFocusedSite(keys, "claude", "gemini"),
-    ["gemini", "chatgpt", "claude", "doubao", "deepseek", "qianwen", "kimi", "yuanbao", "chatglm"]
+    ["gemini", "chatgpt", "claude", "deepseek", "doubao", "qianwen", "kimi", "yuanbao", "chatglm"]
   );
 });
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -42,6 +42,27 @@ test("Linux basic_text keeps the refresh token in memory for this session only",
     assert.equal(await store.load(), "session-only");
     assert.equal(await new TokenStore(path, store.crypto).load(), null);
     assert.equal(store.securePersistence(), false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a decrypt failure that is not ENOENT degrades to null and clears the corrupted file", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "polyask-token-"));
+  const path = join(directory, "oauth-token.bin");
+  await writeFile(path, "corrupted", { mode: 0o600 });
+  const store = new TokenStore(path, {
+    backend: () => "dpapi",
+    available: async () => true,
+    encrypt: async () => { throw new Error("must_not_encrypt"); },
+    decrypt: async () => { throw Object.assign(new Error("cipher mismatch"), { code: "ERR_OSSL_BAD_DECRYPT" }); }
+  });
+  try {
+    assert.equal(await store.load(), null);
+    await assert.rejects(
+      () => readFile(path),
+      (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT"
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

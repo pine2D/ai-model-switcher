@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const realModel = (() => { const scope = vm.createContext({ crypto: require("node:crypto").webcrypto, TextEncoder, Math });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync-model.js"), "utf8") + ";this.model=SyncModel", scope); return scope.model; })();
 const history = new Map(), archives = new Map(), outbox = new Map(), meta = new Map();
 const SyncStore = {
   getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
@@ -96,11 +98,11 @@ function syncRuntime({ files = [], changes = [], downloads = {}, failHistory = f
   const chrome = {
     storage: { local: { get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])), set: async (next) => { for (const [key, value] of Object.entries(next)) local.set(key, value); }, remove: async () => {} }, onChanged: { addListener: (fn) => { onChanged = fn; } } },
     runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} }, lastError: null },
-    alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
+    alarms: { create: () => {}, get: async () => undefined, onAlarm: { addListener: () => {} } },
   };
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel: {
     SCHEMA: 1, hashText: async (text) => text, utf8Preview: (text) => text, retryDelay: () => 500, mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], corrupt: 0 }),
-    mergeHistory: (items) => items, mergeArchives: (items) => items,
+    mergeHistory: (items) => items, futureFiles: realModel.futureFiles, completeBody: realModel.completeBody,
   }, chrome, Date: class extends Date { static now() { return now; } }, setTimeout, clearTimeout, console, URL });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), scope); vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
   return { sync: scope.sync, calls, queued, records, values, change: (c) => onChanged(c, "local"), localChangeCalls: () => localChangeCalls, now: (value) => { now = value; } };
@@ -263,7 +265,7 @@ async function main() {
   await ordered.queued.set("history:h:device", { key: "history:h:device", kind: "history", entityId: "h", nextAt: 0, attempt: 0 });
   await ordered.queued.set("archive:a", { key: "archive:a", kind: "archive", entityId: "a", nextAt: 0, attempt: 0 });
   await ordered.records.set("history:h", { id: "h", textHash: "h", text: "h", deviceId: "device" });
-  await ordered.records.set("archive:a", { id: "a", text: "a", deviceId: "device" });
+  await ordered.records.set("archive:a", { id: "a", text: "a", results: [], deviceId: "device" });
   await ordered.sync.connect();
   assert.equal(ordered.calls.slice(-3).join(","), "state,history,archive", "拉取完成后必须按 state/history/archive 上传");
   assert.equal(ordered.queued.has("history:h:device"), true, "上传失败不得删队列");
@@ -293,8 +295,4 @@ async function main() {
   await require("./test-sync-engine")();
   console.log("sync-runtime tests passed");
 }
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main().catch((error) => { console.error(error); process.exitCode = 1; });

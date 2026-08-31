@@ -1,10 +1,13 @@
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+const read = (name) => fs.readFileSync(path.join(__dirname, "..", name), "utf8");
+const realModel = (() => { const scope = vm.createContext({ crypto: require("node:crypto").webcrypto, TextEncoder, Math });
+  vm.runInContext(read("bg/sync-model.js") + ";this.model=SyncModel", scope); return scope.model; })();
 
-function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false, archiveImportChanged = true } = {}) {
+function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localArchives = [], localHistory = [], queued = [], fail = false, clearFail = false, clearAuthOnce = false, device = {}, goneOnce = false, archiveImportChanged = true, alarm = null } = {}) {
   const meta = new Map(), index = new Map(indexed.map((file) => [file.logicalKey, file])), outbox = new Map(queued.map((op) => [op.key, op]));
-  const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [], broadcasts = [];
+  const local = new Map(), calls = [], auths = [], uploads = [], applied = [], imports = [], seeds = [], events = [], broadcasts = [], alarms = [];
   const deviceState = { schema: 1, deviceId: "device", settings: {}, templates: {}, groups: {}, ...device }; let listener, notes = 0, activeChanges = changes;
   const store = {
     getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value), deleteMeta: async (key) => meta.delete(key),
@@ -17,6 +20,12 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
     enqueue: async (op) => outbox.set(op.key, op), completeOutbox: async (key) => outbox.delete(key), countOutbox: async () => outbox.size,
     getHistory: async (id) => localHistory.find((item) => item.id === id), getArchive: async (id) => localArchives.find((item) => item.id === id),
     putHistory: async () => {}, putArchive: async () => {},
+    setEntityFile: async (kind, id, fileId, expectedFileId, ownerId) => {
+      const value = (kind === "history" ? localHistory : localArchives).find((item) => item.id === id);
+      if (!value || expectedFileId !== undefined && value.fileId !== expectedFileId) return;
+      if (fileId) value.fileId = fileId; else delete value.fileId;
+      if (ownerId) value.deviceId = ownerId;
+    },
   };
   const data = {
     deviceId: async () => "device", deviceState: async () => meta.get("deviceState") || deviceState,
@@ -37,7 +46,8 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
   };
   const chrome = {
     storage: { local: { get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])), set: async (next) => { for (const [key, value] of Object.entries(next)) local.set(key, value); } }, onChanged: { addListener: (fn) => { listener = fn; } } },
-    runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} }, sendMessage: (message) => broadcasts.push(message) }, alarms: { create: () => {}, onAlarm: { addListener: () => {} } },
+    runtime: { onMessage: { addListener: () => {} }, onStartup: { addListener: () => {} }, sendMessage: (message) => broadcasts.push(message) },
+    alarms: { create: (name, info) => alarms.push({ name, info }), get: async () => alarm, onAlarm: { addListener: () => {} } },
   };
   const SyncModel = {
     SCHEMA: 1, hashText: async (value) => value, utf8Preview: (value) => value || "", retryDelay: () => 50,
@@ -47,13 +57,37 @@ function runtime({ listed = [], bodies = {}, changes = [], indexed = [], localAr
         for (const [id, value] of Object.entries(item[bucket] || {})) if (!target[id] || Number(value.updatedAt) >= Number(target[id].updatedAt)) target[id] = value;
       return { settings, templates: Object.values(templates), groups: Object.values(groups), corrupt: 0, readOnly: false };
     },
-    mergeHistory: (items) => items, mergeArchives: (items) => items,
+    mergeHistory: (items) => items, futureFiles: realModel.futureFiles, completeBody: realModel.completeBody,
     compareVersion: (a, b) => Number(a.updatedAt) - Number(b.updatedAt) || String(a.deviceId || "").localeCompare(String(b.deviceId || "")),
   };
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel, chrome, Date, setTimeout, clearTimeout, URL });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/archive-model.js"), "utf8"), scope);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "bg/sync.js"), "utf8") + ";this.sync=SyncEngine", scope);
-  return { sync: scope.sync, calls, auths, uploads, meta, index, outbox, applied, imports, seeds, events, broadcasts, notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
+  vm.runInContext(read("bg/archive-model.js"), scope);
+  vm.runInContext(read("bg/sync.js") + ";this.sync=SyncEngine", scope);
+  return { sync: scope.sync, calls, auths, uploads, meta, index, outbox, applied, imports, seeds, events, broadcasts, alarms, localArchives, localHistory,
+    notes: () => notes, setChanges: (value) => { activeChanges = value; }, change: (value) => listener(value, "local"), deviceState: () => meta.get("deviceState") || deviceState, local };
+}
+
+// 只加载 bg/data.js 的迁移用运行时：storage.local 里的 v0.13 遗留数据 + 真 SyncModel + 内存 IDB 桩。
+function dataRuntime(seed = {}) {
+  const meta = new Map(), archives = new Map(), history = new Map(), outbox = new Map(), removed = [], local = { ...seed };
+  let uuid = 0;
+  const store = {
+    getMeta: async (key) => meta.get(key), putMeta: async (key, value) => meta.set(key, value),
+    getHistory: async (id) => history.get(id), putHistory: async (value) => history.set(value.id, value),
+    getArchive: async (id) => archives.get(id), putArchive: async (value) => archives.set(value.id, value),
+    enqueue: async (op) => outbox.set(op.key, op), trimBodies: async () => {},
+    scanAll: async (kind, visit) => { for (const value of (kind === "history" ? history : archives).values()) visit(value); },
+  };
+  const chrome = { storage: { local: {
+    get: async (keys) => { const names = Array.isArray(keys) ? keys : Object.keys(keys || {});
+      return Object.fromEntries(names.map((key) => [key, key in local ? local[key] : Array.isArray(keys) ? undefined : keys[key]])); },
+    set: async () => {}, remove: async (keys) => { removed.push(...keys); for (const key of keys) delete local[key]; },
+  } }, runtime: { onMessage: { addListener: () => {} } } };
+  const scope = vm.createContext({ SyncStore: store, SyncModel: realModel, chrome, Date,
+    crypto: { randomUUID: () => `00000000-0000-4000-8000-00000000000${++uuid}` } });
+  vm.runInContext(read("bg/archive-model.js"), scope);
+  vm.runInContext(read("bg/data.js") + ";this.data=Data", scope);
+  return { data: scope.data, meta, archives, history, outbox, removed, local };
 }
 
 const liveArchive = (id, patch = {}) => ({ schema: 1, id, createdAt: 1, updatedAt: 1, deviceId: "remote", text: "Prompt", task: "Question", source: null,
@@ -136,7 +170,7 @@ module.exports = async function testSyncEngine() {
   assert.equal(invalidLive.imports.length, 0, "缺少当前元数据的 Drive live 归档必须隔离");
   assert.equal((await invalidLive.sync.status()).errorCount, 1, "损坏 Drive live 归档必须计错");
 
-  const waiting = runtime({ queued: [{ key: "archive:h", kind: "archive", entityId: "h", nextAt: 0, attempt: 0 }], localArchives: [{ id: "h", text: "x" }], fail: true });
+  const waiting = runtime({ queued: [{ key: "archive:h", kind: "archive", entityId: "h", nextAt: 0, attempt: 0 }], localArchives: [{ id: "h", text: "x", results: [] }], fail: true });
   await waiting.sync.connect();
   assert.equal((await waiting.sync.status()).state, "waiting", "429/5xx 退避后状态必须是 waiting");
   assert.equal(waiting.outbox.get("archive:h").attempt, 1);
@@ -199,4 +233,59 @@ module.exports = async function testSyncEngine() {
   assert.deepEqual(authClear.auths, [true, true], "鉴权失败后的继续清理必须重新交互授权");
   assert.equal(authClear.local.get("amsSyncConfig").clearRunning, false);
   assert.equal(authClear.local.get("amsSyncConfig").readOnly, false);
+
+  const trimmed = runtime({ indexed: [{ fileId: "arc-file", logicalKey: "archive:t" }],
+    localArchives: [{ id: "t", createdAt: 1, updatedAt: 1, deviceId: "d", fileId: "arc-file" }] });
+  await trimmed.sync.disconnect();
+  assert.equal(trimmed.localArchives[0].fileId, "arc-file", "断开连接不得抹掉实体的 fileId，否则已裁正文的归档重连后再也回不了源");
+  assert.equal(trimmed.index.size, 0, "断开仍必须清空本地 files 索引");
+
+  const shell = runtime({ queued: [{ key: "archive:s", kind: "archive", entityId: "s", nextAt: 0, attempt: 0 }],
+    localArchives: [{ id: "s", createdAt: 1, updatedAt: 1, deviceId: "device", fileId: "cloud" }], indexed: [{ fileId: "cloud", logicalKey: "archive:s" }] });
+  shell.meta.set("pageToken", "current"); await shell.sync.connect();
+  assert.equal(shell.calls.includes("upload:archive"), false, "缺正文/结果的壳记录不得 PATCH 覆盖云端唯一的好副本");
+  assert.equal(shell.outbox.has("archive:s"), true, "残缺记录必须留在队列里等正文回源，不能当成功丢弃");
+  assert.ok(shell.outbox.get("archive:s").nextAt > Date.now(), "残缺记录必须退避重排，否则 flush 会原地死循环");
+  assert.equal((await shell.sync.status()).errorCount, 1, "跳过残缺上行必须计错，用户才看得见");
+  const wholeUpload = runtime({ queued: [{ key: "archive:s", kind: "archive", entityId: "s", nextAt: 0, attempt: 0 }],
+    localArchives: [{ id: "s", createdAt: 1, updatedAt: 1, deviceId: "device", text: "q", results: [] }] });
+  wholeUpload.meta.set("pageToken", "current"); await wholeUpload.sync.connect();
+  assert.equal(wholeUpload.calls.includes("upload:archive"), true, "正文完整的归档必须照常上行");
+
+  const futureFile = { id: "f2", appProperties: { app: "polyask", schema: "2", kind: "state", id: "f2" } };
+  const locked = runtime({ changes: [{ file: futureFile }] });
+  locked.meta.set("pageToken", "current"); await locked.sync.connect();
+  assert.equal((await locked.sync.status()).readOnly, true, "增量抓到高 schema 文件必须进入只读");
+  assert.deepEqual(JSON.parse(JSON.stringify(locked.meta.get("futureFiles"))), { f2: 2 }, "只读锁必须连同触发它的文件与 schema 一起落盘");
+  locked.setChanges([]); await locked.sync.runNow();
+  assert.equal((await locked.sync.status()).readOnly, true, "一轮空 changes 不足以解除只读");
+  locked.setChanges([{ fileId: "f2", removed: true }]); await locked.sync.runNow();
+  assert.equal((await locked.sync.status()).readOnly, false, "触发只读的文件全部消失后必须自动解锁");
+  assert.deepEqual(JSON.parse(JSON.stringify(locked.meta.get("futureFiles"))), {}, "解锁后持久集合也要清空");
+
+  const freshAlarm = runtime(), keptAlarm = runtime({ alarm: { name: "ams-sync", periodInMinutes: 15 } });
+  await new Promise(setImmediate);
+  assert.deepEqual(JSON.parse(JSON.stringify(freshAlarm.alarms)), [{ name: "ams-sync", info: { periodInMinutes: 15 } }], "没有闹钟时必须建立 15 分钟周期闹钟");
+  assert.deepEqual(keptAlarm.alarms, [], "SW 冷启动不得重建已有闹钟，否则每次唤醒都把 15 分钟周期倒计时清零");
+
+  const legacy = dataRuntime({ amsHistory: ["q1", "q2"], amsArchive: [{ ts: 500, text: "old answer", results: [{ host: "a", label: "A", text: "x" }] }] });
+  const migrated = await legacy.data.migrateLegacy();
+  assert.equal(migrated.histories, 2, "storage.local 里的遗留提问历史必须迁进 IndexedDB");
+  assert.equal(migrated.archives, 1, "storage.local 里的遗留归档必须迁进 IndexedDB");
+  assert.equal([...legacy.archives.values()][0].createdAt, 500, "legacy 条目没有 createdAt，必须用 ts 兜底，别把时间轴塌到迁移当天");
+  assert.deepEqual(legacy.removed, ["amsHistory", "amsArchive"], "迁完必须清掉遗留键");
+  assert.ok(legacy.meta.get("legacyMigrated") > 0, "完成标记必须落 SyncStore meta，不得新增 storage.local 键");
+  assert.equal(await legacy.data.migrateLegacy(), null, "已迁移过必须直接返回，不重复导入");
+  assert.equal(legacy.archives.size, 1);
+  const halfway = dataRuntime({ amsArchive: [{ ts: 500, text: "old answer", results: [] }, { ts: 600, text: "second", results: [] }] });
+  await halfway.data.addArchive({ createdAt: 500, text: "old answer", results: [] });
+  const rerun = await halfway.data.migrateLegacy();
+  assert.equal(rerun.archives, 1, "半途崩溃后重跑：已存在同 createdAt+preview 的归档必须跳过，不得复制一份");
+  assert.equal(halfway.archives.size, 2);
+  const seeded = dataRuntime({ amsHistory: ["q"], amsArchive: [{ ts: 7, text: "x", results: [] }], amsTemplates: [{ id: "t", updatedAt: 1 }] });
+  await seeded.data.seedState(true);
+  assert.equal(seeded.archives.size, 1, "首次连接必须把遗留归档种进 IndexedDB");
+  assert.deepEqual(seeded.removed, ["amsHistory", "amsArchive"], "seed 完必须清掉遗留键");
+  await seeded.data.seedState(true);
+  assert.equal(seeded.archives.size, 1, "断开后重连再次 seed 不得把整批遗留归档复制一份");
 };

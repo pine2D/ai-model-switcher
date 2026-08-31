@@ -33,6 +33,22 @@ function messages() {
   vm.runInNewContext(fs.readFileSync("options/options-i18n.js", "utf8"), { MSG: scope.result, applyI18n() {} });
   return scope.result;
 }
+// 加载真实 i18n.js（非内容脚本世界，location.protocol 给非 chrome-extension: 值以短路 F094 的 applyI18n 早退），
+// 拿到 _resolveAuto 供逐档探测，用于和 desktop/test/copy.test.ts 的 resolveLocale 表对账（F106/F223）。
+function resolveAutoFor(uiLanguage) {
+  const source = fs.readFileSync("i18n.js", "utf8");
+  const scope = {
+    chrome: {
+      i18n: { getUILanguage: () => uiLanguage },
+      storage: { local: { get: (defaults, cb) => cb(defaults) }, onChanged: { addListener() {} } },
+    },
+    document: { dispatchEvent() {} },
+    location: { protocol: "https:" },
+    CustomEvent: function CustomEvent(type) { this.type = type; },
+  };
+  vm.runInNewContext(`${source}\nglobalThis.result = _resolveAuto();`, scope);
+  return scope.result;
+}
 
 const rows = messages();
 const sourceKeys = ["cmp_source", "cmp_sourceSelection", "cmp_sourcePage", "cmp_sourceRemove", "cmp_sourceDetail",
@@ -49,6 +65,18 @@ for (const [key, row] of Object.entries(rows)) {
   assert.deepEqual(Object.keys(row).sort(), [...LANGS].sort(), `${key}: locale coverage differs`);
   for (const lang of LANGS) assert.deepEqual(placeholders(row[lang]), placeholders(row.en), `${key}.${lang}: placeholders differ`);
   assert.doesNotMatch(row.en, /[—–]/, `${key}.en: replace long dashes`);
+}
+
+// F106/F223：i18n.js 的 _resolveAuto（内容脚本注入侧）必须与 desktop/src/shared/copy.ts 的
+// resolveLocale（Desktop 外壳侧，见 desktop/test/copy.test.ts 同名锁定表）逐档一致，否则同一
+// locale 在站点页面内容脚本与周围外壳会显示不同语言。resolveLocale 是收敛方向的权威实现。
+for (const [ui, expected] of [
+  ["zh", "zh_CN"], ["zh-CN", "zh_CN"], ["zh-Hans-CN", "zh_CN"],
+  ["zh-TW", "zh_TW"], ["zh-HK", "zh_TW"], ["zh-MO", "zh_TW"], ["zh-Hant-TW", "zh_TW"], ["zh-Hant-HK", "zh_TW"],
+  ["zh-SG", "en"], ["zh-yue-HK", "en"], ["zh-CHS", "en"], ["en-US", "en"], ["fr-FR", "en"],
+]) {
+  assert.equal(resolveAutoFor(ui), expected,
+    `_resolveAuto("${ui}") 应为 "${expected}"，与 desktop resolveLocale 的同档结果一致（F223）`);
 }
 
 const menuScope = {
@@ -119,9 +147,28 @@ for (const file of htmlFiles) {
     assert.ok(rows[match[1]], `${file}: missing i18n key ${match[1]}`);
   }
 }
-for (const file of ["console/archive.js", "console/archive-detail.js", "console/archive-stats.js", "console/scope.js"]) {
+// F108：只扫 t("...") 调用会漏掉间接引用——ERROR_COPY 映射表、localData_* 三元组、表头数组
+// 等地方，键是作为字符串字面量出现的，不经过 t(）调用。改成按 key 形状（前缀白名单）扫
+// console/、options/、popup/、content/ 全部 js 文件里的双引号字符串字面量，逐个断言真实存在，
+// 重命名/删词条留下的悬空引用会在这里裸露成 key 字符串本身却测不出来的窟窿就补上了。
+const KEY_PREFIXES = ["cmp", "con", "arc", "syn", "sync", "pop", "settings", "localData", "diag"];
+const keyLiteral = new RegExp(`"((?:${KEY_PREFIXES.join("|")})_[A-Za-z0-9_]*)"`, "g");
+// 已知例外：不是 i18n 键，是 options/sync.js 抛给 catch 块的错误码字面量（CLAUDE.md「只产 code」
+// 的 code 值），恰好撞上 sync_ 前缀，不受词条覆盖约束。
+const NOT_I18N_KEYS = new Set(["sync_failed"]);
+const i18nDictFiles = new Set(["console/workspace-i18n.js", "options/options-i18n.js"]);
+const surfaceFiles = ["console", "options", "popup", "content"].flatMap((dir) =>
+  fs.readdirSync(dir).filter((f) => f.endsWith(".js")).map((f) => `${dir}/${f}`).filter((f) => !i18nDictFiles.has(f)));
+for (const file of surfaceFiles) {
   const source = fs.readFileSync(file, "utf8");
-  for (const match of source.matchAll(/\bt\("([^"]+)"/g)) assert.ok(rows[match[1]], `${file}: missing i18n key ${match[1]}`);
+  for (const match of source.matchAll(keyLiteral)) {
+    if (NOT_I18N_KEYS.has(match[1])) continue;
+    assert.ok(rows[match[1]], `${file}: 疑似 i18n 键 "${match[1]}" 不存在（重命名或删词条后的悬空引用？）`);
+  }
+}
+// options/sync.js:33 用 `sync_${state}` 模板拼键，字符串字面量扫描抓不到——显式断言全部 8 个状态词条存在
+for (const state of ["idle", "syncing", "offline", "auth", "blocked", "waiting", "schema", "error"]) {
+  assert.ok(rows[`sync_${state}`], `sync_${state}: options/sync.js 用 sync_\${state} 模板拼出这个键，但词条不存在`);
 }
 
 const consoleHtml = fs.readFileSync("console/console.html", "utf8");
@@ -143,7 +190,13 @@ for (const key of ["sync_intro", "sync_storage", "sync_sensitive", "sync_transfe
   assert.equal(fallbackText(optionsHtml, element), rows[key].zh_CN, `${key}: HTML fallback differs`);
 }
 assert.doesNotMatch(fs.readFileSync("README.md", "utf8"), /归档|歸檔|封存/);
-const changelog = fs.readFileSync("CHANGELOG.md", "utf8"), unreleased = changelog.slice(changelog.indexOf("## [未发布]"), changelog.indexOf("## [0.13.0]"));
-assert.doesNotMatch(unreleased, /归档|歸檔|封存/);
+// F210/F185：旧写法用两个 indexOf 定切片边界，任一个锚点找不到就返回 -1，slice(-1, N) 会静默
+// 退化成空串或跑飞到全文，assert.doesNotMatch 对空串恒过——术语回归检查会在毫无察觉的情况下失效。
+// 改成正则直接捕获「未发布」到下一个版本标题之间的内容，不依赖具体版本号做下界（下界会随发版推移）；
+// match 失败时显式断言，锚点丢失時测试本身先炸，而不是悄悄放行。
+const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+const unreleasedMatch = changelog.match(/## \[未发布\]([\s\S]*?)(?=\n## \[|$)/);
+assert.ok(unreleasedMatch, "CHANGELOG.md: 找不到「## [未发布]」段，术语回归检查失去锚点");
+assert.doesNotMatch(unreleasedMatch[1], /归档|歸檔|封存/, "CHANGELOG.md 未发布段：术语已改为「结果库」，不应再出现「归档」");
 
 console.log("[content-l10n] locale coverage, placeholders, keys, and punctuation passed");

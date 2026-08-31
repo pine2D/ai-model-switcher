@@ -65,6 +65,47 @@ test("shell navigation and IPC trust both lock to the local top frame", () => {
   assert.match(main, /removeSwitch\("remote-debugging-port"\)/);
 });
 
+test("site views grant an explicit permission allowlist and no more", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const allowlist = manager.slice(
+    manager.indexOf("const SITE_PERMISSION_ALLOWLIST"),
+    manager.indexOf("interface ViewManagerOptions")
+  );
+  for (const permission of ["clipboard-sanitized-write", "fullscreen", "pointerLock"]) {
+    assert.match(allowlist, new RegExp(`"${permission}"`));
+  }
+  for (const denied of ["media", "geolocation", "midi", "notifications", "clipboard-read", "window-management"]) {
+    assert.doesNotMatch(allowlist, new RegExp(`"${denied}"`));
+  }
+  assert.match(manager, /setPermissionCheckHandler\(\s*\(_contents, permission\) => SITE_PERMISSION_ALLOWLIST\.has\(permission\)/);
+  assert.match(manager, /setPermissionRequestHandler\(\(_contents, permission, callback\) =>\s*callback\(SITE_PERMISSION_ALLOWLIST\.has\(permission\)\)\)/);
+});
+
+test("site popups never raise a login page from an embedded frame", () => {
+  const siteView = readFileSync("src/main/site-view.ts", "utf8");
+  const handler = siteView.slice(siteView.indexOf("contents.setWindowOpenHandler("));
+  assert.match(handler, /const rewrite = disposition === "auth" && onSite/);
+  assert.match(handler, /navigationDisposition\(site, contents\.getURL\(\)\) === "site"/);
+  assert.match(handler, /authRecovery\.observe\(disposition, rewrite\)/);
+  assert.doesNotMatch(handler, /authRecovery\.observe\(disposition, true\)/);
+  assert.doesNotMatch(handler, /disposition === "site" \|\| disposition === "auth"/);
+  assert.match(handler, /action: "deny"/);
+});
+
+test("site view security is read back from the live view and rate-limits dialogs", () => {
+  const siteView = readFileSync("src/main/site-view.ts", "utf8");
+  const diagnostics = readFileSync("src/main/diagnostics.ts", "utf8");
+  assert.match(siteView, /getLastWebPreferences/);
+  assert.match(siteView, /sandbox: prefs\.sandbox === true/);
+  assert.match(siteView, /contextIsolation: prefs\.contextIsolation === true/);
+  assert.match(siteView, /nodeIntegration: prefs\.nodeIntegration === true/);
+  assert.match(siteView, /webSecurity: prefs\.webSecurity !== false/);
+  assert.doesNotMatch(siteView, /sandbox: SITE_VIEW_SECURITY\.sandbox/);
+  assert.match(diagnostics, /site\.webSecurity === false/);
+  assert.match(diagnostics, /safeDialogs: true/);
+  assert.doesNotMatch(diagnostics, /disableDialogs: true/);
+});
+
 test("shell bootstrap exposes only sanitized runtime metadata", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
@@ -169,12 +210,89 @@ test("answer generation monitoring is run-scoped and never changes navigation", 
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   const manager = readFileSync("src/main/view-manager.ts", "utf8");
   const preload = readFileSync("src/preload/site.ts", "utf8");
-  assert.match(ipc, /beginGenerationRun\(request\.runId, request\.sites\)/);
+  assert.match(ipc, /manager\.beginGenerationRun\(request\.runId, request\.sites\)/);
   assert.match(ipc, /watchGeneration\(request\.runId, result\.site\)/);
   assert.match(ipc, /cancelGenerationRun\(\)/);
   assert.match(manager, /cmd: "generation"/);
   assert.match(preload, /parseGenerationState/);
   assert.doesNotMatch(manager, /generation[\s\S]{0,500}(loadURL|reload\(|focus\()/);
+});
+
+test("a retried run keeps watching the sites that are still generating", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const collectionRun = ipc.indexOf("collection.beginRun(request.runId");
+  const generationRun = ipc.indexOf("manager.beginGenerationRun(request.runId");
+  assert.ok(collectionRun >= 0 && collectionRun < generationRun);
+  const begin = manager.slice(
+    manager.indexOf("beginGenerationRun(runId: string"),
+    manager.indexOf("watchGeneration(runId: string")
+  );
+  assert.match(begin, /const resumed = this\.generation\.begin\(runId, sites\)/);
+  assert.match(begin, /if \(resumed\) for \(const site of sites\) this\.clearGenerationTracking\(site\)/);
+  assert.doesNotMatch(begin, /cancelGenerationRun\(\)/);
+});
+
+test("navigation retires generation monitoring for that site only", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const navigate = manager.slice(
+    manager.indexOf("async navigate(site: SiteKey"),
+    manager.indexOf("markStatus(status: SiteStatus)")
+  );
+  assert.match(navigate, /this\.invalidateGeneration\(site\)/);
+  assert.doesNotMatch(navigate, /cancelGenerationRun/);
+  assert.match(manager, /invalidateGeneration\(site: SiteKey\): void \{\s*this\.generation\.forget\(site\)/);
+});
+
+test("one unreadable generation probe never ends the watch", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const probe = manager.slice(
+    manager.indexOf("private async probeGeneration("),
+    manager.indexOf("private replaceView(")
+  );
+  assert.match(probe, /if \(state === null\) \{\s*this\.scheduleGenerationProbe\(runId, site, false\);/);
+  assert.match(probe, /if \(!reachable \|\| !view\) \{\s*this\.scheduleGenerationProbe\(runId, site, false\);/);
+  assert.match(probe, /if \(phase === "complete"\) return;/);
+  assert.match(probe, /misses >= GENERATION_MISS_LIMIT/);
+  assert.doesNotMatch(probe, /state === null\) return;/);
+});
+
+test("completion is debounced across probes and never inferred from unchanged text", () => {
+  const monitor = readFileSync("src/main/generation-monitor.ts", "utf8");
+  assert.match(monitor, /COMPLETE_CONFIRMATIONS = 3/);
+  assert.match(monitor, /entry\.completeStreak \+= 1/);
+  assert.match(monitor, /entry\.completeStreak >= COMPLETE_CONFIRMATIONS/);
+  assert.doesNotMatch(monitor, /\.length/);
+});
+
+test("commands refuse to reach a crashed or failed page instead of guessing", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const send = manager.slice(
+    manager.indexOf("sendCommand(site: SiteKey"),
+    manager.indexOf("collect(site: SiteKey")
+  );
+  const collect = manager.slice(
+    manager.indexOf("collect(site: SiteKey"),
+    manager.indexOf("private async checkSiteHealth(")
+  );
+  assert.match(send, /const pageFailure = this\.pageFailureCode\(site\)/);
+  assert.match(collect, /const pageFailure = this\.pageFailureCode\(site\)/);
+  assert.match(manager, /if \(phase === "crashed"\) return "renderer_crashed"/);
+  assert.match(manager, /if \(phase === "failed"\) return "load_failed"/);
+  assert.doesNotMatch(send, /reload\(/);
+});
+
+test("assisted synthesis dispatches through its own coordinator and cancel reaches both", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  assert.match(main, /const synthesisCoordinator = new BroadcastCoordinator\(\)/);
+  assert.match(main, /return synthesisCoordinator\.send\(/);
+  assert.match(main, /synthesisCoordinator,/);
+  const cancel = ipc.slice(ipc.indexOf('ipcMain.on("polyask:cancel"'), ipc.indexOf('ipcMain.on("polyask:set-composer-expanded"'));
+  assert.match(cancel, /coordinator\.cancel\(\)/);
+  assert.match(cancel, /synthesisCoordinator\.cancel\(\)/);
+  assert.match(cancel, /manager\.cancelGenerationRun\(\)/);
+  assert.match(cancel, /synthesis\.cancel\(\)/);
 });
 
 test("workspace surfaces detach site views without destroying their web contents", () => {
@@ -192,19 +310,34 @@ test("workspace surfaces detach site views without destroying their web contents
 });
 
 test("site health and guarded reload cross the trusted typed bridge", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8") + readFileSync("src/main/site-health-ipc.ts", "utf8");
+  const healthIpc = readFileSync("src/main/site-health-ipc.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");
   const sitePreload = readFileSync("src/preload/site.ts", "utf8");
   const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  assert.match(ipc, /polyask:site-health/);
-  assert.match(ipc, /polyask:reload-site/);
-  assert.match(ipc, /trustedShell\(event\)/);
+  assert.match(healthIpc, /polyask:site-health/);
+  assert.match(healthIpc, /polyask:reload-site/);
+  assert.match(healthIpc, /options\.trusted\(event\)/);
   assert.match(preload, /checkSiteHealth/);
   assert.match(preload, /reloadSite\(site: SiteKey\): Promise<boolean>/);
   assert.match(sitePreload, /cmd === "diagnose"/);
   assert.match(manager, /siteReloadAllowed/);
   assert.match(manager, /this\.pageStatus\.get\(site\)/);
   assert.match(manager, /this\.runStatus\.get\(site\)/);
+});
+
+test("every main-process IPC handler guards its own sender", () => {
+  for (const file of ["src/main/site-health-ipc.ts", "src/main/sync-ipc.ts"]) {
+    const source = readFileSync(file, "utf8");
+    const handlers = source.match(/ipcMain\.handle\(/g) ?? [];
+    const guards = source.match(/options\.trusted\(event\)/g) ?? [];
+    assert.ok(handlers.length > 0, file);
+    assert.equal(guards.length, handlers.length, file);
+  }
+  const shell = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const shellHandlers = shell.match(/ipcMain\.handle\(/g) ?? [];
+  const shellGuards = shell.match(/trustedShell\(event\)/g) ?? [];
+  assert.ok(shellHandlers.length > 0);
+  assert.ok(shellGuards.length >= shellHandlers.length);
 });
 
 test("archive mutations and history persistence stay behind trusted main-process IPC", () => {
@@ -217,8 +350,12 @@ test("archive mutations and history persistence stay behind trusted main-process
     "polyask:archive-delete",
     "polyask:archive-markdown"
   ]) assert.match(ipc, new RegExp(channel));
-  assert.match(ipc, /result\.ok && !historyRecorded/);
   assert.match(ipc, /history\.record\(request\.text\)/);
+  assert.doesNotMatch(ipc, /historyRecorded/);
+  const record = ipc.indexOf("history.record(request.text)");
+  const dispatch = ipc.indexOf("await coordinator.send(");
+  const imageGuard = ipc.indexOf("image_sites_unsupported");
+  assert.ok(imageGuard >= 0 && imageGuard < record && record < dispatch);
   assert.match(preload, /searchArchives/);
   assert.match(preload, /updateArchive/);
   assert.match(preload, /archiveMarkdown/);

@@ -93,4 +93,34 @@ for (const [code, file] of produced) {
     `补 ERR_KEYS 映射 + i18n.js 三语词条（归档/综合页若也会收到，一并补 ARCH_ERR_KEYS 与 compose-synthesis.js）`);
 }
 
-console.log(`✓ err-codes: 4 张表词条三语齐全、跨表一致；归档覆盖 collectAll (${archived.join(", ")})；群发链路 ${produced.size} 个码均可翻译`);
+// 5) 扩展↔Desktop 归档码双向对账（F218）：同一份归档条目的 results[].code 会跨端同步（同一 Drive
+//    schema，参见 bg/sync.js 与 desktop/src/main/sync-engine.ts 的 archive-<id>.json），任一端不认得
+//    对方产的码，就会把它错报成笼统的「无回答/失败」，而不是各自更准确的兜底文案。
+const statusCopySource = fs.readFileSync("desktop/src/shared/status-copy.ts", "utf8");
+const collectionAt = statusCopySource.indexOf("function describeCollectionCode");
+assert.notEqual(collectionAt, -1, "desktop/src/shared/status-copy.ts: 找不到 describeCollectionCode（被改名了？）");
+const collectionBlock = block(statusCopySource, collectionAt, "desktop/src/shared/status-copy.ts describeCollectionCode");
+const desktopCollectionCodes = new Set([...collectionBlock.matchAll(/case\s+"([a-z_]+)"\s*:/g)].map((m) => m[1]));
+assert.ok(desktopCollectionCodes.size >= 3, "describeCollectionCode 的 case 抽取失效，实得: " + [...desktopCollectionCodes].join(", "));
+
+// 5a) → 方向：扩展 bg/broadcast.js collectAll 产的码，Desktop 侧 describeCollectionCode 必须有显式 case，
+//     否则同步过来的归档条目在 Desktop 端会被兜底成笼统的 copy.failed。
+for (const code of archived) {
+  assert.ok(desktopCollectionCodes.has(code),
+    `bg/broadcast.js collectAll 产出 ${code}，但 desktop/src/shared/status-copy.ts 的 describeCollectionCode 没有对应 case（会兜底成笼统的"失败"），补一条 case 分支`);
+}
+
+// 5b) ← 方向：Desktop 归档采集路径（view-manager.ts collectAnswer → collection-service.ts）会写入
+//     results[].code 的码，扩展侧 console/archive.js 的 ARCH_ERR_KEYS 必须认得，否则 resultError 会
+//     把它错报成 con_errNoAnswer（"无回答"）。列表来自这两个源文件里实际出现的 `code: "x"` 字面量。
+const viewManagerSource = fs.readFileSync("desktop/src/main/view-manager.ts", "utf8");
+const collectionServiceSource = fs.readFileSync("desktop/src/main/collection-service.ts", "utf8");
+const desktopArchiveCodes = new Set([...`${viewManagerSource}\n${collectionServiceSource}`.matchAll(/code:\s*"([a-z_]+)"/g)]
+  .map((m) => m[1]).filter((code) => desktopCollectionCodes.has(code)));
+assert.ok(desktopArchiveCodes.size >= 2, "Desktop 归档采集码抽取失效，实得: " + [...desktopArchiveCodes].join(", "));
+for (const code of desktopArchiveCodes) {
+  assert.ok(tables["console/archive.js ARCH_ERR_KEYS"][code],
+    `Desktop 归档采集路径会产出 ${code}，但 console/archive.js 的 ARCH_ERR_KEYS 没有它（resultError 会错报成"无回答"），补一条映射 + i18n.js 三语词条`);
+}
+
+console.log(`✓ err-codes: 4 张表词条三语齐全、跨表一致；归档覆盖 collectAll (${archived.join(", ")})；群发链路 ${produced.size} 个码均可翻译；扩展↔Desktop 归档码双向对账通过`);

@@ -79,4 +79,12 @@ for (const listener of storageListeners) listener({
 }, "local");
 assert.deepEqual(Object.fromEntries([...controls].map(([id, node]) => [id, node.type === "checkbox" ? node.checked : node.value])),
   { theme: "auto", language: "auto", "display-mode": "handle", "auto-raise": true }, "删除设置必须恢复既有 fallback");
+
+// F105：日期/数字格式化一律传 document.documentElement.lang，不得取浏览器默认 locale（否则界面语言与
+// 日期格式互相打架）——仓库其它三处（status.js/archive-detail.js/archive-stats.js）都显式传了，只有
+// options/sync.js 这一处漏传 undefined locale，钉死防回归。
+const syncSource = fs.readFileSync("options/sync.js", "utf8");
+assert.doesNotMatch(syncSource, /Intl\.DateTimeFormat\(undefined/, "日期格式化不得取浏览器默认 locale，须传 document.documentElement.lang");
+assert.match(syncSource, /Intl\.DateTimeFormat\(document\.documentElement\?\.lang \|\| undefined/, "日期格式化应与 status.js/archive-detail.js/archive-stats.js 对齐，显式传当前界面语言（?. 是容错写法，含义不变）");
+
 console.log("[options-ui] 设置中心入口、分区、路由与 storage 同步通过");

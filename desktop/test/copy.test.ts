@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { COPY, getCopy } from "../src/shared/copy";
+import { COPY, getCopy, resolveLocale } from "../src/shared/copy";
 import { describeCollectionCode, describeStatus, visibleStatus } from "../src/shared/status-copy";
 import { describeSync } from "../src/renderer/sync-status";
 
@@ -310,6 +310,25 @@ test("desktop shell resolves exact supported locale and falls back to English", 
   assert.equal(getCopy("fr-FR").send, "Send");
 });
 
+test("resolveLocale is the desktop-side authority i18n.js's _resolveAuto must match (F223)", () => {
+  // i18n.js's `_resolveAuto` (used by every content-script injection via preload/site.ts,
+  // which always passes amsLang "auto") checks `.includes()` substrings; resolveLocale
+  // here checks `.startsWith()` prefixes. Both already agree on zh, zh-CN, zh-TW, zh-HK,
+  // zh-Hans-CN, zh-Hant-TW, zh-Hant-HK and en-US, but currently diverge on these four —
+  // i18n.js resolves zh-MO to zh_CN (no "mo" branch), zh-SG and zh-CHS to zh_CN (bare
+  // "zh" prefix falls through to Simplified with no locale-specific branch), and
+  // zh-yue-HK to zh_TW (its `.includes("hk")` check fires on a non-"zh-hk"-prefixed
+  // string) — while the renderer/main shell (which always resolves via getCopy/
+  // resolveLocale) resolves them as shown below. A viewer on one of these locales sees
+  // mismatched UI language between the site pane and the surrounding shell. This test
+  // locks resolveLocale's side of that contract; the i18n.js-side fix and a shared
+  // locale table belong to whichever agent owns i18n.js — see gap-verdicts F223.
+  assert.equal(resolveLocale("zh-MO"), "zhTW");
+  assert.equal(resolveLocale("zh-SG"), "en");
+  assert.equal(resolveLocale("zh-yue-HK"), "en");
+  assert.equal(resolveLocale("zh-CHS"), "en");
+});
+
 test("display preferences have complete localized menu labels", () => {
   assert.deepEqual(
     [
@@ -400,4 +419,23 @@ test("archive collection placeholders use localized stable codes", () => {
   assert.equal(describeCollectionCode(copy, "no_answer"), "暂无回答");
   assert.equal(describeCollectionCode(copy, "not_ready"), "站点尚未就绪");
   assert.equal(describeCollectionCode(copy, "private_reason"), "失败");
+});
+
+test("images-busy-while-broadcasting and answer-truncated copy are localized in all three locales", () => {
+  assert.deepEqual(
+    [COPY.en.imagesBusy, COPY.zhCN.imagesBusy, COPY.zhTW.imagesBusy],
+    [
+      "Broadcasting is in progress; images can't be added right now",
+      "群发进行中，暂时无法添加图片",
+      "群發進行中，暫時無法加入圖片"
+    ]
+  );
+  assert.deepEqual(
+    [COPY.en.answerTruncated, COPY.zhCN.answerTruncated, COPY.zhTW.answerTruncated],
+    [
+      "This answer was too long and has been truncated",
+      "该回答过长，已被截断",
+      "該回答過長，已被截斷"
+    ]
+  );
 });

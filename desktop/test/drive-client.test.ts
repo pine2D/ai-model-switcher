@@ -136,3 +136,24 @@ test("Drive preserves timeout and caller cancellation while reading an error bod
     (error: unknown) => (error as { name?: string }).name === "AbortError"
   );
 });
+
+test("Drive ignores a Retry-After hint that would schedule an immediate retry", async () => {
+  const provider: AccessTokenProvider = { accessToken: async () => "token" };
+  const hinted = (status: number, value: string) =>
+    new DriveClient(provider, async () => new Response("{}", { status, headers: { "Retry-After": value } }));
+
+  await assert.rejects(
+    () => hinted(429, "0").listFiles(),
+    (error: unknown) => (error as { code?: string }).code === "rate_limited"
+      && (error as { retryAfter?: number }).retryAfter === undefined
+  );
+  await assert.rejects(
+    () => hinted(503, new Date(Date.now() - 60_000).toUTCString()).listFiles(),
+    (error: unknown) => (error as { code?: string }).code === "server_error"
+      && (error as { retryAfter?: number }).retryAfter === undefined
+  );
+  await assert.rejects(
+    () => hinted(429, new Date(Date.now() + 120_000).toUTCString()).listFiles(),
+    (error: unknown) => ((error as { retryAfter?: number }).retryAfter ?? 0) > 60_000
+  );
+});

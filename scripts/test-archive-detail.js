@@ -9,7 +9,7 @@ assert.ok(html.includes('src="archive-detail.js"') && html.indexOf('src="archive
 class El {
   constructor(tag = "div") {
     this.tagName = tag.toUpperCase(); this.children = []; this.listeners = {}; this.attributes = {};
-    this.className = ""; this.textContent = ""; this.value = "";
+    this.className = ""; this.textContent = ""; this.value = ""; this.selectionStart = 0; this.selectionEnd = 0;
   }
   append(...children) { this.children.push(...children); }
   appendChild(child) { this.children.push(child); return child; }
@@ -25,10 +25,12 @@ class El {
     const visit = (el) => { if (match(el)) out.push(el); el.children.forEach((child) => child instanceof El && visit(child)); };
     visit(this); return out;
   }
+  focus() { document.activeElement = this; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
 }
 
 const root = new El();
-const document = { documentElement: { lang: "en" }, createElement: (tag) => new El(tag), getElementById: (id) => id === "ar-detail" ? root : root.querySelector("#" + id) };
+const document = { activeElement: null, documentElement: { lang: "en" }, createElement: (tag) => new El(tag), getElementById: (id) => id === "ar-detail" ? root : root.querySelector("#" + id) };
 const messages = { arc_favorites: "Favorites", arc_tags: "Tags", arc_note: "Note", arc_sites: "Sites",
   arc_question: "Question", arc_source: "Source", arc_bestAnswer: "Best answer: {0}", arc_best: "Mark as best", arc_unmarkBest: "Clear best answer",
   arc_capturedAt: "Captured: {0}", con_mdThink: "Deep think", con_mdFast: "Fast", con_errNoAnswer: "No answer",
@@ -61,6 +63,8 @@ scope.detail.render(entry, { update: async () => entry, errorText: (item) => ite
 const markdown = scope.detail.entryMarkdown(entry);
 assert.match(markdown, /Best answer: A/);
 assert.doesNotMatch(markdown, /private note/);
+assert.match(markdown, /No answer/, "省略 errorText 时默认值应使用翻译后的通用文案");
+assert.doesNotMatch(markdown, /no_answer/, "省略 errorText 时默认值不应回显裸错误码（F109）");
 const synthesisMarkdown = scope.detail.entryMarkdown({ ...entry,
   synthesis: { host: "a.test", text: "Combined answer", state: "fast", instruction: "Compare", createdAt: 2 } });
 assert.match(synthesisMarkdown, /## Synthesis\n\n\*\*Target AI\*\*: a\.test · Fast\n\nCombined answer/);
@@ -193,6 +197,20 @@ const differentValue = root.querySelector("#ar-note"); differentValue.value = "d
 await Promise.resolve(); await Promise.resolve();
 assert.equal(dedupeUpdates.at(-1).patch.note, "different", "同记录的新值不得被旧值的在途请求阻塞");
 finishRetry(); await new Promise((resolve) => setImmediate(resolve));
+
+// F112: 同条目重渲染（如收藏/胜出点击成功后的重绘）不得打断正在输入的备注光标/选区
+const focusEntry = { ...editable, id: "focusdemo", note: "hello world" };
+const renderFocus = (value) => scope.detail.render(value, { update: async () => value, errorText: (item) => item.code, draft: undefined, onDraft: () => {} });
+renderFocus(focusEntry);
+root.querySelector("#ar-note").focus();
+root.querySelector("#ar-note").setSelectionRange(3, 5);
+renderFocus(focusEntry); // 同一 entry.id 再次渲染
+const rerenderedNote = root.querySelector("#ar-note");
+assert.equal(document.activeElement, rerenderedNote, "同条目重渲染后备注输入应保持聚焦");
+assert.equal(rerenderedNote.selectionStart, 3, "同条目重渲染应保留光标起点");
+assert.equal(rerenderedNote.selectionEnd, 5, "同条目重渲染应保留光标终点");
+renderFocus({ ...editable, id: "otherdemo", note: "different" }); // 切换到不同条目
+assert.notEqual(document.activeElement, root.querySelector("#ar-note"), "切换到不同条目不应把焦点续接到新条目的备注上");
 
 console.log("archive detail tests passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

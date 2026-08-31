@@ -32,13 +32,20 @@ const matches = blocks.flatMap((b) => b.matches || []);
 const adapterFiles = blocks.flatMap((b) => b.js || []).filter((f) => /adapters.*\.js$/.test(f));
 assert.ok(adapterFiles.length, "manifest.json 的 content_scripts.js 里没有任何 adapters*.js —— 九站全部失去适配器");
 const adapterKeys = [];
+const allAdapters = {}; // 合并三卷，供下面的四项钩子对账（漏收对象就测不出缺钩子）
 for (const file of adapterFiles) {
   const S = { adapters: {} };
   vm.runInNewContext(fs.readFileSync(file, "utf8"),
     { window: { __AMS: S }, document: { querySelector: () => null, querySelectorAll: () => [] }, console });
   adapterKeys.push(...Object.keys(S.adapters));
+  Object.assign(allAdapters, S.adapters);
 }
 assert.ok(adapterKeys.length, "适配器源码未注册任何键（vm 加载失败或 __AMS 契约变了）");
+// 协议对账：每站必需 {think, fast, state, diagnose} 四项（CLAUDE.md 硬约束），其余钩子可选。
+// 只加载 adapters-*.js、不加载 content/diag.js，测的是适配器自身是否实现，不吃 diag.js 对 diagnose 的兜底包装。
+for (const [key, adapter] of Object.entries(allAdapters))
+  for (const hook of ["think", "fast", "state", "diagnose"])
+    assert.equal(typeof adapter[hook], "function", `适配器 "${key}" 缺少必需钩子 ${hook}——getState()/switchTier 会静默失效${HINT}`);
 // match pattern 语义：`*.example.com` 同时覆盖裸域名与子域名
 const covers = (pattern, host) => {
   const domain = (pattern.match(/^[^:]+:\/\/([^/]+)/) || [])[1] || "";
@@ -56,4 +63,20 @@ for (const key of adapterKeys)
 for (const pattern of matches)
   assert.ok(sites.some((site) => covers(pattern, site.host)),
     `manifest.json 匹配 "${pattern}" 没有对应 SITES 项 → 孤儿匹配（注入了却不参与群发）；去 console/sites.js 补站点，或删掉这条匹配${HINT}`);
+
+// F197：报障 issue 模板的站点下拉与 SITES 对账——加第 10 站时表单不会静默过期
+{
+  const tpl = fs.readFileSync(".github/ISSUE_TEMPLATE/site-breakage.yml", "utf8");
+  const block = (tpl.match(/label: 哪个站点？[\s\S]*?options:\n([\s\S]*?)\n    validations:/) || [])[1];
+  assert.ok(block, "issue 模板里找不到「哪个站点」下拉的 options 块（结构变了就同步这段抽取）");
+  const rows = [...block.matchAll(/-\s*(.+?)\s*\(([^)]+)\)/g)].map((m) => ({ label: m[1].trim(), host: m[2].trim() }));
+  const tplHosts = new Set(rows.map((r) => r.host));
+  for (const site of sites)
+    assert.ok(tplHosts.has(site.host), `issue 模板站点下拉缺 ${site.host}（${site.label}）；加站点第 8 步：同步 .github/ISSUE_TEMPLATE/site-breakage.yml`);
+  for (const r of rows) {
+    const site = sites.find((x) => x.host === r.host);
+    assert.ok(site, `issue 模板下拉含未登记站点 ${r.host}；站点已下架就同步删掉该选项`);
+    assert.equal(r.label, site.label, `issue 模板站点名 "${r.label}" 与 console/sites.js 的 "${site.label}" 不一致`);
+  }
+}
 console.log("site selection tests passed");

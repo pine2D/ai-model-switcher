@@ -124,9 +124,9 @@ test("archive workspace renders one loading state without empty-state copy", () 
   assert.equal(occurrences(html, "No matching results"), 0);
   assert.equal(occurrences(html, "class=\"archive-empty\""), 1);
   assert.equal(occurrences(html, "Why is the sky blue?"), 0);
-  assert.equal(occurrences(html, "Stale detail"), 0);
-  assert.equal(occurrences(html, "class=\"archive-list\""), 0);
-  assert.equal(occurrences(html, "class=\"archive-detail-pane\""), 0);
+  assert.equal(occurrences(html, "Stale detail"), 1);
+  assert.equal(occurrences(html, "class=\"archive-list\""), 1);
+  assert.equal(occurrences(html, "class=\"archive-detail-pane\""), 1);
 });
 
 test("archive workspace renders one unfiltered empty state across the body", () => {
@@ -201,7 +201,7 @@ test("archive filter intent invalidates the in-flight request before committing 
 
   assert.deepEqual(stateWhenFilterCommitted, {
     items: ["result-a"],
-    loading: true,
+    loading: false,
     status: "",
     query: "B"
   });

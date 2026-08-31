@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 const assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm");
+const realModel = (() => { const scope = vm.createContext({ crypto: require("node:crypto").webcrypto, TextEncoder, Math });
+  vm.runInContext(fs.readFileSync("bg/sync-model.js", "utf8") + ";this.model=SyncModel", scope); return scope.model; })();
 
 function driveRuntime(handler) {
   const requests = [];
@@ -21,7 +23,7 @@ function archiveStore(rows) {
     };
     req = {}; queueMicrotask(advance); return req;
   };
-  const db = { transaction: () => ({ objectStore: () => ({ index: () => ({ openCursor: cursor }) }) }) };
+  const db = { transaction: () => ({ objectStore: () => ({ index: () => ({ openCursor: cursor }), openCursor: cursor }) }) };
   const indexedDB = { open: () => { const req = {}; queueMicrotask(() => { req.result = db; req.onsuccess?.(); }); return req; } };
   const scope = vm.createContext({ indexedDB, IDBKeyRange: { upperBound: () => {} }, queueMicrotask });
   vm.runInContext(fs.readFileSync("bg/store.js", "utf8") + ";this.store=SyncStore", scope);
@@ -51,8 +53,9 @@ async function assertSyncStreams(total) {
   const storage = { addListener: () => {} }, chrome = { storage: { local: {
     get: async (defaults) => Object.fromEntries(Object.keys(defaults || {}).map((key) => [key, local.has(key) ? local.get(key) : defaults[key]])),
     set: async (values) => { for (const [key, value] of Object.entries(values)) local.set(key, value); },
-  }, onChanged: storage }, runtime: { onMessage: storage, onStartup: storage }, alarms: { create: () => {}, onAlarm: storage } };
+  }, onChanged: storage }, runtime: { onMessage: storage, onStartup: storage }, alarms: { create: () => {}, get: async () => undefined, onAlarm: storage } };
   const SyncModel = { SCHEMA: 1, validTime: (value) => Number.isSafeInteger(value) && value >= 0, hashText: async (text) => text,
+    futureFiles: realModel.futureFiles, completeBody: realModel.completeBody,
     mergeStateFragments: () => ({ settings: {}, templates: [], groups: [], materialized: { schema: 1, settings: {}, templates: {}, groups: {} }, corrupt: 0 }) };
   const scope = vm.createContext({ SyncStore: store, Data: data, Drive: drive, SyncModel, chrome, Date, Math, setTimeout, clearTimeout });
   vm.runInContext(fs.readFileSync("bg/sync.js", "utf8") + ";this.sync=SyncEngine", scope);
@@ -94,6 +97,14 @@ async function main() {
   const store = archiveStore([{ id: "new", createdAt: 3, favorite: true }, { id: "gone", createdAt: 2, deletedAt: 0 }, { id: "old", createdAt: 1 }]);
   assert.deepEqual(Array.from((await store.searchArchives(null, 50, (row) => row.favorite)).items, (row) => row.id), ["new"]);
   assert.deepEqual(Array.from((await store.pageArchives(null, 50)).items, (row) => row.id), ["new", "old"]);
+  const scanned = archiveStore([{ id: "a" }, { id: "b" }, { id: "c" }]), swept = [];
+  await scanned.scanAll("archives", (row) => swept.push(row.id));
+  assert.deepEqual(swept, ["a", "b", "c"], "scanAll 必须单事务游标扫全表，而不是每条一个新事务");
+  for (const file of ["bg/data.js", "bg/data-admin.js"]) {
+    const aggregates = fs.readFileSync(file, "utf8");
+    assert.ok(aggregates.includes("SyncStore.scanAll || SyncStore.iterate"), `${file} 的纯聚合扫描必须走单事务 scanAll`);
+    assert.ok(!/await SyncStore\.iterate\(/.test(aggregates), `${file} 不得再逐条新事务扫全表`);
+  }
   const history = archiveStore([{ id: "new", lastUsedAt: 3 }, { id: "gone", lastUsedAt: 2, deletedAt: 2 }, { id: "old", lastUsedAt: 1 }]);
   assert.deepEqual(Array.from((await history.pageHistory(null, 50)).items, (row) => row.id), ["new", "old"], "普通历史分页不得显示 tombstone");
   const verify = fs.readFileSync("scripts/verify.sh", "utf8");

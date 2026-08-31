@@ -91,3 +91,16 @@ test("diagnostic reports replace timestamps outside the JavaScript Date range", 
   assert.equal(snapshot.lastSuccessAt, undefined);
   assert.ok(snapshot.generatedAt <= 8_640_000_000_000_000);
 });
+
+test("a failure without a reason still marks the latest sync stage as failed", () => {
+  const snapshot = createSyncDiagnosticSnapshot(
+    status({ state: "error", connected: true, errorCount: 7, lastSuccessAt: 2_000 }),
+    { version: "0.21.0", distribution: "installed" },
+    3_000
+  );
+  assert.equal(firstFailedSyncStage(snapshot)?.id, "last-sync");
+  assert.equal(firstFailedSyncStage(snapshot)?.code, undefined);
+  const report = buildSyncDiagnosticReport(snapshot);
+  assert.match(report, /^- last-sync: failed$/m);
+  assert.doesNotMatch(report, /^reason=/m);
+});

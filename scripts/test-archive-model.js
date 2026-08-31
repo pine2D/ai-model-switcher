@@ -30,6 +30,13 @@ assert.deepEqual(JSON.parse(JSON.stringify(withSynthesis.synthesis)), synthesis)
 assert.ok(withSynthesis.searchText.includes("combined answer"));
 assert.throws(() => model.update(updated, { synthesis: { ...synthesis, text: "" } }, { now: 30, deviceId: "device" }), /invalid_synthesis/);
 assert.equal(model.update(withSynthesis, { synthesis: null }, { now: 31, deviceId: "device" }).synthesis, null);
+// F214：instruction 与桌面端 desktop/src/shared/synthesis.ts 的 4000 码点上限对齐，必须 throw（不截断）
+assert.equal(model.update(updated, { synthesis: { ...synthesis, instruction: "y".repeat(4000) } }, { now: 30, deviceId: "device" }).synthesis.instruction.length, 4000, "4000 码点边界值应放行");
+assert.throws(() => model.update(updated, { synthesis: { ...synthesis, instruction: "y".repeat(4001) } }, { now: 30, deviceId: "device" }), /invalid_synthesis/, "超过 4000 码点必须拒绝，不得静默截断");
+// F213：title 与桌面端 desktop/src/shared/archive.ts 的 512 码点上限对齐，这里截断而非 throw（validMetadata 不比较 title）
+const longTitleEntry = model.normalize({ text: "Q", source: { kind: "page", title: "x".repeat(600), url: "https://example.com" }, results: [] }, { id: "long-title", now: 1, deviceId: "d" });
+assert.equal(longTitleEntry.source.title.length, 512, "超长标题应截断到 512 码点，而不是拒绝整条归档");
+assert.equal(model.validMetadata(longTitleEntry), true, "截断后的记录仍应通过校验");
 assert.equal(model.validMetadata({ ...updated, source: { kind: "page", title: "Bad", url: "javascript:alert(1)" } }), false);
 const invalid = (patch) => assert.equal(model.validMetadata({ ...updated, ...patch }), false);
 invalid({ resultPreviews: [null] });

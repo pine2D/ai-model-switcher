@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { effectiveStatus, markStatusRead, statusForResult, statusWithUnread } from "../src/main/status";
+import { getCopy } from "../src/shared/copy";
+import { describeCollectionCode } from "../src/shared/status-copy";
 
 test("successful submit with an unconfirmed tier remains a visible warning", () => {
   assert.deepEqual(
@@ -68,4 +70,12 @@ test("only unseen terminal work is marked unread and visiting retains its phase"
     phase: "complete",
     unread: false,
   });
+});
+
+// F218：扩展↔Desktop 归档码双向对账。扩展端 no_window（尚未开窗）与 Desktop 端 no_view（视图已销毁/未打开）
+// 语义相通，一份归档条目跨端同步后，两端都不能把对方的码兜底成笼统的「失败」。
+test("collection code fallback recognizes both the extension's and Desktop's own window-unavailable codes", () => {
+  const copy = getCopy("zh-CN");
+  assert.equal(describeCollectionCode(copy, "no_view"), copy.siteUnavailable);
+  assert.equal(describeCollectionCode(copy, "no_window"), copy.siteUnavailable);
 });

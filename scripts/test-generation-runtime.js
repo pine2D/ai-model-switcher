@@ -9,10 +9,18 @@ const vm = require("node:vm");
 const source = () => fs.readFileSync("content/generation.js", "utf8");
 const rect = (top = 500) => ({ width: 40, height: 40, top, bottom: top + 40, left: 600, right: 640 });
 
+// Each control carries the selector fragments it answers to, so a stop button
+// that the site never labels stays invisible to the probe — the stub must not
+// hand back matches the real selector list would miss.
+function matchesSelector(control, selector) {
+  const fragments = selector.split(",").map((part) => part.trim()).filter(Boolean);
+  return fragments.some((fragment) => (control.selectors || []).includes(fragment));
+}
+
 function run(host, adapter, controls = []) {
   const composer = { getBoundingClientRect: () => rect(600) };
   const document = {
-    querySelectorAll: () => controls,
+    querySelectorAll: (selector) => controls.filter((control) => matchesSelector(control, selector)),
   };
   const context = {
     document,
@@ -32,15 +40,28 @@ function run(host, adapter, controls = []) {
 
 test("generation probe reports only a visible nearby stop control as generating", () => {
   const visible = {
-    matches: () => true,
+    selectors: ['[data-testid="stop-button"]'],
     getBoundingClientRect: () => rect(540),
   };
   const hidden = {
-    matches: () => true,
+    selectors: ['[data-testid="stop-button"]'],
     getBoundingClientRect: () => ({ ...rect(540), width: 0, height: 0 }),
   };
   assert.equal(run("claude.ai", { answer: () => ({}) }, [visible]).generation(), "generating");
   assert.equal(run("claude.ai", { answer: () => ({}) }, [hidden]).generation(), "complete");
+});
+
+test("a stop control the selector list cannot name stays unseen", () => {
+  const unlabelled = {
+    selectors: [".ds-button--primary"],
+    getBoundingClientRect: () => rect(540),
+  };
+  assert.equal(run("deepseek.com", { answer: () => ({}) }, [unlabelled]).generation(), "complete");
+  const labelled = {
+    selectors: ['[aria-label*="stop" i]'],
+    getBoundingClientRect: () => rect(540),
+  };
+  assert.equal(run("deepseek.com", { answer: () => ({}) }, [labelled]).generation(), "generating");
 });
 
 test("generation probe reports completion from the existing read-only answer hook", () => {

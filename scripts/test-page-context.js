@@ -132,8 +132,8 @@ async function run() {
   assert.equal(PageContext.extractForTest(doc({}, " Body fallback ")), "Body fallback");
   assert.equal(PageContext.extractForTest(doc({ article: { innerText: " A\r\nB\rC\n\n\n\nD " } })), "A\nB\nC\n\nD");
   const capped = PageContext.capText("a".repeat(24001) + "MIDDLE" + "z".repeat(6001));
-  assert.equal([...capped.text].length, 30000);
-  assert.equal(capped.text, "a".repeat(24000) + "z".repeat(6000));
+  assert.ok(capped.text.startsWith("a".repeat(24000)) && capped.text.endsWith("z".repeat(6000)), "首尾必须完整保留");
+  assert.match(capped.text, /omitted 8 characters.*已省略 8 个字符/s, "中段必须换成语言无关的省略标记，不得无缝焊接");
   assert.equal(capped.truncated, true);
 
   assert.deepEqual(Object.fromEntries(Object.entries(listeners).map(([name, values]) => [name, values.length])), { installed: 1, startup: 1, changed: 1, clicked: 1 });
@@ -224,7 +224,7 @@ async function run() {
   const longText = "😀".repeat(24001) + "MIDDLE" + "🦊".repeat(6001);
   await PageContext.handleClick({ menuItemId: "ams-send-selection", selectionText: longText },
     { id: 7, url: "https://example.com/a", title: "Example" });
-  assert.equal(saved.amsComposeContext.text, "😀".repeat(24000) + "🦊".repeat(6000));
+  assert.ok(saved.amsComposeContext.text.startsWith("😀".repeat(24000)) && saved.amsComposeContext.text.endsWith("🦊".repeat(6000)) && saved.amsComposeContext.text.includes("omitted 8 characters"), "多码点字符同样要保留首尾并插入标记");
   assert.equal(saved.amsComposeContext.truncated, true);
 
   const empty = await PageContext.handleClick(

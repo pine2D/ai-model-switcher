@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
@@ -85,11 +86,37 @@ test("disconnected Drive keeps actionable states and reasons visible", () => {
   assert.doesNotMatch(reason, />Local only</);
 });
 
-test("syncing settings disable close and state-changing actions", () => {
+test("syncing settings keep the exit available while freezing state-changing actions", () => {
   const html = renderSettings(status({ connected: true, state: "syncing" }));
-  assert.match(html, /<button type="button" title="Close settings" aria-label="Close settings" disabled="">/);
+  assert.doesNotMatch(html, /title="Close settings" aria-label="Close settings" disabled=""/);
   assert.match(html, /<button type="button" class="primary" disabled="">Sync now<\/button>/);
   assert.match(html, /<button type="button" disabled="">Disconnect<\/button>/);
+});
+
+test("waiting for browser authorization never traps the settings page", () => {
+  const html = renderSettings(status({ connected: false, state: "syncing", reason: "oauth" }));
+  assert.doesNotMatch(html, /aria-label="Close settings" disabled=""/);
+  assert.match(html, />Waiting for browser authorization…</);
+  const source = fs.readFileSync("src/renderer/settings-workspace.tsx", "utf8");
+  assert.match(source, /event\.key === "Escape" && !closeLocked/);
+  assert.match(source, /aria-label=\{props\.copy\.closeSettings\} disabled=\{closeLocked\}/);
+});
+
+test("background status pushes refresh diagnostics without stealing focus or reopening the panel", () => {
+  const source = fs.readFileSync("src/renderer/settings-workspace.tsx", "utf8");
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{\s*setDiagnostics\(createSyncDiagnosticSnapshot\(props\.status, props\.runtime\)\);\s*\}, \[props\.runtime, props\.status\]\);/,
+    "the status effect must only refresh data"
+  );
+  assert.match(source, /const pendingFocus = useRef\(false\);/);
+  assert.match(source, /if \(!pendingFocus\.current\) return;/);
+});
+
+test("a stored authorization keeps a revoke action available while disconnected", () => {
+  const stored = renderSettings(status({ connected: false, state: "auth", reason: "oauth_rejected", hasStoredToken: true }));
+  assert.match(stored, />Revoke Google access</);
+  assert.doesNotMatch(renderSettings(status({ connected: false, state: "idle" })), />Revoke Google access</);
 });
 
 test("sync settings expose compact connection state and protected cloud deletion", () => {
@@ -152,7 +179,8 @@ test("an expired connected session offers reauthentication instead of a dead-end
   );
   assert.match(html, /Connect Google Drive/);
   assert.match(html, /Disconnect/);
-  assert.doesNotMatch(html, />Sync now<\/button>/);
+  assert.doesNotMatch(html, /class="primary"[^>]*>Sync now<\/button>/);
+  assert.doesNotMatch(html, /<button type="button">Sync now<\/button>/);
 });
 
 test("Drive failure expands six-stage diagnostics with safe support actions", () => {

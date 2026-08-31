@@ -24,7 +24,7 @@ function syncPage(config, status, clearReply = Promise.resolve({ ok: true })) {
     return Promise.resolve({ ok: true });
   } }, storage: { local: { get: () => Promise.resolve({ amsSyncConfig: config }), set() {} },
     onChanged: { addListener(fn) { storageChanged = fn; } } } };
-  const context = { chrome, document: { title: "", getElementById: (id) => els[id], querySelectorAll: () => controls, addEventListener() {} },
+  const context = { chrome, document: { title: "", documentElement: {}, getElementById: (id) => els[id], querySelectorAll: () => controls, addEventListener() {} },
     applyI18n() {}, t: (key, value) => value == null ? key : `${key}:${value}`, Intl, TextDecoderStream, window: {}, setInterval() {}, clearInterval() {}, setTimeout() {}, console };
   vm.runInNewContext(fs.readFileSync("options/sync.js", "utf8") + "\nglobalThis.testApi={renderStatus,run,setState:(c,s)=>{config=c;status=s;busy=false;notice='';renderStatus();}};", context);
   return new Promise((resolve) => setImmediate(() => resolve({ els, clearCalls: () => clearCalls, api: context.testApi,
@@ -127,7 +127,7 @@ async function archiveRejects() {
     runtime: { lastError: null, sendMessage(_message, done) { done({ ok: false }); }, onMessage: { addListener(fn) { receive = fn; } } },
     storage: { session: { get(_key, done) { done({}); }, remove(_key, done) { done?.(); } }, onChanged: { addListener() {} } },
   },
-    document: { documentElement: {}, getElementById: (id) => ({ failsum, live, send, retry })[id], querySelector: () => null, querySelectorAll: () => [] },
+    document: { documentElement: {}, getElementById: (id) => ({ failsum, live, send, retry })[id], querySelector: () => null, querySelectorAll: () => [], addEventListener() {} },
     navigator: { clipboard: { writeText: () => Promise.resolve() } }, t: (key) => key, setTimeout() {}, clearTimeout, Date, Map, console };
   vm.runInNewContext(fs.readFileSync("console/status.js", "utf8") + "\nglobalThis.testApi={copySummary};", context);
   context.testApi.copySummary([{ host: "a", label: "A" }], [{ host: "a", text: "answer" }], "q");

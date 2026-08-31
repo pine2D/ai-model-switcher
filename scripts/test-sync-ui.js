@@ -12,12 +12,18 @@ assert.deepEqual(manifest.oauth2, {
 const idBytes = crypto.createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest().subarray(0, 16);
 assert.equal([...idBytes].map((byte) => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15))).join(""), "ijghaoddhdgnienpaifekldgoaledefi");
 
-const runtimeFiles = [
-  "background.js", "i18n.js", "console/theme.js", "content/pill.js", "popup/popup.js",
-  "console/console.js", "console/compose-context.js", "console/compose.js", "console/scope.js", "console/archive.js",
-];
+// 从 Git 派生扩展运行时文件清单（排除 scripts/ 与 desktop/），不再手写定点清单——
+// 手写清单只覆盖过 10/46 个文件，断言文案却是仓库级承诺，bg/ 整个目录都在覆盖之外。
+const runtimeFiles = require("node:child_process")
+  .execFileSync("git", ["ls-files", "*.js"], { encoding: "utf8" })
+  .split("\n")
+  .filter((f) => f && !f.startsWith("scripts/") && !f.startsWith("desktop/"));
 const syncRuntimeFiles = runtimeFiles.filter((file) => fs.readFileSync(file, "utf8").includes("storage.sync"));
-assert.deepEqual(syncRuntimeFiles, [], "运行时代码不得再读写 Chrome Sync");
+assert.deepEqual(
+  syncRuntimeFiles,
+  [],
+  `运行时代码不得再读写 Chrome Sync（命中：${syncRuntimeFiles.join(", ") || "无"}）；设置类跨设备同步走 Drive 同步体系（bg/sync.js），不要用 chrome.storage.sync`
+);
 
 const compose = fs.readFileSync("console/compose.js", "utf8");
 const archive = fs.readFileSync("console/archive.js", "utf8");

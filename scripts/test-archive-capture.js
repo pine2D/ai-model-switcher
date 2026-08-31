@@ -117,8 +117,8 @@ function runClearedResetsChips() {
   const chrome = { runtime: { lastError: null, onMessage: { addListener(fn) { receive = fn; } }, sendMessage() {} }, storage: {
     session: { get(_key, done) { done({ amsComposeDispatchUntil: Date.now() + 1000 }); }, remove(_key, done) { done?.(); } }, onChanged: { addListener() {} },
   } };
-  const context = { chrome, document: { documentElement: {}, getElementById: (id) => elements[id], querySelector: () => chip, querySelectorAll: () => [chip] },
-    selected: {}, t: (key) => key, setTimeout: () => 0, clearTimeout: () => {}, Date, Map, console };
+  const context = { chrome, document: { documentElement: {}, getElementById: (id) => elements[id], querySelector: () => chip, querySelectorAll: () => [chip], addEventListener() {} },
+    selected: {}, pendingImages: [], setPendingImages() {}, t: (key) => key, setTimeout: () => 0, clearTimeout: () => {}, Date, Map, console };
   vm.runInNewContext(source("console/status.js"), context);
   assert.equal(elements.send.disabled, true, "新打开的控制台必须恢复工作区发送锁");
   receive({ from: "AMS_BG", type: "sendStart", hosts: ["a"], run: { runId: "run", text: "Q", hosts: ["a"] }, hasImage: false });

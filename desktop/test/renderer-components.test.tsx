@@ -4,6 +4,8 @@ import React, { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
 
+import * as archiveSurface from "../src/renderer/archive-surface";
+import { ArchiveWorkspace } from "../src/renderer/archive-workspace";
 import { BootstrapStateView } from "../src/renderer/bootstrap-state";
 import { CommandBar } from "../src/renderer/command-bar";
 import { CommandPalette } from "../src/renderer/command-palette";
@@ -11,12 +13,15 @@ import { ImagePicker } from "../src/renderer/image-picker";
 import { PageTabs } from "../src/renderer/page-tabs";
 import { SiteFrames } from "../src/renderer/site-frames";
 import { SiteHealthPanel } from "../src/renderer/site-health";
+import { imageSelectionBlockedMessage } from "../src/renderer/use-image-selection";
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { WorkspaceActions } from "../src/renderer/workspace-actions";
+import { CompletionNotifier } from "../src/main/completion-notifier";
 import { getCopy } from "../src/shared/copy";
 import { COMMANDS } from "../src/shared/commands";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
+import { archiveFixture } from "./archive.test";
 
 const noop = () => undefined;
 
@@ -341,15 +346,35 @@ test("workspace actions summarize pending attention on one More entry", () => {
     onOpenMore: noop
   };
   const attentionHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} retryCount={2} synthesisPending />
+    <WorkspaceActions {...base} failureCount={1} cancelledCount={1} synthesisPending />
   );
   const idleHtml = renderToStaticMarkup(
-    <WorkspaceActions {...base} retryCount={0} />
+    <WorkspaceActions {...base} failureCount={0} cancelledCount={0} />
   );
 
   assert.match(attentionHtml, /data-attention-count="3"/);
-  assert.equal([...attentionHtml.matchAll(/aria-label="More actions"/g)].length, 1);
+  assert.equal([...attentionHtml.matchAll(/aria-label="/g)].length, 1, "唯一一个 More 入口不应重复渲染 aria-label");
+  assert.match(attentionHtml, /aria-label="More actions: Retry 2 failed or cancelled sites"/, "attentionCount 必须并入 aria-label（F166），不能只落进不可访问的 data 属性");
   assert.doesNotMatch(idleHtml, /data-attention-count/);
+});
+
+// F166：attentionCount 此前没有并入可访问名——补齐三选一的重试文案覆盖（纯失败/纯取消/两者混合）
+test("workspace actions retry label switches with failure/cancelled mix", () => {
+  const copy = getCopy("en");
+  const base = {
+    copy,
+    disabled: false,
+    synthesisPending: false,
+    syncStatus: { state: "idle", connected: false, pending: 0, errorCount: 0, readOnly: false, oauthConfigured: false, secureTokenStorage: true } as const,
+    onOpenMore: noop
+  };
+  const failedOnly = renderToStaticMarkup(<WorkspaceActions {...base} failureCount={2} cancelledCount={0} />);
+  const cancelledOnly = renderToStaticMarkup(<WorkspaceActions {...base} failureCount={0} cancelledCount={3} />);
+  const mixed = renderToStaticMarkup(<WorkspaceActions {...base} failureCount={1} cancelledCount={2} />);
+
+  assert.match(failedOnly, /aria-label="More actions: Retry 2 failed sites"/);
+  assert.match(cancelledOnly, /aria-label="More actions: Retry 3 cancelled sites"/);
+  assert.match(mixed, /aria-label="More actions: Retry 3 failed or cancelled sites"/);
 });
 
 test("image picker stays icon-first and exposes removable previews and scope warning", () => {
@@ -626,4 +651,181 @@ test("page tabs stay hidden while selected-site state catches up with layout sta
     />
   );
   assert.equal(html, "");
+});
+
+test("archive filter refresh consumes a preferred id exactly once", () => {
+  // F167: props.preferredId (a just-sent synthesis' archive id) must only pull the
+  // selection back on the render where it first appears — not on every later filter
+  // change while the pending synthesis stays outstanding.
+  const first = archiveSurface.resolveFilterRefreshTarget("archive-a", null);
+  assert.deepEqual(first, { target: "archive-a", consumed: "archive-a" });
+
+  const repeatedFilterChange = archiveSurface.resolveFilterRefreshTarget("archive-a", "archive-a");
+  assert.deepEqual(repeatedFilterChange, { target: undefined, consumed: "archive-a" });
+
+  const pendingCleared = archiveSurface.resolveFilterRefreshTarget(null, "archive-a");
+  assert.deepEqual(pendingCleared, { target: undefined, consumed: "archive-a" });
+
+  const newPending = archiveSurface.resolveFilterRefreshTarget("archive-b", "archive-a");
+  assert.deepEqual(newPending, { target: "archive-b", consumed: "archive-b" });
+});
+
+test("archive filter intent invalidates and clears status without flipping loading on every keystroke", () => {
+  // F168 (root cause half): loading must not flip synchronously per keystroke — it is
+  // owned by createArchiveRefresh once the debounced search actually starts, so a fast
+  // typist does not see the whole body flash to a loading placeholder on every key.
+  const requestEpoch = archiveSurface.createArchiveRequestEpoch();
+  let loading = false;
+  let status = "stale error";
+  let invalidated = false;
+  const originalInvalidate = requestEpoch.invalidate;
+  requestEpoch.invalidate = () => { invalidated = true; originalInvalidate(); };
+
+  archiveSurface.startArchiveFilterIntent(
+    requestEpoch,
+    () => undefined,
+    "B",
+    (value) => { loading = value; },
+    (value) => { status = value; }
+  );
+
+  assert.equal(invalidated, true);
+  assert.equal(status, "");
+  assert.equal(loading, false);
+});
+
+function renderArchiveWorkspace(overrides: Partial<React.ComponentProps<typeof ArchiveWorkspace>> = {}): string {
+  return renderToStaticMarkup(
+    <ArchiveWorkspace
+      copy={getCopy("en")}
+      locale="en"
+      items={[]}
+      selected={null}
+      tags={[]}
+      query=""
+      favoriteOnly={false}
+      selectedTag=""
+      loading={false}
+      busy={false}
+      status=""
+      onClose={noop}
+      onQueryChange={noop}
+      onFavoriteFilterChange={noop}
+      onTagChange={noop}
+      onSelect={noop}
+      onCapture={noop}
+      onCopy={noop}
+      onExport={noop}
+      onDelete={noop}
+      onPatch={noop}
+      onOpenSource={noop}
+      pendingSynthesis={null}
+      synthesisCandidate={null}
+      onSynthesize={noop}
+      onCollectSynthesis={noop}
+      onSaveSynthesis={noop}
+      {...overrides}
+    />
+  );
+}
+
+test("archive workspace keeps the detail pane mounted while the list column loads", () => {
+  // F168 (structural half): a loading placeholder must only cover the list column —
+  // the detail pane (and any in-progress SynthesisWorkspace form inside detailOverride)
+  // stays mounted so typing in the search box does not discard unsaved form state.
+  const record = archiveFixture();
+  const html = renderArchiveWorkspace({
+    loading: true,
+    items: [record],
+    selected: record,
+    detailOverride: <p>Synthesis draft in progress</p>
+  });
+
+  assert.equal([...html.matchAll(/Loading results…/g)].length, 1);
+  assert.equal([...html.matchAll(/class="archive-list"/g)].length, 1);
+  assert.equal([...html.matchAll(/class="archive-detail-pane"/g)].length, 1);
+  assert.match(html, /Synthesis draft in progress/);
+});
+
+test("completion notifier fires for a background window even when the site page is currently visible", () => {
+  // F157: unread only tracks the page-badge (whether the site tab is showing), not
+  // window focus. The most common "PolyAsk is in the background" posture is: window
+  // unfocused, but still parked on some site page, so unread is false for that site.
+  const shown: { title: string; body: string }[] = [];
+  const notifier = new CompletionNotifier({
+    copy: { title: "PolyAsk", complete: (site) => `${site} finished`, failed: (site) => `${site} failed` },
+    focused: () => false,
+    show: (notification) => { shown.push(notification); }
+  });
+  notifier.setEnabled(true);
+
+  notifier.accept({ site: "claude", phase: "complete", unread: false }, "Claude");
+
+  assert.deepEqual(shown, [{ title: "PolyAsk", body: "Claude finished" }]);
+});
+
+test("image selection announces a busy message instead of silently dropping a paste mid-broadcast", () => {
+  // F171: pasting/dropping images while a broadcast is running must not vanish without
+  // feedback — idle=false now returns copy.imagesBusy instead of null.
+  const copy = getCopy("en");
+  assert.equal(imageSelectionBlockedMessage(copy, true), null);
+  assert.equal(imageSelectionBlockedMessage(copy, false), copy.imagesBusy);
+  assert.ok(copy.imagesBusy.length > 0);
+});
+
+test("collected answer text is bounded with a non-silent truncation code", () => {
+  // F131: preload/site.ts cannot be imported outside Electron (it pulls in `electron`
+  // at module scope), so this is a source-string regression like the ones in
+  // shell-contract.test.ts — it only guards against the cap or the code disappearing.
+  const preload = readFileSync("src/preload/site.ts", "utf8");
+  assert.match(preload, /TEXT_LIMIT\s*=\s*1_000_000/);
+  assert.match(preload, /"answer_truncated"/);
+  assert.match(preload, /points\.length > TEXT_LIMIT/);
+});
+
+test("the dead polyask:focus-prompt IPC channel stays removed", () => {
+  // F134: this channel was declared and subscribed but never sent from the main
+  // process — the real focus path is the "focus-prompt" command in executeCommand.
+  const shellPreload = readFileSync("src/preload/shell.ts", "utf8");
+  const app = readFileSync("src/renderer/index.tsx", "utf8");
+  assert.doesNotMatch(shellPreload, /focus-prompt/);
+  assert.doesNotMatch(app, /onFocusPrompt/);
+  assert.match(app, /"focus-prompt":\s*\(\)\s*=>\s*\{/);
+});
+
+test("status announcements use the site label, and command-palette page jumps announce too", () => {
+  // F169: the onStatus live-region text must resolve through the bootstrap site list
+  // (label), not the raw SiteKey, once sites have loaded — via a ref, not a new
+  // effect dependency (re-subscribing eight IPC listeners on every bootstrap tick).
+  // F172: showPage (the command-palette / renderer-requested page jump) must announce
+  // like the toolbar PageTabs does, since onLayout suppresses its own announcement
+  // whenever requestedPage.current is set.
+  const app = readFileSync("src/renderer/index.tsx", "utf8");
+  assert.match(app, /sitesRef\.current\.find\(\(site\) => site\.key === status\.site\)\?\.label \?\? status\.site/);
+  const subscribeEffect = app.slice(app.indexOf("useEffect(() => {\n    if (!bootstrapStarted"), app.indexOf("}, [copy]);") + "}, [copy]);".length);
+  assert.match(subscribeEffect, /const offStatus = window\.polyask\.onStatus/);
+  assert.match(subscribeEffect, /\}, \[copy\]\);$/);
+  const showPage = app.slice(app.indexOf("const showPage = "), app.indexOf("const nextUnfinished ="));
+  assert.match(showPage, /requestedPage\.current = \{ page, inputMethod: "keyboard" \};[\s\S]*setAnnouncement\(/);
+});
+
+test("the preference switch respects reduced motion", () => {
+  // F170: the settings toggle's thumb transition must be neutralized under
+  // prefers-reduced-motion, matching the rest of the workbench's motion contract.
+  const css = readFileSync("src/renderer/settings.css", "utf8");
+  assert.match(
+    css,
+    /@media \(prefers-reduced-motion: reduce\) \{\s*\.preference-switch span::after \{ transition: none; \}/
+  );
+});
+
+test("the packaged renderer CSP adds base-uri and form-action without breaking dev HMR", () => {
+  // F231: base-uri/form-action do not fall back to default-src per the CSP spec, so
+  // they were silently absent. connect-src keeps a scoped ws://localhost:* (webpack
+  // dev server's HMR socket) instead of a bare ws: that would accept any host.
+  const html = readFileSync("src/renderer/index.html", "utf8");
+  assert.match(html, /base-uri 'self'/);
+  assert.match(html, /form-action 'self'/);
+  assert.match(html, /connect-src 'self' ws:\/\/localhost:\*/);
+  assert.doesNotMatch(html, /connect-src[^"]*\sws:(?!\/\/)/);
 });
