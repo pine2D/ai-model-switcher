@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.23.1] - 2026-08-31
+
 ### 修复
 
 - 修复可复现构建在不同机器上条目顺序不稳定的问题：打包清单改为排序后固定顺序，同一提交在任意环境打出的 Chrome ZIP 字节一致（v0.23.0 的该声称经实测未成立，仅保证了时间戳一致）
@@ -639,7 +641,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.23.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/pine2D/polyask/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/pine2D/polyask/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/pine2D/polyask/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/pine2D/polyask/compare/v0.20.1...v0.21.0
