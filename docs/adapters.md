@@ -7,14 +7,15 @@
 ## 加新站点
 
 1. `manifest.json` 的 `content_scripts.matches`（当前 9 条）。
-2. 适配器：`content/adapters-intl.js`（国际）或 `adapters-cn.js` / `adapters-cn2.js`（国内，按 300 行上限分卷）。
+2. 适配器：`content/adapters-intl.js` / `adapters-intl2.js`（国际）或 `adapters-cn.js` / `adapters-cn2.js`（国内）。**分卷只因 300 行上限而存在，按站切，不按职责切**：当前 `intl` = Claude + Gemini、`intl2` = ChatGPT、`cn` = DeepSeek + 豆包 + 千问、`cn2` = Kimi + 元宝 + 智谱。
+   **新开一卷要登记五处**（漏哪处都是静默失效）：① `manifest.json` 的 `content_scripts.js`（排在其它适配器之后、**`content/diag.js` 之前**）；② `desktop/src/preload/site.ts` 的 `require` 列表（`scripts/test-desktop-shared-runtime.js` 对账两边集合，只改一边会红）；③ `scripts/test-desktop-shared-runtime.js` 末尾加一行 `adapterMustResolveTranslation(<新卷>, <某 host>, <某 diag key>)`；④ `scripts/test-probe-drift.js` 与 `scripts/test-image.js` 里各有一份写死的适配器文件清单，要把新卷加进去；⑤ 本文的分卷说明 + `CLAUDE.md` 架构段 + `docs/console-windows.md` 的注入顺序串。`scripts/test-site-selection.js` 的适配器清单从 manifest 派生，**不用改**；`scripts/package.sh` 的 `RUNTIME` 收整个 `content/` 目录，也不用改。
 3. `console/sites.js` 的 `SITES`：`{host,label,url,on?,image?,intl?}`。`on` 决定首次使用的默认勾选；`image` 决定「图片站」预置分组与图片群发可用性（必须与适配器是否实现 `attach` 一致）；`intl` 决定「国外/国内」两个预置分组（`scope.js` 由这三个标志现算 `PRESET_SIGNATURES` 区分预置与用户自建分组）。
 4. **Desktop 三处**：`desktop/src/main/sites.ts` 的站点表、`desktop/src/shared/contracts.ts` 的 `SITE_KEYS`（两者顺序必须一致，否则 `diagnostics.ts` 的 `site_order` 判红）、`content/generation.js` 的停止键表（不补 = Desktop 永远观测不到该站的「生成中/已完成」）。漏这三处只有 Desktop 静默缺席，扩展侧一切正常。
 5. `bg/synthesis.js` 的 `SYNTHESIS_ALLOWED_SITES`：辅助综合的目标站白名单，不补则该站不能当综合目标（返回 `invalid_request`）。
 6. 按下方契约表补可选钩子。不补 = 该能力静默降级，不是报错。
 7. 测试：
    - **不用再补断言，要会读它的红**：`scripts/test-site-selection.js`（`verify.sh` 已调）双向对账**四处登记**（扩展 `manifest.matches` / `SITES` / 适配器注册键，加 `desktop/src/main/sites.ts`）——正向查每个 `SITES[].host` 是否被某条 `matches` 覆盖、是否能被某个 `S.adapters` 键以 `includes` 命中（`pickAdapter` 的真实语义，键是 host 子串不必相等）；反向查僵尸适配器键与孤儿匹配。适配器文件清单从 `manifest.content_scripts[].js` 派生，**新开一卷（如 `adapters-cn3.js`）只要挂进 manifest 就自动纳入**，不必改测试。
-   - 站点实现了 `submit` / `inject` / `attach` 时，才另加 `scripts/test-site-send-runtime.js` 用例。该文件只用 `vm` 执行 `adapters-cn.js` / `adapters-cn2.js`，针对 deepseek / kimi / qianwen 三站验发送与附件语义，**不是站点登记表**，加站点不改它不会红。
+   - 站点实现了 `submit` / `inject` / `attach` 时，才另加 `scripts/test-site-send-runtime.js` 用例。该文件只用 `vm` 执行 `adapters-cn.js` / `adapters-cn2.js`，针对 deepseek / kimi / qianwen 三站验发送与附件语义，**不是站点登记表**，加站点不改它不会红。**档位切换的回归不放这里**：国际站在 `scripts/test-intl-runtime.js`（Claude/Gemini）与 `scripts/test-intl2-runtime.js`（ChatGPT 滑块），国内站在 `scripts/test-cn-tier-runtime.js`（智谱/元宝/Kimi），三份与本文件互不重叠。
 
 **适配器注册键是 hostname 子串**：`pickAdapter()` 用 `location.hostname.includes(key)` 匹配，所以 `S.adapters` 的键是 `deepseek.com` / `doubao.com` / `qianwen.com` / `kimi.com`，与 `sites.js` 的完整 host（`chat.deepseek.com` / `www.doubao.com` / `www.qianwen.com` / `www.kimi.com`）**故意不同**（9 站里有 4 站如此）。照抄 sites.js 的 host 当适配器键会静默匹配不上。子串匹配也意味着同域新子域会被同一适配器接管（如 `platform.deepseek.com`），加子域前先想清楚。
 
@@ -59,38 +60,19 @@
 
 Claude / ChatGPT / Gemini / 千问 究竟命中通用链的哪一步（原生点按钮 vs 合成 Enter），只有 Claude 有真机结论；其余三站代码里没有站点级证据，别断言。
 
-## 「控件缺失一律 throw」的 4 处例外（3 个站）
+## 「控件缺失一律 throw」的 3 处例外（2 个站）
 
 例外全部在 `adapters-*.js` 里。`core.js` 没有这条规则，它只负责把适配器抛出的异常转成 `runMode` 返回 false 或 `submitPrompt` 的 `code:"error"`。
 
 1. **DeepSeek `_selectMode`** 找不到模式 radio → 静默跳过。radio 仅空对话首屏存在，聊天中缺失属正常态，档位真值由 DeepThink 开关兜底。
-2. **Claude `_setThinking`** 走「无 effort 入口」的旧布局回退分支时，连裸 Thinking 开关也缺失 → 静默结束。此时唯一调用方是 `think()`：Claude 的 `fast()` 只跑 `_selectModel(/sonnet\s*5/i)`，根本不碰 `_setThinking`。留静默是因为「思考控件整个缺席」在 Claude 旧布局属合法态（该模型本就没有思考档），此时模型已选对、think 只是没能再加一层 effort，抛错会把一次可用的切档判成失败。
-3. **Gemini `_setThinking`** 没有直达开关且 `on === false` → 静默 return（关思考时没有开关可关）。
-4. **Gemini `_setThinking`** 找不到「thinking level / 思考等级」子菜单入口 → 静默 return（窄屏或该模型无此项，属合法缺席）。反例：**子菜单在但目标等级缺失必须 throw**，静默会漏设等级。
+2. **Gemini `_setThinking`** 没有直达开关且 `on === false` → 静默 return（关思考时没有开关可关）。
+3. **Gemini `_setThinking`** 找不到「thinking level / 思考等级」子菜单入口 → 静默 return（窄屏或该模型无此项，属合法缺席）。反例：**子菜单在但目标等级缺失必须 throw**，静默会漏设等级。
 
-另有 5 处「先读后点」的幂等 `return`，**不属于例外，别混为一谈**：豆包 `_select` 已是目标模式、千问 `_selectModel` 已是目标模型、千问 `_setThink` 状态已对、Kimi `_setEffort` 强度已对、ChatGPT `_selectModel` 触发器文本已是目标模型。
+**已撤销的例外**：原第 2 条「Claude `_setThinking` 连裸 Thinking 开关也缺失 → 静默结束」于 2026-08-31 删除。当时的理由是「思考控件整个缺席在旧布局属合法态」，但真机复核发现控件一直在、只是 `effort-menu-trigger` / `effort-option-*` 两个 testid 改没了；静默让 `think()` 一路假成功、弹绿 toast 而档位纹丝不动（本次事故里最难发现的一站）。现在 Claude 的 effort 入口缺失、档位为空一律 throw。**加新例外前先想清楚：它是「站点本就没有这个能力」，还是「我们的选择子过期了」——后者永远不该静默。**
 
-## 注入（`submitPromptNow`）
+**智谱 `think()` 的「极致找不到就点深度」不是例外**：那是有序降级表 `_TIERS` 的正常取值（同 ChatGPT `_pickEdge` 的「取在场端点」、Claude `_setEffort` 的「取在场最高档」），点完照样复读校验、不生效照样 throw。
 
-- **textarea / input** 用原生 value setter（`Object.getOwnPropertyDescriptor(proto,"value").set`）+ 派发 `input`。
-- **contenteditable** 先给 `adapter.inject` 一次机会（`false` 交回通用链，抛异常直接 `inject_failed` 不回退）；`inject` 成功后 `sleep(150)`——Lexical 类编辑器异步应用注入，立即读文本会误判 `inject_failed`。
-- 通用链：全选 → 合成 `beforeinput`（`inputType:"insertText", data`）→ 不行退 `execCommand("insertText")` → 再不行 `el.textContent = text`。**受控编辑器（Lexical/ProseMirror/Slate，千问/Kimi）无视 `execCommand` 的 DOM 写入**：写进了 DOM 但编辑器 model 不注册，发送键保持禁用，必须靠 `beforeinput` 让编辑器登记。
-- **注入是否成功的判据是「非空且较注入前有变化」，不是 `includes`**——受控编辑器多行会重排换行，`includes` 误判。
-- **硬校验不可删**：`if (text.trim() && !readText(el)) return inject_failed`。注入彻底落空时框仍为空，若走到下面「空框 = 已发送」的校验循环就会产生假成功绿点。`execCommand` 的返回值不许丢弃。**这条校验对 textarea/input 与 contenteditable 两条分支同样生效**，位置在两分支合流之后——别再把它挪回 contenteditable 分支里（受控 textarea 的注入被 React 回滚时正好从这个洞里漏过去）。
-- 读输入框用 `readText`：textarea/input 取 `.value`（`.textContent` 是初始值，不随输入更新），其余取 `.textContent`。
-- **图片路径**：附件确认后要**重取 composer**；取不到返回 `attachment_timeout` 而不是 `composer_not_found`——后者会让 bg 整包重传同一张图片。
-- **`findComposer` 的阈值**：高度 `>=16`（不是 `>=20`，理由见 `CLAUDE.md` 硬约束）、`width > 80` 挡 0×0 假框。
-
-## 提交（通用链 + `confirmSubmitted`）
-
-顺序：`adapter.submit` → 原生点发送键 → **合成 Enter** → 若 Enter 也没发出且按钮可用再点一次 → `confirmSubmitted`。
-
-- **附件确认里的 busy 只能延后、不能永远否决**（2026-08-14 真机）：DeepSeek 图片传完、发送键已可用，页面仍常驻一个 `.ds-loading`；老条件 `(!current.busy || before.busy)` 在「传后才出现且不消失」时恒为假，`waitAttachments` 一路等到 `attachment_timeout`，core 于是在**注入文字之前**就 return（表现为图片和文字都留在框里）。现改为 busy 最多压制 5s。
-- **发送键必须挨着输入框再认**（2026-08-14 真机）：`button[aria-label*="发送"]` 会命中**侧栏里标题含「发送」二字的历史会话**的「更多选项」按钮，而 `querySelector` 取文档顺序第一个（侧栏在前）→ 真发送键从没被点过。`core.js` 的 `sendBtn()` 已按「与输入框纵向距离 <240px 且可见」筛选。**任何按 `aria-label` 文本找按钮的地方都要防这一手**：站点侧栏会把用户的会话标题原样放进 `aria-label`，用户聊什么词，选择器就可能撞什么词。
-- **点了没生效仍要退回 Enter**：chatglm 这类站只能靠 Enter；且点击确认只给 3s，不能用带图的长 deadline——否则确认循环空转满 90s，Enter 回退根本轮不到（这正是「带图发不出去、90s 后突然发出」的成因）。
-- 通用发送键选择子：`button[data-testid*="send" i], button[aria-label*="send" i], button[aria-label*="发送"]`，`!disabled` 防误触。优先原生点击的理由是国产站拒合成事件、且对受控编辑器发 Enter 会产生多余换行。
-- **`confirmSubmitted` 每轮重新 `findComposer()` 读当前活节点**：DeepSeek/智谱等 React 站发送后把输入框换成新节点，捕获的旧节点脱离 DOM、文本永远停在旧值 → 轮询等不到清空 → 芯片误标红。判据是「空 或 不再等于原文」。
-- **全站已知限制（DeepSeek/豆包/Kimi 真机证实）**：流式生成期间站点把同一发送键复用为「停止」（class/id 不变，仅换图标）。流式中对同站二次群发会点成停止、截断上一条回答。`confirmSubmitted` 会诚实报失败可 retry；图标判别太脆弱，**有意不做守卫**。
+另有 5 处「先读后点」的幂等 `return`，**不属于例外，别混为一谈**：豆包 `_select` 已是目标模式、千问 `_selectModel` 已是目标模型、千问 `_setThink` 状态已对、Kimi `_setEffort` 强度已对、ChatGPT `_selectModel` 目标模型已 `aria-checked`。
 
 ## 切档（`runMode` / `switchTier`）
 
@@ -131,7 +113,8 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 - **`clickEl` 用 `detail:1` 拟真**：真实点击 `detail=1`，`el.click()` 与裸构造是 0——Kimi 新首页按 `detail===0` 过滤机器人点击（真机 2026-07-21）。
 - **控件正在下沉到二级子菜单**（2026-08 两轮改版的共同形态）：顶层只留当前值，完整列表进子菜单。写新逻辑默认「顶层找不到 → 找子菜单入口 → 展开 → 再找」，别假设一层列表。
 - **同一页面里不同语义的列表可能共用同一个 role**：ChatGPT 的 Model 与 Effort 子菜单都是 `[role=menuitemradio]`。取档位必须校验文本属于**档位标签集**，且整份列表只要带模型名就判定为模型菜单并拒绝使用——否则「最高档」会被点成末位模型。
-- **每个菜单动作自己 `escMenus()` 收尾**：子菜单不关会罩住输入框，也会让后续动作点空（选完模型再点 Effort 只是把它关掉）。
+- **每个菜单动作自己收尾**：菜单不关会罩住输入框，也会让后续动作点空（选完模型再点 Effort 只是把它关掉）。**但 `escMenus()` 不是万能的**——2026-08-31 真机实测：Claude(Base UI) / ChatGPT(Radix) / 元宝 / 豆包 的菜单 Escape 有效；**Gemini、智谱、Kimi 三站 Escape 关不掉**（Gemini 连点 backdrop 都没用；Kimi 只收得掉 effort 子菜单、收不掉根菜单），这三站各自实现了 `_close()`：先 `escMenus()`，仍开着就**再点一次触发器/入口**。给新站写收尾时先真机验一次「Escape 到底关不关得掉」，别默认。
+- **档位控件不一定是列表**：ChatGPT 2026-08-31 把 radio 列表换成了滑块（键盘左右方向键驱动，`End`/`Home` 无效）。遇到「菜单开着但一个可选项都找不到」，先找 `[role=slider]` / `aria-keyshortcuts` / `data-*-slider`，再断定控件消失。
 - **有状态控件先读后点**（幂等）；菜单可能一次打不开，`openMenu` 要允许重试第二次；开关切换会重渲染，重渲染后的选项必须 `waitFor` 重取。
 - **站点常有宽窄两种布局**：Claude 窄屏是 Adaptive thinking 开关、宽屏是 effort 子菜单；Gemini 窄屏模型按钮无 `aria-haspopup`。适配器须双布局兼容。
 - **文案可能含零宽字符**（Claude 的 "Max" 实为 4 字符）：用 contains 匹配，别用 `^...$` 配长度。Kimi 适配器专门有 `_zap()` 去零宽字符。
@@ -140,31 +123,37 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 
 ### Claude（`claude.ai`，`content/adapters-intl.js`）
 
-- 档位：think = `_selectModel(/fable\s*5/i)` + `_setThinking(true,"high")`；fast = **只跑 `_selectModel(/sonnet\s*5/i)`**，不碰 Thinking/effort（用该模型自身默认设置，别把 Fable 的 High effort 强加给快档）。`state()` 读 `[data-testid="model-selector-dropdown"]` 的 aria-label：嵌入锁定或空 → null；含 `sonnet|haiku` → fast；不含 `fable|opus` → null；含 `adaptive|high|extra|max|高|最大` → think；含 `\blow\b|低` → fast；形如 `(fable|opus)\s*[\d.]+$`（窄屏思考关、无后缀）→ fast；其余 null。Anthropic 换代时同步 `fast()`/`think()` 的模型正则。
-- `_setThinking(on, effort)` 在模型下拉内操作：找 `[data-testid="effort-menu-trigger"]`，用 `[data-testid="effort-option-<level>"]` 选档；Thinking 裸开关是 aria-label 或所属 menuitem 文本含 `thinking|思考` 的 `[role="switch"]`（按 `aria-checked` 幂等）。effort 为 high 时收尾复读 `_label()`，不含 `high|高` 直接抛「Claude: High effort 未生效」。
-- **模型菜单已下沉（2026-08）**：顶层只保留当前模型一项，其余进「more models / 更多模型」子菜单，`_selectModel` 顶层等 900ms 找不到才展开子菜单；选中后 `sleep(700)` + **`escMenus()`**（子菜单不关会罩住输入框并让后续动作点空）。
+- 档位：think = `_selectModel(/fable\s*5/i)` + `_setEffort()`（**取在场最高档**，当前是 Max）；fast = **只跑 `_selectModel(/sonnet\s*5/i)`**，不碰 effort（用该模型自身默认设置，别把 Fable 的最高档强加给快档）。`state()` 读 `[data-testid="model-selector-dropdown"]` 的 aria-label：嵌入锁定或空 → null；含 `sonnet|haiku` → fast；不含 `fable|opus` → null；命中 `_THINK`（`adaptive|high|extra|max|高|最大`）→ think；含 `\blow\b|低` → fast；形如 `(fable|opus)\s*[\d.]+$`（窄屏思考关、无后缀）→ fast；其余 null。aria-label 现为 **`Model: Fable 5 · Max`**（分隔符 U+00B7，真机 2026-08-31）。Anthropic 换代时同步 `fast()`/`think()` 的模型正则。
+- **effort 的两个 testid 已消失（2026-08-31 真机）**：`effort-menu-trigger` / `effort-option-*` 全没了，Base UI 菜单只剩自动生成 id（`base-ui-_r_*`），全菜单只剩 `chat-input` 一个 data-testid。入口退化成文本为 **`EffortMax`**（`Effort` + 当前档）的 `[role=menuitem][aria-haspopup=menu]`，按 `/^(effort|强度|思考强度|努力)/i` 找；档位项是子菜单里的 `menuitemradio`，精确文本 **`Low` / `MediumDefault` / `High` / `Extra` / `Max`**（Extra、Max 是本次新增的两档）。
+- **档位项与模型项同为 `menuitemradio` 且同时在 DOM**（顶层 4 个模型 + 子菜单 5 个档位），`_effortItems()` 做**两层语义校验**：① 所属 `[role=menu]` 的 `aria-labelledby` 必须指回 effort 入口的 `id`；② 文本须命中 `_EFFORT` 档位标签集（由低到高的有序表）。少一层都会把「最高档」点成模型——一个叫「Max Preview」的模型就能骗过纯文本校验。`_setEffort()` 取 rank 最高的一项（撤掉 Max 自动退 Extra，再撤退 High），点完 `waitFor` 复读 `_label()` 命中 `_THINK` 才算成功，否则抛「Claude: 目标 effort 未生效」。
+- **「无 effort 入口静默 return」的例外已撤销（2026-08-31）**：控件仍在，只是选择子变了；入口缺失 / 档位为空一律 throw。旧的 `_thinkSwitch()` 裸开关分支同时删除（真机已无该开关）。
+- **模型菜单已下沉（2026-08）**：顶层保留 Fable 5 / Opus 5 / Sonnet 5 / Haiku 4.5，其余进「more models / 更多模型」子菜单，`_selectModel` 顶层等 900ms 找不到才展开子菜单；选中后 `sleep(700)` + **`escMenus()`**（子菜单不关会罩住输入框并让后续动作点空；Base UI 菜单 Escape 有效，与 Gemini/智谱/Kimi 三站不同）。
 - 发送键 `aria-label="Send message"`，原生 click 有效；此前「拒绝合成点击」的结论是误判——当时点的是侧栏同名假按钮（见发送路径表）。`answer()` 取末条 `.font-claude-response` → `.row-start-2`（折叠的思考头在 `.row-start-1`），取不到回退整块。`attach` 走 `input[data-testid="file-upload"]` + `S.setInputFiles`。
 
-### ChatGPT（`chatgpt.com`，`content/adapters-intl.js`）
+### ChatGPT（`chatgpt.com`，**`content/adapters-intl2.js`**）
 
-- 档位：think = `_selectModel(/^GPT-5\.6\s*Sol$/i)` + `_pickEdge(true)`（点档位列表**末位** = 最高档）；fast = 同模型 + `_pickEdge(false)`（点首位 = 最低档）。**不写死档位标签**，站点加减档自适应。`state()`：`_tier()`（先剥版本前缀 `/^(?:gpt-?)?5\.[3456](?:\s*sol)?/i`）命中 `instant|medium|极速|即时|均衡|中` → fast；原始文本命中旧模型 `(?:gpt-?)?5\.[345](?!\d)|\bo3\b` → null（不许冒充 5.6 的 think）；命中 `high|pro|高` → think；其余 null。注意 instant/medium 判定在旧模型判空之前，所以「5.5Instant」仍判 fast。
-- **档位在 Effort 二级子菜单**（2026-08 改版为「Power 滑块 + Advanced 视图」，旧布局第一层就是档位，两种都要兼容）：`_openRoot()` 开 pill 菜单，`_openEffort()` 在顶层不是档位列表时找 `/^(effort|强度|推理|思考|力度)/i` 的 `[role=menuitem][aria-haspopup=menu]`（找不到就取排除模型名后的最后一个 haspopup 项）再展开。
-- **档位项与模型项同为 `[role=menuitemradio]`**：`_tiers()` 只认 `_LABELS` 档位标签集且 `^` 锚定（避免误中侧栏标题），整份列表只要有一项含 `gpt-|claude` 就判为模型菜单并返回 null。真机 2026-08 教训：think 先选模型，残留的正是模型列表 → 把「最高档」点成了 o3。
-- 档位锚点 `_anchor()`：一条并集选择子（`button.__composer-pill[aria-haspopup="menu"], button[aria-haspopup="menu"]`）+ `.find()` 取首个文本经 `_tier()` 后命中 `_LABELS` 的按钮。`querySelectorAll` 按文档顺序返回，并不保证 pill 先命中——实测 pill 唯一故等价，真要保证优先得拆成两次查询。
-- **`diagnose()` 的 `diag_intelEntry` 只判入口层存在**（纯选择子 `button.__composer-pill[aria-haspopup="menu"]`，不做文本校验）：`_anchor()` 那层的 `_LABELS` 文本校验只服务 `state()` / `_openRoot`。两者拆开后巡检有两个独立信号——「入口项红」= 按钮真没了，「档位项红」= 标签集漂移；混判会把标签集漂移误报成按钮消失，指错排查方向。
-- 模型子菜单必须用**原生 `trig.click()`** 展开（通用 pointer 序列会连开带关把两级菜单一起收起）；选完模型要 `sleep(700)+escMenus()+sleep(200)`，子菜单开着时点 Effort 只会把它关掉；子菜单渲染在独立 popper，`_radios()` 必须全局取。
+- **本站单独一卷**：`adapters-intl.js` 触及 300 行上限后按站分卷，ChatGPT 移到 `adapters-intl2.js`（Claude / Gemini 留在 `adapters-intl.js`）。分卷的五处登记见本文「加新站点」与文末分卷说明。
+- 档位：think = `_selectModel(/^GPT-5\.6\s*Sol\b/i)` + `_pickEdge(true)`（滑块推到**最右端** = 最高档）；fast = 同模型 + `_pickEdge(false)`（推到最左端）。**不写死档位标签**，站点加减档自适应。`state()`：pill 为空或命中 `_OPEN_PILL`（`thinking effort|思考(强度|力度)?`）→ null（**菜单开着时 pill 显示的是控件名，不是档位，属非终态**）；`_tier()`（先剥版本前缀 `/^(?:gpt-?)?5\.[3456](?:\s*sol)?/i`）命中 `instant|medium|极速|即时|均衡|中` → fast；原始文本命中旧模型 `(?:gpt-?)?5\.[345](?!\d)|\bo3\b` → null（不许冒充 5.6 的 think）；命中 `high|pro|高` → think；其余 null。
+- **2026-08-31 改版：档位从 radio 列表换成一根滑块**。菜单是 Radix popper `[data-testid="composer-intelligence-picker-content"]`，里面**没有任何 `aria-haspopup` 子菜单入口**——旧的 `_openEffort()`/`_tiers()` 因此永远找不到档位列表，think/fast 双双抛错而 `diagnose()` 全绿（本次事故的表象）。现结构：① `[role=menuitem][aria-label="Select model"]`（文本是当前档名）；② `[role=menuitem][aria-label="Power"]`，`aria-keyshortcuts="ArrowLeft ArrowRight"`，内含 `[data-model-reasoning-effort-slider]` 与一个 `[role=slider]`（`aria-valuenow/min/max` = 当前位次 / 0 / 4）。
+- **档位真值只认位次「X of N」，不认档名**：0–3 档的档名不在任何可选中节点上，只出现在 Power 项 `aria-describedby` 指向的朗读文本里（`Pro, 5 of 5.` / `Use Left and Right arrow keys to adjust power.`）。`_level()` 先读 `[role=slider]` 的三个 aria 数值，读不出才回退正则解析那句朗读文本。位次映射（真机实测全表）：0=Instant / 1=Medium / 2=High / 3=Extra High / 4=Pro。
+- **切档靠键盘，且只有左右方向键有效**：`_pickEdge` 聚焦 Power 项后逐格发 `ArrowRight`/`ArrowLeft`（`KeyboardEvent` 必须 `bubbles:true`），每格 220ms、循环上界 = 档位数，端点会饱和不越界。**`End` / `Home` 真机实测无效**（值纹丝不动），不要拿它们省循环。收尾比对 `lv.now === goal`，不等就抛「ChatGPT: 档位未到端点」。
+- **模型 radio 常驻菜单**：Advanced 视图（`composer-model-picker-slider-advanced-view`）不必展开也在 DOM，`GPT-5.6 Sol`(checked) / `GPT-5.5` 两项随时可取。`_selectModel` 先直接找，找不到才点 `aria-label="Select model"` 入口；**已 `aria-checked=true` 就直接返回不点**（点了会连带把菜单收掉）。
+- 档位锚点 `_anchor()` 改成**纯选择子** `button.__composer-pill[aria-haspopup="menu"]`（真机实测全页精确 1 个）。**不许再做文本前置校验**：新 UI 的 pill 在菜单开着时是控件名，带文本校验的 `_anchor` 会当场返回 undefined。`diagnose()` 两项因此天然独立——「入口项红」= 按钮真没了，「档位项红」= 标签集漂移或 pill 读不出。
 - `answer()` 取 `[data-turn="assistant"]` 末条 → `.markdown`（旧内层 `[data-message-author-role="assistant"]` 兜底）。`attach` 走 `#upload-photos`。唯一实现 `stop()` 的站（`[data-testid="stop-button"]`，回退 aria-label 含 stop answering/streaming/generating 的按钮）——**目前无调用方**。
-- **改中文档位标签正则前必须先真机确认**：Instant / Medium / High / Extra High / Pro 的中文对应目前只有代码注释里的候选词，未经真机验证，不要直接抄进 `_LABELS`。
+- **改中文档位词前必须先真机确认**：`_OPEN_PILL` 与 `_power()` 里的中文候选（思考强度 / 强度 / 力度）都是直译，未经中文界面真机验证。
 
 ### Gemini（`gemini.google.com`，`content/adapters-intl.js`）
 
-- 档位：think = `_selectModel(/3\.1\s*pro\b/i)` + `_setThinking(/^(extended|扩展)/i)`（开）；fast = `_selectModel(/3\.6\s*flash\b/i)` + 同项**关**。`_selectModel` 选中后 `sleep(700)` + **`escMenus()`**（不依赖后续 `_setThinking` 替它关菜单），与 Claude / ChatGPT 卡一致。
+- 档位：think = `_selectModel(/3\.1\s*pro\b/i)` + `_setThinking(/^(extended|扩展)/i)`（开）；fast = `_selectModel(/\b\d+(?:\.\d+)?\s*flash\b(?!\s*-?\s*lite)/i)` + 同项**关**。
+- **快档模型正则必须版本无关**（2026-08-31 事故）：菜单从 `3.6 Flash` 换成 `3.7 Flash`，写死版本号的旧正则当天让整站 `fast()` 抛「未找到模型」。现按「任意版本号 + Flash、且不是 Flash-Lite」匹配，后瞻同时挡住 `Flash-Lite` 与 `Flash Lite` 两种写法——**Lite 是更弱的另一档，绝不能被当成快档选中**。think 侧的 `3.1 Pro` 与 Extended thinking 开关不动。
+- 菜单项实测（2026-08-31）：`3.5 Flash-Lite Fastest answers` / `3.7 Flash All-around helpNew` / `3.1 Pro Advanced reasoning`(selected) / `Extended thinking Complex problem solving`。当前选中项带 `.selected` 类，鼠标高亮项带 `.active` 类——**判选中只能看 `.selected`**。
+- **`escMenus()` 对本站无效**（2026-08-31 真机：Escape 与点 `.cdk-overlay-backdrop` 都关不掉，`aria-expanded` 一直是 `true`），**只有再点一次触发器才收**。所有收尾一律走 `_close()`：先 `escMenus()`，仍开着就 `clickEl(_modelBtn())`。菜单不关会罩住输入框、让随后的注入点空。`_selectModel` / `_setThinking` 的每条出口（含 throw 前）都已改走它。
 - 模型按钮 `_modelBtn()`：先找 aria-label 含 `mode picker` 的 button，回退 `button[class*="input-area-swi"]`（窄屏模型按钮无 `aria-haspopup`）。菜单项选择子常量 `_MI = "button.mat-mdc-menu-item, [role=menuitem]"`；菜单可能要 `openMenu` 两次。
-- **`_MI` 必须过 `_items()` 只取可见项**（2026-08-14 真机）：页面常驻一个隐藏的导出菜单（`gv-pm-saved-export-menu gv-hidden`，含 JSON / Markdown 两个 `[role=menuitem]`）。老写法 `if (!document.querySelector(this._MI)) openMenu(btn)` 因此恒判「菜单已展开」，**模型按钮从来没被点开过**，随后在 `[JSON, Markdown]` 里找 `3.6 Flash` 自然抛「未找到模型」。开菜单改用 `aria-expanded !== "true" || !this._items().length` 判定，找项一律走 `this._find(re)`。
-- **`state()` 按模式名判粗档位，不是复合条件**：aria-label 现为 `Open mode picker, currently <Mode>`（切到深度思考后是 `currently Pro Extended`）。判定顺序是 `flash` → fast，否则 `\bpro\b|extended|扩展` → think，其余 null——aria-label 不报 Extended thinking 开关状态，所以不能拿它证明思考已开；`think()` 仍会幂等地把 Extended thinking 一并打开。菜单项实测：`3.5 Flash-Lite` / `3.6 Flash` / `3.1 Pro` / `Extended thinking`。
+- **`_MI` 必须过 `_items()` 只取可见项**（2026-08-14 真机）：页面常驻一个隐藏的导出菜单（`gv-pm-saved-export-menu gv-hidden`，含 JSON / Markdown 两个 `[role=menuitem]`）。老写法 `if (!document.querySelector(this._MI)) openMenu(btn)` 因此恒判「菜单已展开」，**模型按钮从来没被点开过**，随后在 `[JSON, Markdown]` 里找 Flash 自然抛「未找到模型」。开菜单改用 `aria-expanded !== "true" || !this._items().length` 判定，找项一律走 `this._find(re)`。
+- **`state()` 按模式名判粗档位，不是复合条件**：aria-label 现为 `Open mode picker, currently <Mode>`（切到深度思考后是 `currently Pro Extended`）。判定顺序是 `flash` → fast，否则 `\bpro\b|extended|扩展` → think，其余 null——aria-label 不报 Extended thinking 开关状态，所以不能拿它证明思考已开；`think()` 仍会幂等地把 Extended thinking 一并打开。
 - `_setThinking` 双布局：当前布局是模型菜单里的直达开关（按 `.selected` 类或 `aria-checked` 幂等点击）；旧布局走 `/thinking level|思考(等级|程度)?/i` 嵌套子菜单，最多重开子菜单（`openMenu(trig)` 指针序列，**不是 hover**——重发 hover 那招是 Kimi 的，两站机理不同别互抄）并重取目标项 6 轮，命中后先 `focus()` + Enter keydown 再 `clickEl`。**子菜单在但目标等级缺失必须抛「Gemini: 思考等级选项未找到」**；整段子菜单缺席才算合法静默跳过。
 - **有意不实现 `attach`**（Gemini 忽略合成 drop，附件菜单要求可信点击且不保留 file input）。`answer()` 取末个 `message-content` → `.markdown`，回退整块。
-- 中文界面报「切不动」时，先真机核对「扩展」这个标签再改正则——英文 Extended 已真机确认，中文是直译候选。真机探测坑（同 URL 双 page target）见 `docs/verify.md`。
+- 中文界面报「切不动」时，先真机核对「扩展」这个标签再改正则——英文 Extended 已真机确认，中文是直译候选。真机探测坑（同 URL 双 page target；**批量刷新站点标签可能触发 Google「unusual traffic」验证码插页**）见 `docs/verify.md`。
 
 ### DeepSeek（`chat.deepseek.com` / 适配器键 `deepseek.com`，`content/adapters-cn.js`）
 
@@ -177,7 +166,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 ### 豆包（`www.doubao.com` / 键 `doubao.com`，`content/adapters-cn.js`）
 
 - 档位：think = `_select(/专家$/, "think")`、fast = `_select(/快速$/, "fast")`。**锚定的是后缀不是前缀**——菜单项实测带品牌与版本前缀（`豆包 2.1 Turbo 专家`），写成 `/^专家/` 会一项都匹配不上。**只切 composer 模式按钮的菜单项，无独立思考开关、无模型选择。**
-- `state()` 读模式按钮文本：`/专家$/` 或 `/^豆包\s+[\d.]/`→think、`/快速$/`→fast、**其余（含「超能模式」）→ null**——超能档下 HUD 不亮、`switchTier` 会一直重试到超时。`^豆包\s+版本号` 这条分支是因为选中专家档后按钮只回显 `豆包 2.1 Turbo`、后缀被吃掉（真机 2026-08-26）。
+- `state()` 读模式按钮文本：`/专家$/` 或 `/^豆包\s+[\d.]/`→think、`/快速$/`→fast、**其余 → null**（「超能模式」是**历史档位**：2026-08-31 真机复核菜单只剩 `豆包 快速` / `豆包 2.1 Turbo专家` 两项，已无超能模式；该分支保留为兜底，若它回归 HUD 不亮、`switchTier` 会一直重试到超时）——超能档下 HUD 不亮、`switchTier` 会一直重试到超时。`^豆包\s+版本号` 这条分支是因为选中专家档后按钮只回显 `豆包 2.1 Turbo`、后缀被吃掉（真机 2026-08-26）。
 - `_select(re, expected)` 的第二参是**幂等短路的判据**：先 `state() === expected` 就直接返回，不开菜单。改档位正则时两个参数要一起对，只改正则会让短路永久失效（每次群发都白开一次菜单）。`_modeBtn()` 从候选中取离 composer 最近者，避免撞到侧栏标题；`_select` 最多 3 轮，`openMenu` 展开后对 `[role="menuitem"]` 用**原生 `item.click()`**，每轮 `escMenus()`；按钮缺失或 3 轮未选中都抛异常。
 - `answer()` 从 `[data-message-id]` 中过滤掉自身或子节点带 `justify-end` 的用户消息（AI 消息无右对齐），取末条 → `.md-box-root`。`attach` 走 `input[type="file"][accept*="png"]`。
 - 渲染会**在中英文与数字之间插空格**——marker 匹配先去空白再比。
@@ -198,19 +187,26 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 - 换模型会 SPA 路由跳 `/agent?chat_enter_method=change_model`（含会话内切换，会离开会话视图）；该面发送**偶发**对真人也失效（真机连可信打字/点击/Enter 都发不出，判断为站点高峰限流禁用对话）。发送失败诚实报 `submit_unconfirmed` 可 retry，**不要因此改掉 K3 映射**。
 - **`inject` 必须用 `el.focus()` + 显式 Range 全选 + `execCommand("insertText")`，失败抛异常禁回退**：合成 `beforeinput` 会让 Lexical 的 DOM 与 model 分叉并冻死编辑器（发送键失灵，可信键盘也不再接受）。新开页 focus 后选区未必落进编辑器，要显式设 Range。
 - **effort 子菜单的 hover 会丢**：菜单开启动画期间合成 hover 丢失，effort 行节点还会被重挂 → **每轮重新取行、重发 hover（循环 4 次）**，不是单次 hover 后干等；点击被吞时末尾复读 `_effort()` 校验，不许静默成功。
+- **K3 档位真机复核（2026-08-31，新开标签验完即关）**：模型项为 `Instant`(checked) / `K3` / `K3 Swarm`；切到 K3 后 `.effort-option` 三项 `Standard` / `High` / `Max`（Max 带「Consumes more credits」）——**现有词表无需改**。K3 下还多出第二个 `.effort-item` 行「Context Length」，合成 hover 打不开它的子菜单、未观察到 `.effort-option` 撞名；即便撞上，末尾复读 `_effort()` 也会拦住错选。
+- **`escMenus()` 只收得掉 effort 子菜单，收不掉模型根菜单**（2026-08-31 真机：Escape 后 `.model-item` 仍可见、入口仍带 `.active`），**再点一次入口才整体关掉**。收尾统一走 `_close()`：`escMenus()` → 入口仍带 `.active` → 再 `click()` 一次入口。`_select` / `_setEffort` / `attach` 的每条出口（含 throw 前）都已改走它。
 - 唯一实现 `submitted(text)` 的站（比对末条 `.chat-content-item-user` 的 `.user-content`，去零宽 + 折叠空白后与原文等值）——Kimi 发送后会重挂页面/隔离世界，bg 只对它敢自动重试一次。`answer()` 取末个 `.chat-content-item-assistant` 内、排除 `.thinking-container` 后的最后一个 `.markdown`。`attach` 用 `input.hidden-input[type="file"]`，没有就先点 `.toolkit-trigger-btn`，再按 deadline 剩余预算夹取等待（`Math.min(1500, deadline-now)`），**无论取到与否都 `escMenus()` 收尾**。**动 Kimi 图片路径前先真机跑一次 `attach`**——最近一次验证时间未记录，别默认它还能用。
 
 ### 元宝（`yuanbao.tencent.com`，`content/adapters-cn2.js`）
 
 - 档位（2026-08-26 新版）：composer 的 `button[aria-label="Switch model"]` 菜单包含 Instant / Thinking / Expert，映射 **think = Thinking、fast = Instant**；Expert 属工具执行档，`state()` 有意返回 null。`_selectMode` 先读后点，经 `[role="menuitemradio"]` 选择并复读按钮确认，关键控件缺失或切换未生效均抛异常。中文的「切换模型 / 思考 / 深度思考 / 即时 / 快速」只作双语兼容候选，英文标签已真机确认。
+- **新增 Models 子菜单（真机 2026-08-31）**：菜单里多了一个 `[role=menuitem]` 「Models」（文本尾缀是当前模型，如 `ModelsHy3`），展开后 `Hy4 preview` / `Hy3`(checked) / `DeepSeek` 三项**与模式项同为 `[role=menuitemradio]`、同时在 DOM**。`_selectMode` 因此加了 `_isMode()` **两层语义校验**：① 模型列表那层菜单带 `aria-label="Model list"`、模式那层没有 aria-label —— 先按容器整个排除模型列表；② 再要求文本命中 `_MODES` 模式标签集。只做文本校验挡不住「模型取名叫深度思考版」，只做容器校验挡不住站点把模型塞进同一层，**两层缺一不可**。适配器**不选模型**，停在哪个用哪个。
 - 旧版 `[class*="ThinkSelector"]` 深度思考 toggle 仍作为 A/B 回退（只有新版模式按钮整个不存在时才走），开态判据为 className 含 `ThinkSelector_selected`；点击后**同样复读 `_isOn()`**，未生效抛「元宝: 深度思考未生效」——新版分支本就有复读，旧版此前是全站唯一遗漏的静默成功路径。新版发送键是非 button 的 `[aria-label="Send"]`（中文回退 `[aria-label="发送"]`），disabled 时返回 false；旧 `.icon-send` 已下线。
 - `inject` 无（真机实证 `beforeinput` 不生效、`execCommand` 生效，由 core 既有回退链覆盖）。`answer()` 取末个 `.agent-chat__conv--ai__speech_show` 内、排除 `[class*="cot__think"]` 后的最后一个 `.hyc-common-markdown`（**不排除就把思考全文混进汇总复制**）。`attach` 是九站唯一走 `S.dropFiles(el, files, el, deadline)` 拖放路径的站。
 
 ### 智谱（`chatglm.cn`，UI 标签「智谱」，站点全名智谱清言，`content/adapters-cn2.js`）
 
-- 档位：think = `_pick("深度", true)`（经思考子菜单）、fast = `_pick("快速", false)`。思考已从 toggle 改为「触发器 `.think-mode-trigger` + el-tooltip 弹层」：顶层是 快速 / 思考（`.has-submenu`），思考子菜单含 标准 / 深度。**无模型选择。**
-- `state()` **只读不开菜单**（弹层关闭时菜单项仍在 DOM）：`.think-mode-item:not(.has-submenu)` 中名为「深度」的项带 selected → think、「快速」带 selected → fast，**其余（含「标准」被选中）→ null**。
-- 选档序列（chrome-dbg 实测）：hover + click `.think-mode-trigger` 开弹层 → `sleep 350` →（仅深度档）hover `.think-mode-item.has-submenu`（其名随当前档变，故按 class 找）→ `sleep 300` → 原生 click 目标 `.think-mode-item:not(.has-submenu)` 的 `.item-name` 等值项 → `sleep 500` + `escMenus` → **复读只读判据 `_selected(name)`**，未命中抛「智谱: 档位未生效」。触发器缺失直接抛；目标项未找到时先 `escMenus()` 再抛。`_hover()` 需连发 pointerenter/mouseenter/pointerover/mouseover 四种事件才触发弹层与子菜单。
+- 档位：think = `_pick("极致", true)`、fast = `_pick("快速", false)`。**「极致」是 2026-08-31 新增的最强档**（描述「全力推理，耗时更长」），think 从「深度」升到它；`_TIERS = ["极致","深度"]` 由强到弱，站点撤掉极致时 `think()` 自动降级点「深度」（不是抛错——深度仍是可用的思考档）。
+- **弹层现在分两段**（真机 2026-08-31）：**模型段**（`GLM-5.3` / `GLM-Flash`，后者描述「5.3-Flash，回复速度快」，当前选中）+ **档位段**（`快速` / `深度` / `极致`），两段**同为 `.think-mode-item`**。`.has-submenu` 那一项是档位段的父项，其名随当前档变。
+- **适配器不选模型**：当前停在哪个模型就用哪个。`_itemByName` 排除 `.has-submenu` 后按 `.item-name` **精确等值**取项，现有六个名字互不重叠——站点若把某个模型改叫「快速」之类，这里会当场错位，要立刻改。
+- `state()` **只读不开菜单**（弹层关闭时菜单项仍在 DOM，只是 rect 归零）：`_TIERS` 里任一项带 `selected` → think（**极致 / 深度都算**）、「快速」带 selected → fast，**其余（含「标准」若回归）→ null**。
+- 选档序列（chrome-dbg 实测）：hover + click `.think-mode-trigger` 开弹层 → `sleep 350` →（档位档）hover `.think-mode-item.has-submenu` → `sleep 300` → 原生 click 目标项 → `sleep 500` + `_close()` → **复读只读判据 `_selected(name)`**，未命中抛「智谱: 档位未生效」。触发器缺失直接抛；目标项未找到时先 `_close()` 再抛。`_hover()` 需连发 pointerenter/mouseenter/pointerover/mouseover 四种事件。
+- **脆弱点（必读）**：合成 hover 在真机上**并不真的展开子菜单**（档位项 rect 恒 0），只是靠 `.click()` 仍能触发 Vue handler 才碰巧能用。收尾的 `_selected()` 复读是唯一防线，**别把它删了**；哪天站点改成「不可见就不响应点击」，这里会立刻整档失效。
+- **`escMenus()` 对本站无效**（2026-08-31 真机：Escape 关不掉 el-tooltip 弹层），**再点一次触发器才收**。收尾走 `_close()`：`escMenus()` → 仍开（按 `.think-mode-item` 的 rect 判）→ hover + click 触发器。弹层不关会罩住输入框让注入点空。
 - 无 `submit`，靠通用链（先试标签按钮，实际靠 Enter，textarea 可发）。`answer()` 取末个 `.answer-content` 内、排除 `.text-advance-thinking-content` 后的最后一个 `.markdown-body`。**有意不实现 `attach`**（站点 input 忽略扩展派发的 input/change，且无可复用预览节点）。
 - **加载极重**：水合期（~30s）连扩展消息都无响应，安定后正常。真机验证要新开标签 + 长等待。
 

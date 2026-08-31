@@ -31,7 +31,15 @@ const context = {
 vm.runInNewContext(source, context);
 
 const state = S.adapters["claude.ai"].state.bind(S.adapters["claude.ai"]);
+// 真机 2026-08-31：aria-label 用 U+00B7 中点分隔（`Model: Fable 5 · Max`），旧的空格形态在
+// 滚动发布期仍会出现，两种都要判对；Extra / Max 是本次新增的两档。
 for (const [value, expected] of [
+  ["Model: Fable 5 \u00b7 Max", "think"],
+  ["Model: Fable 5 \u00b7 Extra", "think"],
+  ["Model: Fable 5 \u00b7 High", "think"],
+  ["Model: Fable 5 \u00b7 Low", "fast"],
+  ["Model: Fable 5 \u00b7 Medium", null],
+  ["Model: Sonnet 5 \u00b7 Max", "fast"],   // 快模型恒 fast：effort 后缀不能把它抬成 think
   ["Model: Fable 5 High", "think"],
   ["Model: Fable 5 Extra", "think"],
   ["Model: Fable 5 Max", "think"],

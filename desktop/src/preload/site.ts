@@ -50,6 +50,7 @@ require("../../../content/core.js");
 require("../../../content/upload.js");
 require("../../../content/md.js");
 require("../../../content/adapters-intl.js");
+require("../../../content/adapters-intl2.js");
 require("../../../content/adapters-cn.js");
 require("../../../content/adapters-cn2.js");
 require("../../../content/generation.js");

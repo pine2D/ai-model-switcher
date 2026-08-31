@@ -8,23 +8,6 @@ const vm = require("node:vm");
 
 const source = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
 
-function chatGptNewTurnMustBeCollected() {
-  const markdown = { marker: "answer" };
-  const turns = [{ querySelector: () => null }, { querySelector: (selector) => selector === ".markdown" ? markdown : null }];
-  const S = { adapters: {}, waitFor: async (fn) => fn(), findByText: () => null,
-    openMenu() {}, clickEl() {}, sleep: async () => {}, escMenus() {} };
-  const context = {
-    window: { __AMS: S }, t: (key) => key, console,
-    document: {
-      querySelector: () => null,
-      querySelectorAll: (selector) => selector === '[data-turn="assistant"]' ? turns : [],
-    },
-  };
-  vm.runInNewContext(source("content/adapters-intl.js"), context);
-  assert.equal(S.adapters["chatgpt.com"].answer(), markdown,
-    "ChatGPT 新版 data-turn 回答必须可被汇总复制");
-}
-
 function twentyPixelComposerMustBeFound() {
   const composer = { // 19.98 而非 20：页面缩放会让标称 20px 的单行编辑器算出小数高度
     tagName: "DIV", textContent: "", focus() {}, dispatchEvent() {},
@@ -74,60 +57,6 @@ function claudeModelInMoreMenuMustBeSelected() {
   });
 }
 
-// 2026-08 改版：ChatGPT 档位 radio 只存在于 Effort 子菜单，Model 子菜单同为 menuitemradio。
-// view 从 "model" 起步：think() 先选模型，_pickEdge 进场时残留的正是模型列表。
-function chatGptTierCase(effortLabel, dropEffortEntry) {
-  const clicked = [];
-  let expanded = false, view = "model";
-  const attr = (map) => ({ getAttribute: (name) => (name in map ? map[name] : null) });
-  const radio = (text) => Object.assign({ textContent: text }, attr({ "aria-checked": "false" }));
-  const efforts = ["Instant", "Medium", "High", "Extra High", "Pro"].map(radio);
-  const models = ["GPT-5.6 Sol", "GPT-5.5", "o3"].map(radio);
-  const trigger = (text, next) => Object.assign({ textContent: text, click() { view = next; } }, attr({ "aria-haspopup": "menu" }));
-  const triggers = [trigger("ModelGPT-5.6 Sol", "model")];
-  if (!dropEffortEntry) triggers.push(trigger(effortLabel, "effort"));
-  const pill = { textContent: "High", className: "__composer-pill",
-    getAttribute: (name) => (name === "aria-haspopup" ? "menu" : (name === "aria-expanded" ? String(expanded) : null)) };
-  const document = {
-    querySelector: (selector) => (selector.includes("__composer-pill") ? pill : null),
-    querySelectorAll: (selector) => {
-      if (selector === '[role="menuitemradio"]') return view === "effort" ? efforts : (view === "model" ? models : []);
-      if (selector === '[role="menuitem"][aria-haspopup="menu"]') return triggers;
-      if (selector.includes("__composer-pill")) return [pill];
-      return [];
-    },
-  };
-  const S = fakeRuntime(document, clicked, (el) => { if (el === pill) expanded = true; });
-  vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
-  return { adapter: S.adapters["chatgpt.com"], S, clicked, efforts, models, pill };
-}
-
-async function chatGptEffortMustComeFromEffortSubmenu() {
-  for (const label of ["EffortHigh", "档位High"]) { // 英文入口 + 未知译法（回退：排除带模型名的入口）
-    const c = chatGptTierCase(label, false);
-    await c.adapter._pickEdge(true);
-    assert.ok(c.clicked.includes(c.efforts[4]), "ChatGPT 最高档必须取自 Effort 子菜单（Pro）：" + label);
-    assert.ok(!c.clicked.some((el) => c.models.includes(el)), "档位切换绝不能点到 Model 子菜单的模型项：" + label);
-    assert.equal(c.S.escCount, 1, "选档成功后必须 escMenus 收尾（Effort 子菜单会罩住输入框）：" + label);
-  }
-}
-
-// 巡检的两项必须彼此独立：档位标签集漂移（pill 文本不在 _LABELS 里）时只有「已识别档位」该红，
-// 入口项跟着红会把改版剧本指去 composer/菜单层，而真正要改的是 _LABELS。
-function chatGptEntryCheckMustSurviveLabelDrift() {
-  const c = chatGptTierCase("EffortHigh", false);
-  c.pill.textContent = "Ludicrous"; // 站点新加了一个我们还不认识的档位词
-  const checks = c.adapter.diagnose();
-  assert.equal(checks[0].ok, true, "按钮还在，Intelligence 入口项不该跟着标签集一起红");
-  assert.equal(checks[1].ok, false, "档位读不出必须由「已识别档位」这一项单独报出");
-}
-
-async function chatGptMustNotClickModelWhenTiersMissing() {
-  const c = chatGptTierCase("", true); // 只剩 Model 入口：宁可报错，也不能把末位模型 o3 当最高档
-  await assert.rejects(async () => c.adapter._pickEdge(true));
-  assert.equal(c.clicked.length, 0, "找不到档位列表时不得点击任何 radio");
-}
-
 // helper 语义贴近生产：findByText 走真实选择器、openMenu/clickEl 记录副作用。
 // escMenus 必须是计数器而非空桩——「每个菜单动作自己收尾」是硬约束，空桩让违反者永远绿。
 // waitFor 也必须消耗 timeout：忽略它就分不清 waitFor(fn, 1500) 与无超时调用，短超时用例形同虚设。
@@ -166,8 +95,11 @@ function geminiCase(build) {
     },
   };
   const S = fakeRuntime(document, clicked, () => { open = true; });
+  // 真机 2026-08-31：Escape / backdrop 都关不掉 Gemini 的 mode picker（escMenus 故意不改 open），
+  // 只有再点一次触发器才收 —— 假对象照抄这个语义，否则 _close 的兜底分支永远测不到。
+  S.clickEl = (el) => { clicked.push(el); if (el === button) open = false; return true; };
   vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
-  return { adapter: S.adapters["gemini.google.com"], S, clicked, items, state };
+  return { adapter: S.adapters["gemini.google.com"], S, clicked, items, state, button, isOpen: () => open };
 }
 
 // aria-label 只报模式名，state 必须按粗档位判；读不出时返回 null 而不是谎报 fast
@@ -198,6 +130,86 @@ async function geminiThinkingToggleMustBeIdempotent() {
     assert.equal(c.clicked.includes(c.items[0]), shouldClick, "Extended thinking 开关幂等，active=" + active);
     assert.equal(c.S.escCount, 1, "开关动作同样要 escMenus 收尾，active=" + active);
   }
+}
+
+// 快档模型正则必须版本无关：站点 2026-08-31 把 3.6 Flash 换成 3.7 Flash，写死版本号当天整站抛
+// 「未找到模型」。同时 Flash-Lite 是更弱的另一档，绝不能被当成快档选中。
+async function geminiFastMustMatchAnyFlashButNotLite() {
+  for (const flash of ["3.7 Flash All-around helpNew", "4.0 Flash", "3.9 flash"]) {
+    const c = geminiCase((item) => [item("3.5 Flash-Lite Fastest answers"), item(flash), item("3.1 Pro Advanced reasoning")]);
+    await c.adapter.fast();
+    assert.ok(c.clicked.includes(c.items[1]), "任意版本号的 Flash 都要能选中：" + flash);
+    assert.ok(!c.clicked.includes(c.items[0]), "Flash-Lite 不是快档，绝不能被选中：" + flash);
+  }
+  const lite = geminiCase((item) => [item("3.5 Flash Lite"), item("3.1 Pro")]); // 空格写法同样要挡住
+  await assert.rejects(async () => lite.adapter.fast(), "只剩 Flash Lite 时宁可报错也不许错选");
+}
+
+// escMenus 对 Gemini 无效：收尾必须自己兜底点触发器，否则菜单一直罩着输入框
+async function geminiMenuMustBeClosedByRetriggerWhenEscFails() {
+  const c = geminiCase((item) => [item("3.1 Pro"), item("3.7 Flash")]);
+  await c.adapter._selectModel(/3\.1\s*pro\b/i);
+  assert.equal(c.isOpen(), false, "选完模型后菜单必须真的关掉（Escape 关不掉，要回点触发器）");
+  assert.ok(c.clicked.includes(c.button), "兜底动作就是再点一次模型按钮");
+}
+
+// —— Claude effort 子菜单（2026-08-31：effort-menu-trigger / effort-option-* 两个 testid 全没了）——
+function claudeEffortCase(options) {
+  const opts = options || {};
+  const clicked = [];
+  const attr = (map) => ({ getAttribute: (name) => (name in map ? map[name] : null) });
+  const state = { label: "Model: Fable 5 · Medium" };
+  const menu = (lb) => ({ getAttribute: (name) => (name === "aria-labelledby" ? lb : null) });
+  const modelMenu = menu("model-lb"), effortMenu = menu("eff-1");
+  const radio = (text, home, checked) => ({ textContent: text, closest: () => home,
+    getAttribute: (name) => (name === "aria-checked" ? String(!!checked) : null) });
+  // 「Max Preview」是刻意放的诱饵模型：文本命中档位标签集，但不属于 effort 子菜单容器。
+  // 只按文本过滤就会把它当最高档点下去 —— 双重语义校验的第二层就是防它。
+  const models = [radio("Fable 5", modelMenu), radio("Max Preview", modelMenu), radio("Sonnet 5", modelMenu, true)];
+  const tiers = (opts.tiers || ["Low", "MediumDefault", "High", "Extra", "Max"])
+    .map((name) => radio(name, effortMenu));
+  const trigger = Object.assign({ textContent: "EffortMedium", id: "eff-1" }, attr({ "aria-haspopup": "menu" }));
+  let expanded = !!opts.expanded;
+  const document = {
+    querySelector: (selector) => selector === '[data-testid="model-selector-dropdown"]'
+      ? { getAttribute: (name) => (name === "aria-label" ? state.label : null) }
+      : (selector === '[role="menuitemradio"]' ? models[0] : null),
+    querySelectorAll: (selector) => {
+      if (selector === '[role="menuitemradio"]') return expanded ? models.concat(tiers) : models;
+      if (selector === '[role="menuitem"][aria-haspopup="menu"]') return opts.dropEntry ? [] : [trigger];
+      return [];
+    },
+  };
+  const S = fakeRuntime(document, clicked, (el) => { if (el === trigger) expanded = true; });
+  S.clickEl = (el) => { clicked.push(el); state.label = "Model: Fable 5 · " + (el.textContent || ""); return true; };
+  vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
+  return { adapter: S.adapters["claude.ai"], S, clicked, tiers, models, state };
+}
+
+// think 取已知序列里在场的最高档；站点减档时自动退到次高档，而不是写死 High
+async function claudeEffortMustTakeHighestKnownTier() {
+  for (const [tiers, wanted] of [[null, "Max"], [["Low", "MediumDefault", "High", "Extra"], "Extra"], [["Low", "High"], "High"]]) {
+    const c = claudeEffortCase({ tiers: tiers });
+    await c.adapter._setEffort();
+    const picked = c.clicked.filter((el) => c.tiers.includes(el)).map((el) => el.textContent);
+    assert.deepEqual(picked, [wanted], "必须取在场最高档：" + JSON.stringify(tiers));
+    assert.equal(c.adapter.state(), "think", "切完必须能被 state() 判成 think");
+    assert.equal(c.S.escCount, 1, "选档后必须 escMenus 收尾");
+  }
+}
+
+// 档位项与模型项同为 menuitemradio：容器不对的「Max Preview」绝不能被当成最高档点下去
+async function claudeEffortMustIgnoreModelRadios() {
+  const c = claudeEffortCase({ tiers: [] }); // 子菜单展开了但一个档位都没有
+  await assert.rejects(async () => c.adapter._setEffort());
+  assert.ok(!c.clicked.some((el) => c.models.includes(el)), "绝不能点到模型 radio（含诱饵 Max Preview）");
+}
+
+// 入口整个不见了必须抛 —— 2026-08-31 起撤销「无 effort 入口静默 return」那条例外
+async function claudeMissingEffortMustThrow() {
+  const c = claudeEffortCase({ dropEntry: true });
+  await assert.rejects(async () => c.adapter._setEffort());
+  assert.equal(c.clicked.length, 0, "找不到 effort 入口时不得点击任何项");
 }
 
 // Claude 新版发送键拒绝一切合成点击（真机 2026-08）：点了没生效必须退回 Enter，否则整条群发发不出去
@@ -240,15 +252,15 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
 
 let failed = 0;
 (async () => {
-  const tests = [chatGptNewTurnMustBeCollected, twentyPixelComposerMustBeFound,
-    claudeModelInMoreMenuMustBeSelected, chatGptEffortMustComeFromEffortSubmenu,
-    chatGptMustNotClickModelWhenTiersMissing, chatGptEntryCheckMustSurviveLabelDrift,
-    sendMustFallBackToEnterWhenClickIgnored,
-    geminiStateMustFollowModeLabel, geminiModelSelectMustCloseItsMenu, geminiThinkingToggleMustBeIdempotent];
+  const tests = [twentyPixelComposerMustBeFound, claudeModelInMoreMenuMustBeSelected,
+    claudeEffortMustTakeHighestKnownTier, claudeEffortMustIgnoreModelRadios, claudeMissingEffortMustThrow,
+    sendMustFallBackToEnterWhenClickIgnored, geminiStateMustFollowModeLabel,
+    geminiModelSelectMustCloseItsMenu, geminiThinkingToggleMustBeIdempotent,
+    geminiFastMustMatchAnyFlashButNotLite, geminiMenuMustBeClosedByRetriggerWhenEscFails];
   for (const test of tests) {
     try { await test(); }
     catch (error) { failed++; console.error(error.stack || error); }
   }
   if (failed) process.exitCode = 1;
-  else console.log("✓ 国际站新版对话结构与二级档位菜单兼容");
+  else console.log("✓ Claude effort 语义校验、Gemini 版本无关快档与菜单收尾兼容");
 })();

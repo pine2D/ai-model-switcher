@@ -146,6 +146,7 @@ function manifestAndDesktopPreloadShareContentScriptsExceptKnownExemptions() {
 i18nMustExposeDesktopNamespace();
 coreMustResolveTranslationAcrossModuleBoundary();
 adapterMustResolveTranslation("content/adapters-intl.js", "claude.ai", "diag_modelEntry");
+adapterMustResolveTranslation("content/adapters-intl2.js", "chatgpt.com", "diag_intelEntry");
 adapterMustResolveTranslation("content/adapters-cn.js", "deepseek.com", "diag_deepThink");
 adapterMustResolveTranslation("content/adapters-cn2.js", "kimi.com", "diag_modelEntry");
 diagMustResolveTranslationAcrossModuleBoundary();

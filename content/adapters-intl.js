@@ -1,4 +1,5 @@
-// content/adapters-intl.js — 国际站点适配器（Claude/ChatGPT/Gemini）
+// content/adapters-intl.js — 国际站点适配器（Claude/Gemini；ChatGPT 在 adapters-intl2.js）
+// 触及 300 行上限后按站分卷，契约与注意事项同 CLAUDE.md / docs/adapters.md。
 // think = 最强思考(最强模型/最高思考档/思考开)；fast = 均衡快速(快模型/思考关)。
 // 切换前对有状态控件先读状态、仅在需要时点击(幂等)；单站失败由 runMode 兜底为 toast。
 (function () {
@@ -29,44 +30,45 @@
         if (!item) { escMenus(); throw new Error("Claude: 未找到模型 " + re); }
         clickEl(item); await sleep(700); escMenus(); // 收尾：子菜单不关会罩住输入框，也会让后续动作点空
       },
-      // effort 子菜单内的 Thinking 开关（与 effort-option-* 同层）
-      _thinkSwitch: function () {
-        return [...document.querySelectorAll('[role="switch"]')]
-          .find((s) => /thinking|思考/i.test((s.getAttribute("aria-label") || "") +
-            (s.closest('[role="menuitem"]') ? s.closest('[role="menuitem"]').textContent : ""))) || null;
+      // effort 档位标签，由低到高（真机 2026-08-31：Low / MediumDefault / High / Extra / Max）。
+      // think 取本表里在场的最高档，站点加减档自适应：撤掉 Max 就自动退到 Extra，再撤退到 High。
+      _EFFORT: [/^(low|低)/i, /^(medium|中)/i, /^(high|高)/i, /^(extra|超)/i, /^(max|极致|最大|最高)/i],
+      _THINK: /adaptive|high|extra|max|高|最大/i, // state() 与 _setEffort() 的复读共用，避免两处漂开
+      // 2026-08 改版：effort-menu-trigger / effort-option-* 两个 testid 已消失（Base UI 菜单只剩
+      // 自动生成 id），入口退化成「文本 Effort+当前档」的 role=menuitem 子菜单项。
+      _effortTrigger: function () {
+        return findByText('[role="menuitem"][aria-haspopup="menu"]', /^(effort|强度|思考强度|努力)/i);
       },
-      // Thinking/effort 控制位于模型下拉内；effort 级别由参数传入（max/medium/low…），
-      // 用稳定 testid effort-option-<level>；开关切换会重渲染故 waitFor 重取。
-      _setThinking: async function (on, effort) {
+      // 档位项与模型项同为 menuitemradio 且同时在 DOM（真机 2026-08-31：顶层 4 个模型 + 子菜单 5 个档位）。
+      // 双重语义校验：① 所属 [role=menu] 的 aria-labelledby 必须指回 effort 入口的 id；② 文本须属档位标签集。
+      // 少一层都会把「最高档」点成末位模型（同 ChatGPT 2026-08 那次事故）。
+      _effortItems: function (trig) {
+        const id = trig.id || "";
+        return [...document.querySelectorAll('[role="menuitemradio"]')]
+          .map((el) => ({ el, rank: this._EFFORT.findIndex((re) => re.test((el.textContent || "").trim())) }))
+          .filter((x) => {
+            if (x.rank < 0) return false;
+            const menu = x.el.closest('[role="menu"]');
+            return !id || !!(menu && menu.getAttribute("aria-labelledby") === id);
+          });
+      },
+      // effort 子菜单在模型下拉内；控件缺失一律 throw（2026-08-31 起不再有「静默 return」例外——
+      // 控件仍在，只是选择子变了，静默会让 runMode 误报「已切到」并弹假成功 toast）。
+      _setEffort: async function () {
         await this._open();
-        const optSel = '[data-testid="effort-option-' + effort + '"]';
-        const trig = document.querySelector('[data-testid="effort-menu-trigger"]');
-        if (trig) {
-          if (!this._thinkSwitch() && !document.querySelector(optSel)) openMenu(trig);
-          // 1) 旧布局有 Thinking 开关；Fable 5 新布局只有 effort 单选项。
-          const ready = await waitFor(() => this._thinkSwitch() || document.querySelector(optSel), 1500);
-          if (!ready) { escMenus(); throw new Error("Claude: Thinking/effort 控件未找到"); }
-          const sw = this._thinkSwitch();
-          if (sw && (sw.getAttribute("aria-checked") === "true") !== on) { clickEl(sw); await sleep(450); }
-          // 2) effort 档位切到目标级别
-          if (!document.querySelector(optSel)) {
-            const t2 = document.querySelector('[data-testid="effort-menu-trigger"]');
-            if (t2) openMenu(t2);
-          }
-          const opt = await waitFor(() => document.querySelector(optSel), 1500);
-          if (!opt) { escMenus(); throw new Error("Claude: 目标 effort 未找到"); }
-          if (opt.getAttribute("aria-checked") !== "true") clickEl(opt);
-          await sleep(300);
-          if (effort === "high" && !/high|高/i.test(this._label())) {
-            escMenus(); throw new Error("Claude: High effort 未生效");
-          }
-          escMenus(); return;
+        const trig = this._effortTrigger();
+        if (!trig) { escMenus(); throw new Error("Claude: Effort 入口未找到"); }
+        let items = this._effortItems(trig);
+        if (!items.length) { // 子菜单未展开：openMenu 一次再重取（展开会重渲染，不能复用旧节点）
+          openMenu(trig);
+          items = await waitFor(() => { const l = this._effortItems(trig); return l.length ? l : null; }, 1500) || [];
         }
-        // 回退：无 effort 入口的旧布局（窄屏 Adaptive 开关），仅切裸开关；开关也缺失时保持
-        // 静默——fast() 只选模型、从不进入本函数，此静默仅影响 think()（例外清单第 2 条）
-        const sw = this._thinkSwitch();
-        if (sw) { if ((sw.getAttribute("aria-checked") === "true") !== on) clickEl(sw); await sleep(300); }
+        if (!items.length) { escMenus(); throw new Error("Claude: Effort 档位未找到"); }
+        const top = items.reduce((a, b) => (b.rank > a.rank ? b : a));
+        if (top.el.getAttribute("aria-checked") !== "true") { clickEl(top.el); await sleep(450); }
+        const ok = await waitFor(() => this._THINK.test(this._label()), 1200); // 点击被吞时不许静默成功
         escMenus();
+        if (!ok) throw new Error("Claude: 目标 effort 未生效");
       },
       _label: function () {
         const e = document.querySelector('[data-testid="model-selector-dropdown"]');
@@ -78,14 +80,15 @@
           { name: t("diag_modelReadable"), ok: /opus|sonnet|haiku|fable/i.test(this._label()) },
         ];
       },
-      // think = Fable 5 High；fast = Sonnet 5（快模型，使用该模型默认设置）。
+      // think = Fable 5 + 在场最高 effort（当前 Max）；fast = Sonnet 5（快模型，使用该模型默认设置）。
       // 判档：模型名带 sonnet/haiku 恒 fast；Fable/Opus 再按 thinking/effort 后缀（Adaptive/High/Extra/Max=think，Low/无后缀=fast，其余 effort 不判）
+      // aria-label 形如 `Model: Fable 5 · Max`（分隔符 U+00B7，真机 2026-08-31）。
       state: function () {
         const t = this._label();
         if (!t) return null;
         if (/sonnet|haiku/i.test(t)) return "fast";
         if (!/fable|opus/i.test(t)) return null;
-        if (/adaptive|high|extra|max|高|最大/i.test(t)) return "think";
+        if (this._THINK.test(t)) return "think";
         if (/\blow\b|低/i.test(t)) return "fast";
         if (/(?:fable|opus)\s*[\d.]+$/i.test(t.trim())) return "fast"; // 窄屏思考关：无后缀
         return null;
@@ -100,7 +103,7 @@
         return el.querySelector(".row-start-2") || el;
       },
       think: async function () {
-        await this._selectModel(/fable\s*5/i); await this._setThinking(true, "high");
+        await this._selectModel(/fable\s*5/i); await this._setEffort();
       },
       // fast 只选 Sonnet 5，使用该模型记忆的默认 effort，避免把思考档的 High 强加给快档。
       fast: async function () {
@@ -108,111 +111,6 @@
       },
       attach: function (files, el, deadline) {
         return S.setInputFiles(document.querySelector('input[data-testid="file-upload"]'), files, el, deadline);
-      },
-    },
-
-    "chatgpt.com": {
-      // GPT-5.6：Instant 仍为 GPT-5.5；Medium～Extra High 为 Sol；Pro 为 Sol Pro。
-      // 兼容滚动发布期间仍显示的 Pro Standard/Extended（标准/扩展）。
-      // 真机验证 2026-07-11（chrome-dbg，英文界面）：pill 为纯档名（Pro/Instant，无版本前缀）；
-      // 菜单 radio 的 "Instant5.5" 尾缀是行内徽标拼接（不影响按位置取档/只看 pill 的锚点）；
-      // 模型子菜单触发器唯一、文本 "GPT-5.6 Sol" 无零宽字符。中文界面档位词仍为候选、待真机验证。
-      _LABELS: /^(instant|medium|high|extra\s*high|o3|极速|即时|均衡|中(?:等)?|高(?:级)?|[极超]高|pro(?:\s*(?:standard|extended|标准|扩展|深度模式))?)$/i,
-      // 旧模型会把版本前缀并进 pill（实测如 5.5Pro / 5.5Instant），先剥掉再判档。
-      _tier: function (text) {
-        return (text || "").trim().replace(/^(?:gpt-?)?5\.[3456](?:\s*sol)?/i, "").trim();
-      },
-      // 锚点：composer pill（实测精确 1 个）优先，再回退任意 haspopup=menu；文本须属档位标签集（^锚定，避免误中侧栏标题）
-      _anchor: function () {
-        return [...document.querySelectorAll(
-            'button.__composer-pill[aria-haspopup="menu"], button[aria-haspopup="menu"]')]
-          .find((x) => this._LABELS.test(this._tier(x.textContent)));
-      },
-      // 子菜单渲染在独立 popper 里，只看第一个 wrapper 会漏，故全局取
-      _radios: function () { return [...document.querySelectorAll('[role="menuitemradio"]')]; },
-      // 打开 pill 菜单第一层（2026-08 改版：Power 滑块 + Advanced 视图里的 Model/Effort 子菜单入口）
-      _openRoot: async function () {
-        const anchor = this._anchor();
-        if (!anchor) throw new Error("ChatGPT: Intelligence 按钮未找到");
-        const open = () => anchor.getAttribute("aria-expanded") === "true" &&
-          !!(document.querySelector('[role="menuitem"][aria-haspopup="menu"]') || this._radios().length);
-        for (let i = 0; i < 2; i++) { if (open()) return; openMenu(anchor); if (await waitFor(open, 1500)) return; }
-        escMenus(); throw new Error("ChatGPT: 档位菜单未展开");
-      },
-      // 档位项只认标签集，整份列表带模型名即判为 Model 子菜单：两处子菜单同为 menuitemradio，混用
-      // 会把「最高档」点成末位模型（真机 2026-08：think 先选模型，残留的正是模型列表 → 点成 o3）。
-      _tiers: function () {
-        const rs = this._radios();
-        if (!rs.length || rs.some((x) => /gpt-|claude/i.test(x.textContent || ""))) return null;
-        const tiers = rs.filter((x) => this._LABELS.test(this._tier(x.textContent)));
-        return tiers.length ? tiers : null;
-      },
-      // 打开档位菜单，返回 radio 列表（DOM 升序：极速…Pro）
-      _openEffort: async function () {
-        await this._openRoot();
-        if (!this._tiers()) { // 新布局档位在 Effort 子菜单里；旧布局第一层就是档位，无此入口
-          const trig = findByText('[role="menuitem"][aria-haspopup="menu"]', /^(effort|强度|推理|思考|力度)/i)
-            || [...document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]')]
-              .filter((x) => !/gpt-|^o3$|claude/i.test((x.textContent || "").trim())).pop();
-          if (trig) trig.click();
-        }
-        const rs = await waitFor(() => this._tiers(), 1500);
-        if (!rs) { escMenus(); throw new Error("ChatGPT: 档位菜单未展开"); }
-        return rs;
-      },
-      // top=true 取最高档（末位），否则最低档（首位）；不写死标签，自适应加减档
-      _pickEdge: async function (top) {
-        const rs = await this._openEffort();
-        const item = top ? rs[rs.length - 1] : rs[0];
-        if (!item) { escMenus(); throw new Error("ChatGPT: 档位为空"); }
-        clickEl(item); await sleep(400); escMenus(); // 收尾：档位子菜单不关会罩住输入框，让随后的注入点空
-      },
-      // 模型子菜单靠原生 click 展开；通用 pointer 序列会连续触发开/关而把两级菜单一起收起。
-      _selectModel: async function (re) {
-        await this._openRoot();
-        const trig = await waitFor(() => [...document.querySelectorAll('[role="menuitem"][aria-haspopup="menu"]')]
-          .find((x) => /GPT-|^o3$/i.test((x.textContent || "").trim())), 1500);
-        if (!trig) { escMenus(); throw new Error("ChatGPT: 模型入口未找到"); }
-        if (re.test((trig.textContent || "").trim())) { escMenus(); return; }
-        trig.click();
-        const item = await waitFor(() => findByText('[role="menuitemradio"]', re), 1500);
-        if (!item) { escMenus(); throw new Error("ChatGPT: GPT-5.6 Sol 未找到"); }
-        item.click(); await sleep(700); escMenus(); await sleep(200); // 子菜单开着时点 Effort 只会把它关掉
-      },
-      diagnose: function () {
-        return [
-          { name: t("diag_intelEntry"), ok: !!document.querySelector('button.__composer-pill[aria-haspopup="menu"]') }, // 只判入口层：_anchor() 还要求文本属档位标签集，混判会把「标签集漂移」误报成「按钮消失」
-          { name: t("diag_tierReadable"), ok: this.state() != null },
-        ];
-      },
-      state: function () {
-        const a = this._anchor();
-        const raw = a ? (a.textContent || "").trim() : "";
-        const t = this._tier(raw);
-        if (/instant|medium|极速|即时|均衡|中/i.test(t)) return "fast"; // Instant/Medium
-        if (/(?:gpt-?)?5\.[345](?!\d)|\bo3\b/i.test(raw)) return null; // 旧模型高档不能冒充 5.6 think
-        if (/high|pro|高/i.test(t)) return "think";             // High/Extra High/Pro（含旧 Standard/Extended）
-        return null;
-      },
-      // 最后一条回答（真机审计 2026-08：每轮 section[data-turn]，正文仍在 .markdown）；
-      // data-message-author-role 是滚动发布中的旧内层，保留兜底。
-      answer: function () {
-        let els = document.querySelectorAll('[data-turn="assistant"]');
-        if (!els.length) els = document.querySelectorAll('[data-message-author-role="assistant"]');
-        if (!els.length) return null;
-        const el = els[els.length - 1];
-        return el.querySelector(".markdown") || el;
-      },
-      think: async function () { await this._selectModel(/^GPT-5\.6\s*Sol$/i); await this._pickEdge(true); },
-      fast: async function () { await this._selectModel(/^GPT-5\.6\s*Sol$/i); await this._pickEdge(false); },
-      attach: function (files, el, deadline) {
-        return S.setInputFiles(document.querySelector("#upload-photos"), files, el, deadline);
-      },
-      stop: function () {
-        const b = document.querySelector('[data-testid="stop-button"]') ||
-          [...document.querySelectorAll('button[aria-label]')]
-            .find((x) => /stop (answering|streaming|generating)/i.test(x.getAttribute("aria-label") || ""));
-        if (b) { clickEl(b); S.toast(t("cs_stopped"), true); }
       },
     },
 
@@ -234,11 +132,21 @@
         if (!ok) { openMenu(btn); ok = await waitFor(() => this._items().length); }
         if (!ok) throw new Error("Gemini: 模型菜单未展开");
       },
+      // 收尾：**escMenus 对 Gemini 无效**（真机 2026-08-31：Escape 与点 cdk backdrop 都关不掉，
+      // aria-expanded 一直是 true），只有再点一次触发器才收 → 先 Escape 再兜底点触发器。
+      // 菜单不关会罩住输入框，让随后的注入点空。
+      _close: async function () {
+        escMenus();
+        if (!this._items().length) return;
+        await sleep(250);
+        if (!this._items().length) return;
+        clickEl(this._modelBtn()); await sleep(300);
+      },
       _selectModel: async function (re) {
         await this._openModelMenu();
         const item = await waitFor(() => this._find(re));
-        if (!item) { escMenus(); throw new Error("Gemini: 未找到模型 " + re); }
-        clickEl(item); await sleep(700); escMenus(); // 收尾：不依赖后续 _setThinking 替它关菜单
+        if (!item) { await this._close(); throw new Error("Gemini: 未找到模型 " + re); }
+        clickEl(item); await sleep(700); await this._close(); // 收尾：不依赖后续 _setThinking 替它关菜单
       },
       // 当前布局把 Extended thinking 作为模型菜单直达开关；旧布局仍走 Thinking level 嵌套子菜单。
       _setThinking: async function (re, on = true) {
@@ -247,17 +155,17 @@
         if (direct) {
           const active = direct.classList.contains("selected") || direct.getAttribute("aria-checked") === "true";
           if (active !== on) clickEl(direct);
-          await sleep(400); escMenus(); return;
+          await sleep(400); await this._close(); return;
         }
-        if (!on) { escMenus(); return; }
+        if (!on) { await this._close(); return; }
         const trig = await waitFor(() => this._find(/thinking level|思考(等级|程度)?/i));
-        if (!trig) { escMenus(); return; } // 无等级子菜单的布局（窄屏/模型无此项）：合法缺席，静默跳过
+        if (!trig) { await this._close(); return; } // 无等级子菜单的布局（窄屏/模型无此项）：合法缺席，静默跳过
         let lvl = null;
         for (let i = 0; i < 6 && !lvl; i++) { if (!this._find(re)) openMenu(trig); lvl = await waitFor(() => this._find(re), 600); }
-        if (!lvl) { escMenus(); throw new Error("Gemini: 思考等级选项未找到"); } // 子菜单在但目标缺 → 报错可见（静默会漏设等级）
+        if (!lvl) { await this._close(); throw new Error("Gemini: 思考等级选项未找到"); } // 子菜单在但目标缺 → 报错可见（静默会漏设等级）
         if (lvl.focus) lvl.focus();
         lvl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-        clickEl(lvl); await sleep(400); escMenus();
+        clickEl(lvl); await sleep(400); await this._close();
       },
       diagnose: function () {
         return [
@@ -278,7 +186,13 @@
       },
       // 等级 UI 词中英双写；英文 "Extended" 真机已确认，中文「扩展」为直译候选
       think: async function () { await this._selectModel(/3\.1\s*pro\b/i); await this._setThinking(/^(extended|扩展)/i); },
-      fast: async function () { await this._selectModel(/3\.6\s*flash\b/i); await this._setThinking(/^(extended|扩展)/i, false); },
+      // 快档模型正则**版本无关**：写死 3.6 在站点升到 3.7 Flash 当天就整站抛「未找到模型」（真机
+      // 2026-08-31 事故）。取「任意版本号 + Flash、且不是 Flash-Lite」——Lite 是更弱的另一档，
+      // 后瞻同时挡住 `Flash-Lite` 与 `Flash Lite` 两种写法。
+      fast: async function () {
+        await this._selectModel(/\b\d+(?:\.\d+)?\s*flash\b(?!\s*-?\s*lite)/i);
+        await this._setThinking(/^(extended|扩展)/i, false);
+      },
       // Gemini 忽略合成 drop，附件菜单又要求可信点击且不保留 file input；留空明确报 unsupported。
     },
 

@@ -199,7 +199,7 @@ function loadAdapters() {
     t: (key) => key,
     console,
   });
-  for (const file of ["content/adapters-intl.js", "content/adapters-cn.js", "content/adapters-cn2.js"])
+  for (const file of ["content/adapters-intl.js", "content/adapters-intl2.js", "content/adapters-cn.js", "content/adapters-cn2.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), context);
   return { S, calls, input, drop };
 }

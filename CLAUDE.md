@@ -54,7 +54,7 @@ bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--b
 ## 架构（先在这里定位入口文件）
 
 - **群发编排**：`background.js`（SW 入口）→ `bg/`（窗口/平铺/群发/伴侣窗/读页/辅助综合）。
-- **站点适配**：`content/core.js` + `content/{md,upload,pill,diag,generation,adapters-intl,adapters-cn,adapters-cn2}.js`（`pill.js` 只进扩展、`generation.js` 只进 Desktop preload，两条豁免见 `docs/adapters.md`）。
+- **站点适配**：`content/core.js` + `content/{md,upload,pill,diag,generation,adapters-intl,adapters-intl2,adapters-cn,adapters-cn2}.js`（`pill.js` 只进扩展、`generation.js` 只进 Desktop preload，两条豁免见 `docs/adapters.md`）。
 - **数据与同步**：`bg/` 的 8 个数据模块；`store` 使用 IndexedDB `polyask`。
 - **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
 - **桌面预览版**：`desktop/src/{main,preload,renderer}/`；复用 content 适配器，独立打包、独立会话。

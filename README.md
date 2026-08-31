@@ -18,17 +18,17 @@ PolyAsk 将同一问题发送到 9 个真实 AI 站点，并让回答保持实�
 
 | 站点 | 🧠 深度思考 | ⚡ 快速 |
 |---|---|---|
-| Claude (claude.ai) | Fable 5（Thinking 开 + Effort High） | Sonnet 5（默认设置） |
-| ChatGPT (chatgpt.com) | GPT-5.6 Sol + 档位列表最高项（Extra High 或 Pro） | GPT-5.6 Sol + 档位列表最低项（Instant） |
-| Gemini (gemini.google.com) | 3.1 Pro + Thinking: Extended | 3.6 Flash |
+| Claude (claude.ai) | Fable 5 + Effort 最高档（当前为 Max） | Sonnet 5（默认设置） |
+| ChatGPT (chatgpt.com) | GPT-5.6 Sol + 思考强度滑块推到最高档（当前为 Pro） | GPT-5.6 Sol + 滑块推到最低档（当前为 Instant） |
+| Gemini (gemini.google.com) | 3.1 Pro + Thinking: Extended | 最新 Flash（当前为 3.7 Flash，不含 Flash-Lite） |
 | DeepSeek (chat.deepseek.com) | Expert + DeepThink 开 | Instant + DeepThink 关 |
 | 豆包 (doubao.com) | 专家 | 快速 |
 | 千问 (qianwen.com) | Qwen3.7-千问 + 思考研究 | Qwen3.8-Max + 快速 |
 | Kimi (kimi.com) | K3 + Thinking Max | K3 + Thinking Standard |
 | 元宝 (yuanbao.tencent.com) | Thinking（模型菜单；旧版界面为 Deep Thinking 开） | Instant（模型菜单；旧版界面为 Deep Thinking 关） |
-| 智谱清言 (chatglm.cn) | 深度思考：深度 | 快速 |
+| 智谱清言 (chatglm.cn) | 思考：极致（无此档时降级为深度） | 快速 |
 
-元宝的 Expert 属工具执行档，不参与深/快映射；停在 Expert 时读不出当前档位。
+元宝的 Expert 属工具执行档，不参与深/快映射；停在 Expert 时读不出当前档位。表中「最高档 / 最低档 / 最新 Flash」等说法是**按站点当前在场的档位现取**，不写死档名——站点加减档时映射自动跟随，括号里的具体档名只是当前实测值。
 
 > AI 站点改版后，模型切换可能暂时失效。Chrome 扩展可在扩展弹窗中运行只读诊断，或在控制台的站点选择窗里巡检所选站点并「复制诊断报告」，通过设置页的反馈入口提交问题；结果库的「站点健康统计」（扩展专有）会按站点汇总历次收集失败，帮助发现某站是否已改版。Desktop 预览版按 `Alt+H` 打开站点状态做实时检查，暂无跨记录的失败聚合。
 

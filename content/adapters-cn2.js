@@ -18,6 +18,16 @@
         return n ? this._zap(n.textContent) : ""; // 与 _effort() 同款去零宽，见 F076
       },
       _zap: function (s) { return (s || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim(); }, // 零宽字符防御
+      // 收尾：**escMenus 只收得掉 effort 子菜单，收不掉模型根菜单**（真机 2026-08-31：Escape 后
+      // .model-item 仍可见、入口仍带 .active），再点一次入口才整体关掉。菜单不关会罩住输入框，
+      // 让随后的注入点空——Kimi 的注入本就是站点特调的 execCommand 路径，点空即整条群发哑火。
+      _close: async function () {
+        escMenus();
+        const e = this._entry();
+        if (!e || !e.classList.contains("active")) return;
+        await sleep(250);
+        if (this._entry() && this._entry().classList.contains("active")) { this._entry().click(); await sleep(300); }
+      },
       _effort: function () {
         const n = this._entry() && this._entry().querySelector(".current-effort");
         return n ? this._zap(n.textContent) : "";
@@ -30,10 +40,10 @@
           const n = el.querySelector(".name");
           return n && this._zap(n.textContent) === name; // 去零宽再比，同上，见 F076
         }), 1500);
-        if (!opt) { escMenus(); throw new Error("Kimi: 目标选项未找到"); }
+        if (!opt) { await this._close(); throw new Error("Kimi: 目标选项未找到"); }
         opt.click();
         await sleep(400);
-        escMenus();
+        await this._close();
       },
       _setEffort: async function (re) {
         if (re.test(this._effort())) return;
@@ -47,16 +57,16 @@
         for (let i = 0; i < 4 && !opt; i++) {
           const row = await waitFor(() => [...document.querySelectorAll(".effort-item")].find((el) =>
             /Thinking|思考|推理/i.test((el.querySelector(".effort-title") || {}).textContent || "")), 1500);
-          if (!row) { escMenus(); throw new Error("Kimi: 思考强度入口未找到"); }
+          if (!row) { await this._close(); throw new Error("Kimi: 思考强度入口未找到"); }
           ["pointerenter", "mouseenter", "pointerover", "mouseover"].forEach((type) =>
             row.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })));
           opt = await waitFor(() => [...document.querySelectorAll(".effort-option")].find((el) =>
             re.test(this._zap((el.querySelector(".effort-name") || {}).textContent))), 900);
         }
-        if (!opt) { escMenus(); throw new Error("Kimi: 目标思考强度未找到"); }
+        if (!opt) { await this._close(); throw new Error("Kimi: 目标思考强度未找到"); }
         opt.click();
         await sleep(400);
-        escMenus();
+        await this._close();
         if (!re.test(this._effort())) throw new Error("Kimi: 思考强度未生效"); // 点击被吞时不许静默成功
       },
       diagnose: function () {
@@ -80,7 +90,7 @@
           trigger.click(); // 打开工具菜单
           const ms = Number(deadline) ? Math.min(1500, Math.max(0, Number(deadline) - Date.now())) : 1500;
           input = await waitFor(() => document.querySelector('input.hidden-input[type="file"]'), ms);
-          escMenus(); // 无论成败都收尾，别把菜单罩在输入框上带进后续 inject
+          await this._close(); // 无论成败都收尾，别把菜单罩在输入框上带进后续 inject
         }
         return input ? S.setInputFiles(input, files, el, deadline) : false;
       },
@@ -125,6 +135,18 @@
     "yuanbao.tencent.com": {
       _modeBtn: function () { return document.querySelector('button[aria-label="Switch model"], button[aria-label="切换模型"]'); },
       _mode: function () { const b = this._modeBtn(); return b ? (b.textContent || "").trim() : ""; },
+      // 模式标签集。Models 子菜单（Hy4 preview / Hy3 / DeepSeek，真机 2026-08-31）与模式项同为
+      // menuitemradio 且同时在 DOM，候选必须过 _isMode 才允许点——否则档位会被点成模型
+      // （同 ChatGPT 2026-08 那次事故；DeepSeek 那项的描述里就带「deep thinking」字样）。
+      _MODES: /^(thinking|instant|expert|思考|深度思考|即时|快速|专家)/i,
+      // 两层语义校验，缺一不可：① 模型列表那层菜单带 aria-label="Model list"，模式那层没有
+      // aria-label —— 先按容器把模型列表整个排除；② 再要求文本命中模式标签集。
+      // 只做文本校验挡不住「模型取名叫深度思考版」，只做容器校验挡不住站点把模型塞进同一层。
+      _isMode: function (el) {
+        const menu = el.closest ? el.closest('[role="menu"]') : null;
+        if (menu && /model|模型/i.test(menu.getAttribute("aria-label") || "")) return false;
+        return this._MODES.test((el.textContent || "").trim());
+      },
       _toggle: function () { return document.querySelector('[class*="ThinkSelector"]'); },
       _isOn: function () {
         const t = this._toggle();
@@ -135,8 +157,9 @@
         if (!b) throw new Error("元宝: 模式按钮未找到");
         if (re.test(this._mode())) return;
         openMenu(b);
-        const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((el) =>
-          re.test((el.textContent || "").trim())), 1500);
+        const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((el) => {
+          return this._isMode(el) && re.test((el.textContent || "").trim()); // 语义校验在前：模型项一律不可点
+        }), 1500);
         if (!item) { escMenus(); throw new Error("元宝: 目标模式未找到"); }
         item.click(); await sleep(500); escMenus();
         if (!re.test(this._mode())) throw new Error("元宝: 目标模式未生效");
@@ -185,12 +208,18 @@
       },
     },
 
-    // 智谱清言：思考已从「toggle」改为「触发器 + el-tooltip 弹层菜单」——顶层 快速 / 思考(.has-submenu)，
-    // 思考子菜单含 标准 / 深度。映射 think→深度（深度全力推理）、fast→快速。
-    // 选档序列（chrome-dbg 实测验证）：hover+click .think-mode-trigger 开弹层；深度还需先 hover 父项
+    // 智谱清言：思考已从「toggle」改为「触发器 + el-tooltip 弹层菜单」。弹层现在分两段（真机
+    // 2026-08-31）：**模型段**（GLM-5.3 / GLM-Flash）+ **档位段**（快速 / 深度 / 极致），两段同为
+    // .think-mode-item。映射 think→极致（全力推理，找不到退回深度）、fast→快速。
+    // **适配器不选模型**：当前停在哪个模型就用哪个（模型项与档位项同类名，按名精确等值取项，
+    // 现有六个名字互不重叠；站点若把模型改叫「快速」之类要立刻改这里）。
+    // 选档序列（chrome-dbg 实测验证）：hover+click .think-mode-trigger 开弹层；档位项还需先 hover 父项
     //（.has-submenu，其名随当前档变故按 class 找）展开子菜单，再原生 click 目标 .item-name 项。
+    // **脆弱点**：合成 hover 在真机上并不真的展开子菜单（档位项 rect 恒 0），只是靠 .click() 仍能
+    // 触发 Vue handler 才碰巧能用 —— 收尾的 _selected() 复读是唯一防线，别把它删了。
     // state 只读：读 .think-mode-item 的 selected 类（弹层关闭时菜单项仍在 DOM，不开菜单）。
     "chatglm.cn": {
+      _TIERS: ["极致", "深度"], // think 目标，由强到弱：站点撤掉「极致」时降级点「深度」
       _trigger: function () { return document.querySelector(".think-mode-trigger"); },
       _hover: function (el) {
         if (!el) return;
@@ -206,6 +235,19 @@
         const it = this._itemByName(name);
         return !!it && /(^|\s)selected(\s|$)/.test((it.className || "").toString());
       },
+      // 弹层是否开着：档位/模型项在关闭态也留在 DOM，只能按几何判（rect 恒 0 = 关）
+      _open: function () {
+        return [...document.querySelectorAll(".think-mode-item")].some((el) => el.getBoundingClientRect().height > 0);
+      },
+      // 收尾：**escMenus 对本站无效**（真机 2026-08-31：Escape 关不掉 el-tooltip 弹层），只有再点一次
+      // 触发器才收。弹层不关会罩住输入框，让随后的注入点空。
+      _close: async function () {
+        escMenus();
+        if (!this._open()) return;
+        await sleep(250);
+        const tg = this._trigger();
+        if (this._open() && tg) { this._hover(tg); tg.click(); await sleep(300); }
+      },
       _pick: async function (name, viaSubmenu) {
         const tg = this._trigger();
         if (!tg) throw new Error("智谱: 思考触发器未找到");
@@ -213,8 +255,8 @@
         await sleep(350);
         if (viaSubmenu) { this._hover(document.querySelector(".think-mode-item.has-submenu")); await sleep(300); } // 展开子菜单
         const it = this._itemByName(name);
-        if (!it) { escMenus(); throw new Error("智谱: 档位「" + name + "」未找到"); }
-        it.click(); await sleep(500); escMenus();
+        if (!it) { await this._close(); throw new Error("智谱: 档位「" + name + "」未找到"); }
+        it.click(); await sleep(500); await this._close();
         if (!this._selected(name)) throw new Error("智谱: 档位未生效"); // 点击被吞时不许静默成功
       },
       diagnose: function () {
@@ -223,8 +265,15 @@
           { name: t("diag_tierReadable"), ok: this.state() != null },
         ];
       },
-      state: function () { return this._selected("深度") ? "think" : this._selected("快速") ? "fast" : null; },
-      think: async function () { await this._pick("深度", true); },
+      // 极致 / 深度 都算 think（深度是极致缺席时的降级目标）；标准若回归仍判 null，不猜。
+      state: function () {
+        if (this._TIERS.some((n) => this._selected(n))) return "think";
+        return this._selected("快速") ? "fast" : null;
+      },
+      // 只读挑目标：档位项在弹层关闭时也在 DOM，所以这里不开菜单（契约要求 think 之前不得副作用）。
+      think: async function () {
+        await this._pick(this._TIERS.find((n) => this._itemByName(n)) || this._TIERS[this._TIERS.length - 1], true);
+      },
       fast: async function () { await this._pick("快速", false); },
       // 智谱 input 忽略扩展派发的 input/change，且无可复用预览节点；留空明确报 unsupported。
       // 最后一条回答（真机审计锚点 2026-07：.answer-content；排除隐藏思考段后取末尾正文）

@@ -208,7 +208,7 @@ bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮
 | `contextMenus` | 两条右键菜单「用 PolyAsk 比较所选内容 / 当前网页」（id `ams-send-selection` / `ams-send-page`） |
 | `activeTab` + `scripting` | 右键菜单触发时读当前页正文，唯一使用点是 `bg/page-context.js` 的 `chrome.scripting.executeScript` |
 
-`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入 9 个文件，顺序 `i18n.js → content/core.js → upload.js → md.js → adapters-intl.js → adapters-cn.js → adapters-cn2.js → diag.js → pill.js`，`run_at: document_idle`；`diag.js` 必须在全部适配器分卷之后——它按已填充的注册表统一包装 `diagnose`）。
+`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入 9 个文件，顺序 `i18n.js → content/core.js → upload.js → md.js → adapters-intl.js → adapters-intl2.js → adapters-cn.js → adapters-cn2.js → diag.js → pill.js`，`run_at: document_idle`；`diag.js` 必须在全部适配器分卷之后——它按已填充的注册表统一包装 `diagnose`）。
 
 右键读页细则：菜单只在 `documentUrlPatterns: http://*/*, https://*/*` 下注册，读取前还要 `canRead(tab)` 再校验一次协议；正文上限 30000 字符，超长保留首 24000 + 尾 6000 并打 `truncated` 标记；菜单标题按 `storage.local.amsLang` 三语手写在 `MENU_COPY`（不走 `i18n.js`），`installMenus` 用 `installQueue` 串行化防重复创建。
 
