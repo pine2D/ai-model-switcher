@@ -340,11 +340,47 @@ test("site health and guarded reload cross the trusted typed bridge", () => {
   assert.match(healthIpc, /polyask:reload-site/);
   assert.match(healthIpc, /options\.trusted\(event\)/);
   assert.match(preload, /checkSiteHealth/);
-  assert.match(preload, /reloadSite\(site: SiteKey\): Promise<boolean>/);
+  assert.match(preload, /reloadSite\(site: SiteKey, ignoreCache\?: boolean\): Promise<boolean>/);
   assert.match(sitePreload, /cmd === "diagnose"/);
   assert.match(manager, /siteReloadAllowed/);
   assert.match(manager, /this\.pageStatus\.get\(site\)/);
   assert.match(manager, /this\.runStatus\.get\(site\)/);
+});
+
+test("hard reload and clear-site-data self-rescue actions cross the trusted typed bridge", () => {
+  const healthIpc = readFileSync("src/main/site-health-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  assert.match(healthIpc, /polyask:clear-site-data/);
+  const reloadHandler = healthIpc.slice(
+    healthIpc.indexOf('ipcMain.handle("polyask:reload-site"'),
+    healthIpc.indexOf('ipcMain.handle("polyask:clear-site-data"')
+  );
+  assert.match(reloadHandler, /options\.trusted\(event\)/);
+  assert.match(reloadHandler, /throw new Error\("untrusted_sender"\)/);
+  assert.match(reloadHandler, /SITE_KEYS\.includes\(value as SiteKey\)/);
+  assert.match(reloadHandler, /throw new Error\("invalid_site"\)/);
+  assert.match(reloadHandler, /manager\.reload\(value as SiteKey, ignoreCache === true\)/);
+  const clearHandler = healthIpc.slice(healthIpc.indexOf('ipcMain.handle("polyask:clear-site-data"'));
+  assert.match(clearHandler, /options\.trusted\(event\)/);
+  assert.match(clearHandler, /throw new Error\("untrusted_sender"\)/);
+  assert.match(clearHandler, /SITE_KEYS\.includes\(value as SiteKey\)/);
+  assert.match(clearHandler, /throw new Error\("invalid_site"\)/);
+  assert.match(clearHandler, /manager\.clearSiteData\(value as SiteKey\)/);
+  assert.match(healthIpc, /removeHandler\("polyask:clear-site-data"\)/);
+  assert.match(preload, /clearSiteData\(site: SiteKey\): Promise<boolean>/);
+  assert.match(preload, /ipcRenderer\.invoke\("polyask:clear-site-data", site\)/);
+  assert.match(manager, /reload\(site: SiteKey, ignoreCache = false\): boolean/);
+  assert.match(manager, /reloadIgnoringCache\(\)/);
+  const clearSiteData = manager.slice(
+    manager.indexOf("async clearSiteData(site: SiteKey)"),
+    manager.indexOf("checkHealth(sites: readonly SiteKey[])")
+  );
+  assert.match(clearSiteData, /siteReloadAllowed\(this\.currentStatus\(site\)\.phase\)/);
+  assert.match(clearSiteData, /clearStorageData\(\{/);
+  assert.match(clearSiteData, /storages: \["cachestorage", "serviceworkers"\]/);
+  assert.doesNotMatch(clearSiteData, /"cookies"/);
+  assert.match(clearSiteData, /reloadIgnoringCache\(\)/);
 });
 
 test("every main-process IPC handler guards its own sender", () => {

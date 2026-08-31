@@ -3,7 +3,7 @@ import { formatCopy, type DesktopCopy } from "../shared/copy";
 import type { SiteStatus } from "../shared/protocol";
 import { siteReloadAllowed, summarizeSiteHealth, type SiteHealth, type SiteHealthState } from "../shared/site-health";
 import { describeStatus } from "../shared/status-copy";
-import { BackIcon, FocusIcon, ReloadIcon } from "./icons";
+import { BackIcon, FocusIcon, ReloadIcon, TrashIcon } from "./icons";
 
 interface SiteHealthPanelProps {
   readonly copy: DesktopCopy;
@@ -16,6 +16,8 @@ interface SiteHealthPanelProps {
   readonly onCheck: (sites: readonly SiteKey[]) => void;
   readonly onFocus: (site: SiteKey) => void;
   readonly onReload: (site: SiteKey) => void;
+  readonly onHardReload: (site: SiteKey) => void;
+  readonly onClearData: (site: SiteKey) => void;
   readonly onBack: () => void;
 }
 
@@ -74,6 +76,8 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
           <button type="button" disabled={props.checking} onClick={() => props.onCheck([detailSite.key])}>{props.checking ? props.copy.checkingSiteHealth : props.copy.checkAgain}</button>
           <button type="button" onClick={() => props.onFocus(detailSite.key)}><FocusIcon />{props.copy.healthFocusSite}</button>
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.reloadSite, { site: detailSite.label })} onClick={() => props.onReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.reloadSite, { site: detailSite.label })}</button>
+          <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.hardReloadSite, { site: detailSite.label })} onClick={() => props.onHardReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.hardReloadSite, { site: detailSite.label })}</button>
+          <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} aria-label={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} onClick={() => props.onClearData(detailSite.key)}><TrashIcon />{formatCopy(props.copy.clearSiteCache, { site: detailSite.label })}</button>
         </div>
         {reloadBlocked ? <p className="health-blocked">{props.copy.healthReloadBlocked}</p> : null}
       </section>
@@ -89,7 +93,6 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
       {props.sites.length ? (
         <div className="site-status-list">
           {props.sites.map((site) => {
-            const status = props.statuses[site.key] ?? { site: site.key, phase: "loading" as const };
             const current = props.health[site.key] ?? { site: site.key, state: "unknown" as const, checks: [] };
             return (
               <button type="button" key={site.key} data-health-state={current.state} onClick={() => props.onDetail(site.key)}>

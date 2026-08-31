@@ -578,6 +578,24 @@ function App(): React.JSX.Element {
               if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
             }).catch(() => setAnnouncement(copy.workspaceActionFailed));
           }}
+          onHardReloadSite={(site) => {
+            void window.polyask.reloadSite(site, true).then((ok) => {
+              const definition = sites.find((candidate) => candidate.key === site);
+              setAnnouncement(ok
+                ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
+                : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
+              if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
+            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+          }}
+          onClearSiteData={(site) => {
+            void window.polyask.clearSiteData(site).then((ok) => {
+              const definition = sites.find((candidate) => candidate.key === site);
+              setAnnouncement(ok
+                ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
+                : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
+              if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
+            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+          }}
         />
       ) : null}
       <SiteFrames

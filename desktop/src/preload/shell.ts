@@ -70,7 +70,8 @@ export interface PolyAskDesktopApi {
   clearRemoteSync(confirmation: string): Promise<SyncStatus>;
   syncDiagnostics(): Promise<SyncDiagnosticSnapshot>;
   checkSiteHealth(sites: readonly SiteKey[]): Promise<SiteHealth[]>;
-  reloadSite(site: SiteKey): Promise<boolean>;
+  reloadSite(site: SiteKey, ignoreCache?: boolean): Promise<boolean>;
+  clearSiteData(site: SiteKey): Promise<boolean>;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
@@ -127,7 +128,8 @@ const api: PolyAskDesktopApi = Object.freeze({
   clearRemoteSync: (confirmation: string) => ipcRenderer.invoke("polyask:sync-clear", confirmation),
   syncDiagnostics: () => ipcRenderer.invoke("polyask:sync-diagnostics"),
   checkSiteHealth: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:site-health", sites),
-  reloadSite: (site: SiteKey) => ipcRenderer.invoke("polyask:reload-site", site),
+  reloadSite: (site: SiteKey, ignoreCache?: boolean) => ipcRenderer.invoke("polyask:reload-site", site, ignoreCache),
+  clearSiteData: (site: SiteKey) => ipcRenderer.invoke("polyask:clear-site-data", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>

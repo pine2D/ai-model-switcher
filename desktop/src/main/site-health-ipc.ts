@@ -22,13 +22,19 @@ export function registerSiteHealthIpc(options: SiteHealthIpcOptions): () => void
     if (!sites) throw new Error("invalid_sites");
     return options.manager.checkHealth(sites);
   });
-  ipcMain.handle("polyask:reload-site", (event, value: unknown) => {
+  ipcMain.handle("polyask:reload-site", (event, value: unknown, ignoreCache?: unknown) => {
     if (!options.trusted(event)) throw new Error("untrusted_sender");
     if (typeof value !== "string" || !SITE_KEYS.includes(value as SiteKey)) throw new Error("invalid_site");
-    return options.manager.reload(value as SiteKey);
+    return options.manager.reload(value as SiteKey, ignoreCache === true);
+  });
+  ipcMain.handle("polyask:clear-site-data", (event, value: unknown) => {
+    if (!options.trusted(event)) throw new Error("untrusted_sender");
+    if (typeof value !== "string" || !SITE_KEYS.includes(value as SiteKey)) throw new Error("invalid_site");
+    return options.manager.clearSiteData(value as SiteKey);
   });
   return () => {
     ipcMain.removeHandler("polyask:site-health");
     ipcMain.removeHandler("polyask:reload-site");
+    ipcMain.removeHandler("polyask:clear-site-data");
   };
 }

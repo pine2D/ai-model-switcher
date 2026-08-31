@@ -270,13 +270,34 @@ export class ViewManager {
     this.setPage(page);
   }
 
-  reload(site: SiteKey): boolean {
+  reload(site: SiteKey, ignoreCache = false): boolean {
     const view = this.views.get(site);
     if (!view || view.webContents.isDestroyed()) return false;
     if (!siteReloadAllowed(this.currentStatus(site).phase)) return false;
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
-    view.webContents.reload();
+    if (ignoreCache) view.webContents.reloadIgnoringCache();
+    else view.webContents.reload();
+    return true;
+  }
+
+  // Clears only Service Worker registrations and CacheStorage for the site's own
+  // origin — never cookies (keeps the sign-in) or localStorage/IndexedDB (keeps
+  // the site's own client-side preferences). Meant for a stuck/blank page whose
+  // service worker is serving a stale asset that a normal reload() cannot evict
+  // because reload() itself is served from that same cache.
+  async clearSiteData(site: SiteKey): Promise<boolean> {
+    const view = this.views.get(site);
+    const definition = SITES.find((candidate) => candidate.key === site);
+    if (!view || view.webContents.isDestroyed() || !definition) return false;
+    if (!siteReloadAllowed(this.currentStatus(site).phase)) return false;
+    await this.siteSession.clearStorageData({
+      origin: `https://${definition.host}`,
+      storages: ["cachestorage", "serviceworkers"]
+    });
+    this.runStatus.delete(site);
+    this.updatePageStatus({ site, phase: "loading" });
+    view.webContents.reloadIgnoringCache();
     return true;
   }
 

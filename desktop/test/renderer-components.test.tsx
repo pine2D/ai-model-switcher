@@ -133,6 +133,8 @@ test("site health summarizes only the selected scope and keeps detail actions ex
       onCheck={noop}
       onFocus={noop}
       onReload={noop}
+      onHardReload={noop}
+      onClearData={noop}
       onBack={noop}
     />
   );
@@ -141,6 +143,9 @@ test("site health summarizes only the selected scope and keeps detail actions ex
   assert.match(html, /重新检查/);
   assert.match(html, /聚焦站点/);
   assert.match(html, /重新加载 ChatGPT/);
+  assert.match(html, /强制重新加载 ChatGPT（忽略缓存）/);
+  assert.match(html, /清除缓存并重新加载 ChatGPT/);
+  assert.match(html, /清除该站点的缓存与 Service Worker 后重新加载，登录状态会保留/);
 });
 
 test("bootstrap loading is a polite busy state without a retry action", () => {
@@ -437,6 +442,8 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
       onCheckHealth={noop}
       onFocusSite={noop}
       onReloadSite={noop}
+      onHardReloadSite={noop}
+      onClearSiteData={noop}
     />
   );
 
@@ -472,6 +479,8 @@ test("workspace health lists only sites in the current scope", () => {
       onCheckHealth={noop}
       onFocusSite={noop}
       onReloadSite={noop}
+      onHardReloadSite={noop}
+      onClearSiteData={noop}
     />
   );
   assert.equal([...html.matchAll(/data-health-state="unknown"/g)].length, 2);
