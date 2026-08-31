@@ -38,7 +38,7 @@ function renderStatus() {
   byId("status-title").textContent = t(statusKey());
   const detail = [];
   if (config.clearRunning) detail.push(t("sync_clearProgress", config.clearProgress || 0));
-  if (config.connected && status.lastSuccessAt) detail.push(t("sync_lastSuccess", new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(status.lastSuccessAt)));
+  if (config.connected && status.lastSuccessAt) detail.push(t("sync_lastSuccess", new Intl.DateTimeFormat(document.documentElement?.lang || undefined, { dateStyle: "medium", timeStyle: "short" }).format(status.lastSuccessAt)));
   if (config.connected && status.pending) detail.push(t("sync_pending", status.pending));
   if (status.state === "blocked") detail.push(t({ drive_disabled: "sync_blockedDriveDisabled", quota: "sync_blockedQuota", policy: "sync_blockedPolicy" }[status.reason] || "sync_blockedPolicy"));
   if (status.errorCount) detail.push(t("sync_errorCount", status.errorCount));

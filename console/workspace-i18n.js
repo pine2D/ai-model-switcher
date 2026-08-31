@@ -25,7 +25,6 @@ Object.assign(MSG, {
   arc_unmarkBest: { en: "Clear best answer", zh_CN: "取消最佳", zh_TW: "取消最佳" },
   arc_updateFailed: { en: "Could not save the change. Try again.", zh_CN: "更改保存失败，请重试。", zh_TW: "變更儲存失敗，請重試。" },
   arc_source: { en: "Source", zh_CN: "来源", zh_TW: "來源" },
-  arc_savedLocal: { en: "Saved locally", zh_CN: "已保存到本地", zh_TW: "已儲存到本機" },
   arc_noMatches: { en: "No matching results.", zh_CN: "没有匹配的结果。", zh_TW: "沒有符合的結果。" },
   arc_loading: { en: "Loading saved result…", zh_CN: "正在加载已保存的结果…", zh_TW: "正在載入已儲存的結果…" },
   arc_capturedAt: { en: "Captured: {0}", zh_CN: "采集时间：{0}", zh_TW: "擷取時間：{0}" },

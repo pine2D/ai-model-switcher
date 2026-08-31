@@ -77,7 +77,7 @@ const Data = (() => {
   }
   async function archiveTags() {
     const tags = new Set();
-    await SyncStore.iterate("archives", (record) => {
+    await (SyncStore.scanAll || SyncStore.iterate)("archives", (record) => {
       if (!Object.hasOwn(record, "deletedAt")) for (const tag of record.tags || []) tags.add(tag);
     });
     return [...tags].sort((left, right) => left.localeCompare(right));
@@ -87,7 +87,7 @@ const Data = (() => {
   // 已上云旧条目会被 trimBodies 裁掉 results，统计覆盖近 50 条 + 全部未上云条目。
   async function archiveFailStats() {
     const byHost = new Map();
-    await SyncStore.iterate("archives", (record) => {
+    await (SyncStore.scanAll || SyncStore.iterate)("archives", (record) => {
       if (Object.hasOwn(record, "deletedAt")) return;
       const ts = Number(record.ts || record.createdAt) || 0;
       for (const item of record.results || []) {
@@ -150,6 +150,26 @@ const Data = (() => {
     }
   }
   const applyRemoteState = projectState;
+  // 一次性把 v0.13 及更早写在 storage.local 的 amsHistory/amsArchive 迁进 IndexedDB：新版界面早已不读这两个键，
+  // 而「重置本机数据」会直接删掉它们，不迁就是静默丢数据。完成标记落 SyncStore meta（clearLocalData 会一并清）而非
+  // 新增 storage.local 键；归档 id 必须是 UUID v4 不能按内容派生，半途崩溃靠 createdAt+preview 比对幂等，ts 兜 createdAt。
+  async function migrateLegacy() {
+    if (await SyncStore.getMeta("legacyMigrated")) return null;
+    const local = await chrome.storage.local.get(["amsHistory", "amsArchive"]);
+    const texts = Array.isArray(local.amsHistory) ? local.amsHistory : [], entries = Array.isArray(local.amsArchive) ? local.amsArchive : [];
+    const seen = new Set(); let histories = 0, archives = 0;
+    if (entries.length) await (SyncStore.scanAll || SyncStore.iterate)("archives", (record) => seen.add(`${record.createdAt}\u0000${record.preview || ""}`));
+    for (const text of texts) if (await addHistory(text)) histories++;
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object") continue;
+      const createdAt = Number(entry.createdAt) || Number(entry.ts) || Date.now();
+      if (seen.has(`${createdAt}\u0000${SyncModel.utf8Preview(entry.text || "")}`)) continue;
+      await addArchive({ ...entry, createdAt }); archives++;
+    }
+    await SyncStore.putMeta("legacyMigrated", Date.now());
+    await chrome.storage.local.remove(["amsHistory", "amsArchive"]);
+    return { histories, archives };
+  }
   async function seedState(cloudEmpty) {
     const keys = cloudEmpty ? [...SETTINGS, "amsConsole", "amsTemplates", "amsGroups", "amsHistory", "amsArchive"] :
       ["amsTemplates", "amsGroups", "amsHistory", "amsArchive"];
@@ -159,10 +179,12 @@ const Data = (() => {
     for (const key of stateKeys) if (key in local)
       changes[key] = { newValue: local[key] };
     await noteStorageChanges(changes);
-    for (const text of local.amsHistory || []) await addHistory(text);
-    for (const entry of local.amsArchive || []) await addArchive(entry);
+    await migrateLegacy();
     return exportRecords();
   }
+  // 版本打平但本地正文已被裁空时用来源正文就地回填：否则这条壳记录会被上行 PATCH 覆盖掉云端唯一的好副本（上行的 completeBody 只让它退避重排，正文不会自己长回来）。tombstone 不回填。
+  const refill = (old, value, whole) => whole && old && old.text == null && !Object.hasOwn(old, "deletedAt") && typeof value.text === "string" ?
+    { ...value, ...(old.fileId && !value.fileId ? { fileId: old.fileId } : {}) } : null;
   const stamp = (record = {}) => ({ ...record, updatedAt: Math.max(Number(record.updatedAt) || 0, Number(record.deletedAt) || 0, Number(record.createdAt) || 0) });
   const newer = (old, next) => !old || SyncModel.compareVersion(stamp(old), stamp(next)) < 0;
   async function importRecords(records = []) {
@@ -170,11 +192,14 @@ const Data = (() => {
     if (!Array.isArray(records)) {
       for (const value of records.history || []) {
         const old = await SyncStore.getHistory(value.id), merged = SyncModel.mergeHistory([old, value])[0];
-        if (merged && merged !== old) { await SyncStore.putHistory(merged); historyChanges++; }
+        const fill = merged && merged !== old ? merged : refill(old, value, true);
+        if (fill) { await SyncStore.putHistory(fill); historyChanges++; }
       }
       for (const value of records.archives || []) if (await mutateArchive(value.id, async () => {
-        if (!newer(await SyncStore.getArchive(value.id), value)) return false;
-        await SyncStore.putArchive(value); return true;
+        const old = await SyncStore.getArchive(value.id);
+        const fill = newer(old, value) ? value : refill(old, value, Array.isArray(value.results));
+        if (!fill) return false;
+        await SyncStore.putArchive(fill); return true;
       })) archiveChanges++;
       return { histories: historyChanges, archives: archiveChanges };
     }
@@ -195,15 +220,16 @@ const Data = (() => {
           ...(Object.hasOwn(value, "deletedAt") ? {} : { preview: value.preview || SyncModel.utf8Preview(value.text) }) };
         const old = await SyncStore.getHistory(next.id), merged = SyncModel.mergeHistory([old, next])[0];
         if (merged !== old) historyChanges++;
-        await SyncStore.putHistory(merged);
+        await SyncStore.putHistory(merged !== old ? merged : refill(old, next, true) || merged);
         await SyncStore.enqueue({ key: `history:${next.id}:${id}`, kind: "history", entityId: next.id, nextAt: 0, attempt: 0 });
       } else if (kind === "archive") {
         const next = { ...value, deviceId: id, schema: SyncModel.SCHEMA, updatedAt: value.updatedAt || value.deletedAt || value.createdAt,
           preview: value.preview || SyncModel.utf8Preview(value.text || "") };
         if (await mutateArchive(next.id, async () => {
-          const old = await SyncStore.getArchive(next.id);
-          const changed = newer(old, next);
-          if (changed) await SyncStore.putArchive(next);
+          const old = await SyncStore.getArchive(next.id), changed = newer(old, next);
+          const fill = changed ? next : refill(old, next, Array.isArray(next.results));
+          if (!fill) return false;
+          await SyncStore.putArchive(fill);
           await SyncStore.enqueue({ key: `archive:${next.id}`, kind: "archive", entityId: next.id, nextAt: 0, attempt: 0 });
           return changed;
         })) archiveChanges++;
@@ -227,7 +253,7 @@ const Data = (() => {
         after = item.key;
         const isHistory = store === "history", tombstone = Object.hasOwn(item.value, "deletedAt");
         const resolved = tombstone ? item.value : await resolve(isHistory ? "history" : "archive", item.value.id);
-        if (!resolved || isHistory && resolved.text == null || !isHistory && !Object.hasOwn(resolved, "deletedAt") && (resolved.text == null || !Array.isArray(resolved.results)))
+        if (!resolved || isHistory && !Object.hasOwn(resolved, "deletedAt") && resolved.text == null || !isHistory && !Object.hasOwn(resolved, "deletedAt") && (resolved.text == null || !Array.isArray(resolved.results)))
           throw Object.assign(new Error("reconnect_required"), { code: "reconnect_required" });
         const value = { ...resolved }; delete value.fileId;
         yield { kind: isHistory ? "history" : "archive", value };
@@ -244,7 +270,7 @@ const Data = (() => {
   return { deviceId: getDeviceId, resetDeviceId: () => { cachedDeviceId = undefined; deviceIdOpening = null; }, deviceState, noteStorageChanges, applyRemoteState, addHistory, deleteHistory,
     pageHistory: (cursor, limit = 50) => SyncStore.pageHistory(cursor, limit), getHistory: (id) => resolve("history", id),
     addArchive, updateArchive, deleteArchive, pageArchives: (cursor, limit = 50) => SyncStore.pageArchives(cursor, limit), searchArchives, archiveTags, archiveFailStats, getArchive: (id) => resolve("archive", id),
-    seedState, importRecords, exportRecords, projectState };
+    seedState, migrateLegacy, importRecords, exportRecords, projectState };
 })();
 
 if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -267,7 +293,7 @@ if (chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addList
   actions[msg.action]().then((value) => {
     sendResponse({ ok: true, ...value });
     if (value.changed) chrome.runtime.sendMessage({ source: "AMS_DATA", type: value.changed,
-      ...(value.changeToken ? { changeToken: value.changeToken } : {}) });
+      ...(value.changeToken ? { changeToken: value.changeToken } : {}) }, () => void chrome.runtime.lastError);
   }, (error) => sendResponse({ ok: false, code: error.code || "local_write_failed" }));
   return true;
 });

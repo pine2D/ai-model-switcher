@@ -17,6 +17,14 @@ chrome.runtime.onStartup.addListener(() =>
   chrome.storage.local.remove(["amsConsoleWin", "amsComposeWin", "amsScopeWin", "amsArchiveWin"])
 );
 
+// 历史键迁移：装完/升级各跑一次即可（放 onInstalled 而非 SW 顶层，避免每次冷启动都走一遍数据层）。
+// 三重保险，因为这条挂在 SW 启动路径上，抛一次就整份 background 不注册任何监听：`onInstalled?.` 兼容
+// 只桩了部分 chrome.runtime 的离线夹具；`Data.migrateLegacy?.()` 兼容该方法尚未落地；try 兼容 bg/data.js
+// 整份没加载成功（Data 未声明时 `Data?.` 一样抛 ReferenceError）。
+chrome.runtime.onInstalled?.addListener(() => {
+  try { Data.migrateLegacy?.().catch(() => {}); } catch (e) {}
+});
+
 // console 获焦 → 延迟 ~180ms 再抬整组工作区。点 console 的「最小化按钮」会先让窗口获焦（→ 本会立刻
 // 抬窗、把正在最小化的 console 又解最小化，与最小化打架、时好时坏），延迟给紧随其后的「最小化」一个
 // 取消窗口：consoleHidden 到达即 clearTimeout 取消本次抬窗。真要抬时再核对 console 非 minimized 兜底。
@@ -50,7 +58,16 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
-// console 关闭 → 关闭 owned 平铺窗口（不动收编的用户窗口）；各伴侣窗关闭 → 仅清自身登记。
+// 抬窗抑制：console 未持焦时点细条上的按钮，Chrome 先派发窗口 focus 再派发 click——180ms 后的
+// raiseWorkspace 会把刚建好的伴侣窗踢到平铺窗后面、把焦点抢回细条，用户的第一行字打进细条输入框
+// （F013）。三个开伴侣窗的入口共用：先清掉待触发的抬窗，再把抑制窗推后 600ms。
+function holdRaise() {
+  if (raiseTimer != null) { clearTimeout(raiseTimer); raiseTimer = null; }
+  suppressFocusUntil = Date.now() + 600;
+}
+
+// console 关闭 → 关闭 owned 平铺窗口与其孤儿窗（owned=false 的复用路径当前无生产者，见 bg/windows.js
+// 顶部说明）；各伴侣窗关闭 → 仅清自身登记。
 // 单监听器统一清理窗口登记，避免多监听器重复读取 storage。
 chrome.windows.onRemoved.addListener(async (winId) => {
   const cid = await getConsoleWinId();
@@ -99,13 +116,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     ensureConsoleReady(msg.host).then(() => sendResponse({ ok: true }), () => sendResponse({ ok: false }));
     return true;
   }
-  if (msg.action === "openScope") {
-    if (raiseTimer != null) { clearTimeout(raiseTimer); raiseTimer = null; }
-    suppressFocusUntil = Date.now() + 600;
-    openScope(msg.anchor); return;
-  }
-  if (msg.action === "openCompose") { openCompose(msg.anchor, msg.mode); return; }
-  if (msg.action === "openArchive") { openArchive(); return; }
+  // 三个伴侣窗入口都要先 holdRaise：建窗耗时 ~150-300ms，故创建完成后再续一次抑制窗，覆盖整段建窗时间
+  if (msg.action === "openScope") { holdRaise(); openScope(msg.anchor).then(holdRaise, holdRaise); return; }
+  if (msg.action === "openCompose") { holdRaise(); openCompose(msg.anchor, msg.mode).then(holdRaise, holdRaise); return; }
+  if (msg.action === "openArchive") { holdRaise(); openArchive().then(holdRaise, holdRaise); return; }
   if (msg.action === "openTile") { serializeOp(() => openTile(msg.sites || [])).then((results) => sendResponse({ results })).catch(() => sendResponse({ results: [] })); return true; }
   if (msg.action === "sendAll") {
     const epoch = currentSendEpoch();
@@ -131,7 +145,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     })()
       .then(sendResponse).catch(() => sendResponse({ results: [], code: "error" })); return true;
   } // 只读收集回答，同上
-  // 回应完成时刻：console 据此解除按钮忙碌态（操作可能在串行链里排队最长 ~22s，无反馈像卡死）
+  // 回应完成时刻：console 据此解除按钮忙碌态（操作在串行链里排在群发之后，最长要等一整轮：纯文本 44s、
+  // 带图 90s——见 bg/broadcast.js 的 deadline = timeoutMs * 2；无反馈像卡死）
   if (msg.action === "closeAll") { cancelPendingSends(); serializeOp(closeAll).then(() => sendResponse({}), () => sendResponse({})); return true; }
   if (msg.action === "newSession") { cancelPendingSends(); serializeOp(() => newSessionAll(msg.sites || [])).then(() => sendResponse({}), () => sendResponse({})); return true; }
 });

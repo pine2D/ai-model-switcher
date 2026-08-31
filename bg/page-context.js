@@ -59,17 +59,24 @@ const PageContext = (() => {
     try { return ["http:", "https:"].includes(new URL(tab?.url || "").protocol); } catch (e) { return false; }
   }
 
+  // 首 24000 + 尾 6000 之间插入语言无关的省略标记，避免两段无缝焊接成一句连续文本让模型误读；
+  // 标记本身不用三段短横线，避免和 console/compose-context.js 的 activeMarker UUID 围栏视觉混淆。
   function capText(value) {
     const chars = [...String(value || "").trim()];
     const truncated = chars.length > 30000;
-    return {
-      text: truncated ? chars.slice(0, 24000).concat(chars.slice(-6000)).join("") : chars.join(""),
-      truncated,
-    };
+    if (!truncated) return { text: chars.join(""), truncated };
+    const head = chars.slice(0, 24000), tail = chars.slice(-6000), omitted = chars.length - head.length - tail.length;
+    const marker = `\n\n[… omitted ${omitted} characters / 已省略 ${omitted} 个字符 …]\n\n`;
+    return { text: head.join("") + marker + tail.join(""), truncated };
   }
 
   function extractPage(rootDocument = document) {
-    const roots = [rootDocument.querySelector("article"), rootDocument.querySelector("main"),
+    // 唯一命中才用 article：列表页每条目一个 <article> 时，querySelector 只会捞到文档顺序第一条，
+    // 混进导航/推荐位。querySelectorAll 不可用时（离线测试桩）退回旧的单命中判定，不改变既有行为。
+    const hasList = typeof rootDocument.querySelectorAll === "function";
+    const article = hasList ? (rootDocument.querySelectorAll("article").length === 1 ? rootDocument.querySelector("article") : null)
+      : rootDocument.querySelector("article");
+    const roots = [article, rootDocument.querySelector("main"),
       rootDocument.querySelector('[role="main"]'), rootDocument.body];
     for (const root of roots) {
       const text = String(root?.innerText || "").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -110,7 +117,7 @@ const PageContext = (() => {
     if (!text) return isPage ? pageFailure("page_empty", current) : { ok: false, code: "page_empty" };
     const context = {
       kind: isPage ? "page" : "selection",
-      title: String(tab.title || ""),
+      title: [...String(tab.title || "")].slice(0, 512).join(""),
       url: tab.url,
       text,
       truncated,

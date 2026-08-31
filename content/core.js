@@ -129,9 +129,9 @@
         if (!injected) { el.textContent = text; el.dispatchEvent(new InputEvent("input", { bubbles: true })); }
       }
       }
-      // 硬校验：注入彻底落空时框仍为空，绝不能走到下面"空框=已发送"的校验循环产生假成功
-      if (text.trim() && !readText(el)) return { ok: false, code: "inject_failed" };
     }
+    // 硬校验（两条分支同样生效，textarea 的 native setter 也会被受控组件回滚）：注入彻底落空时框仍为空，绝不能走到下面"空框=已发送"的校验循环产生假成功
+    if (text.trim() && !readText(el)) return { ok: false, code: "inject_failed" };
     await sleep(250);
     if (deadline && Date.now() >= deadline) return { ok: false, code: "timeout" };
     const a = pickAdapter();
@@ -196,7 +196,7 @@
         try { document.dispatchEvent(new CustomEvent("ams:switched")); } catch (e) {}
         return true;
       } catch (e) {
-        if (attempt && !silent) toast(t("cs_switchFail", (e && e.message ? e.message : e)), false);
+        escMenus(); try { console.debug("[PolyAsk] switch:", (e && e.message) || e); } catch (e2) {} if (attempt && !silent) toast(t("cs_switchFailGeneric"), false); // 最后一次失败后也必须收尾，残留菜单会罩住输入框让随后的注入点空；适配器抛的是硬编码中文，只降级进控制台，不进用户可见文案
       }
     }
     return false;

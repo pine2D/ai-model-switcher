@@ -16,16 +16,21 @@ const Drive = (() => {
     return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
   }
 
+  // 403 需要按 reason 再分流：userRateLimitExceeded/rateLimitExceeded/quotaExceeded/dailyLimitExceeded 是可退避重试的限流，
+  // storageQuotaExceeded（存储配额耗尽）不在其列——继续落 forbidden，否则会对着打不满的配额无限退避空转。
+  const RATE_LIMIT_REASONS = new Set(["userratelimitexceeded", "ratelimitexceeded", "quotaexceeded", "dailylimitexceeded"]);
   async function driveError(response) {
     let details = null;
     try { details = JSON.parse(await response.text()); } catch (e) { /* non-JSON Drive errors are valid */ }
     const status = response.status;
-    const code = status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status === 404 ? "not_found" :
-      status === 429 ? "rate_limited" : status >= 500 ? "server_error" : "request_failed";
+    const reason = details?.error?.errors?.[0]?.reason || details?.error?.message;
+    const rateLimited = status === 403 && RATE_LIMIT_REASONS.has(String(reason || "").toLowerCase());
+    const code = status === 401 ? "unauthorized" : status === 404 ? "not_found" :
+      status === 429 || rateLimited ? "rate_limited" : status === 403 ? "forbidden" :
+      status >= 500 ? "server_error" : "request_failed";
     const error = { code, status };
     const wait = retryAfter(response.headers.get("Retry-After"));
     if (wait !== undefined) error.retryAfter = wait;
-    const reason = details?.error?.errors?.[0]?.reason || details?.error?.message;
     if (reason) error.reason = reason;
     return error;
   }

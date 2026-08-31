@@ -15,7 +15,8 @@ const ownChangeTokens = new Set();
 const drafts = new Map();
 const ARCH_ERR_KEYS = { timeout: "con_errTimeout", composer_not_found: "con_errNoComposer", inject_failed: "con_errInject",
   submit_unconfirmed: "con_errSubmit", tier_unconfirmed: "con_errTier", no_window: "con_errNoWindow",
-  not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric" };
+  not_ready: "con_errNotReady", cancelled: "con_errCancelled", no_answer: "con_errNoAnswer", error: "con_errGeneric",
+  no_view: "con_errNoView" }; // no_view 是 Desktop 端产的码（视图已销毁/未打开）；跨端同步的归档条目可能带这个码（F218）
 function resultError(r) { return t(ARCH_ERR_KEYS[r.code] || "con_errNoAnswer"); }
 
 function entryMd(e) { return ArchiveDetail.entryMarkdown(e, resultError); }

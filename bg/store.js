@@ -35,8 +35,13 @@ const SyncStore = (() => {
           outbox.createIndex("entity", ["kind", "entityId"]);
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+      req.onblocked = () => { opening = null; reject(new Error("IndexedDB open blocked")); };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onclose = db.onversionchange = () => { opening = null; try { db.close(); } catch (e) { /* already closed */ } };
+        resolve(db);
+      };
+      req.onerror = () => { opening = null; reject(req.error || new Error("IndexedDB open failed")); };
     });
     return opening;
   }
@@ -81,6 +86,16 @@ const SyncStore = (() => {
   async function iterate(kind, visit) {
     let after = null, item;
     while ((item = await next(kind, after))) { after = item.key; await visit(item.value); }
+  }
+  // 纯聚合扫描：单事务 + row.continue()，代价是 visit 必须同步（await 外部 promise 会让只读事务提前提交）。
+  // 需要在扫描过程中跨事务写库的场景（forget/删除）仍用 iterate 的逐条新事务写法。
+  async function scanAll(kind, visit) {
+    const db = await open(), tx = db.transaction(kind);
+    await new Promise((resolve, reject) => {
+      const req = tx.objectStore(kind).openCursor();
+      req.onerror = () => reject(req.error || new Error("IndexedDB cursor failed"));
+      req.onsuccess = () => { const row = req.result; if (!row) return resolve(); visit(row.value); row.continue(); };
+    });
   }
   async function next(kind, after) {
     const db = await open(), tx = db.transaction(kind), store = tx.objectStore(kind);
@@ -209,6 +224,6 @@ const SyncStore = (() => {
     enqueue, readyOutbox, completeOutbox, countOutbox,
     putFile: (file) => write("files", file), getFile: (fileId) => read("files", fileId), findFile,
     deleteFile: (fileId) => erase("files", fileId),
-    setEntityFile, markFile, hydrateEntity, trimBodies, clearLocalData, iterate, next,
+    setEntityFile, markFile, hydrateEntity, trimBodies, clearLocalData, iterate, scanAll, next,
   };
 })();

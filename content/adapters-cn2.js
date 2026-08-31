@@ -15,7 +15,7 @@
       _entry: function () { return document.querySelector(".current-model"); },
       _model: function () {
         const n = this._entry() && this._entry().querySelector(".name");
-        return n ? (n.textContent || "").trim() : "";
+        return n ? this._zap(n.textContent) : ""; // 与 _effort() 同款去零宽，见 F076
       },
       _zap: function (s) { return (s || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim(); }, // 零宽字符防御
       _effort: function () {
@@ -28,7 +28,7 @@
         if (!e.classList.contains("active")) e.click();
         const opt = await waitFor(() => [...document.querySelectorAll(".model-item")].find((el) => {
           const n = el.querySelector(".name");
-          return n && (n.textContent || "").trim() === name;
+          return n && this._zap(n.textContent) === name; // 去零宽再比，同上，见 F076
         }), 1500);
         if (!opt) { escMenus(); throw new Error("Kimi: 目标选项未找到"); }
         opt.click();
@@ -77,8 +77,10 @@
         if (!input) {
           const trigger = document.querySelector(".toolkit-trigger-btn");
           if (!trigger) return false;
-          trigger.click();
-          input = await waitFor(() => document.querySelector('input.hidden-input[type="file"]'), 1500);
+          trigger.click(); // 打开工具菜单
+          const ms = Number(deadline) ? Math.min(1500, Math.max(0, Number(deadline) - Date.now())) : 1500;
+          input = await waitFor(() => document.querySelector('input.hidden-input[type="file"]'), ms);
+          escMenus(); // 无论成败都收尾，别把菜单罩在输入框上带进后续 inject
         }
         return input ? S.setInputFiles(input, files, el, deadline) : false;
       },
@@ -147,6 +149,7 @@
         const t = this._toggle();
         if (!t) throw new Error("元宝: Deep Thinking 控件未找到");
         if (this._isOn() !== on) { t.click(); await sleep(500); }
+        if (this._isOn() !== on) throw new Error("元宝: 深度思考未生效"); // 点击被吞时不许静默成功
       },
       diagnose: function () {
         return [
@@ -210,8 +213,9 @@
         await sleep(350);
         if (viaSubmenu) { this._hover(document.querySelector(".think-mode-item.has-submenu")); await sleep(300); } // 展开子菜单
         const it = this._itemByName(name);
-        if (!it) throw new Error("智谱: 档位「" + name + "」未找到");
+        if (!it) { escMenus(); throw new Error("智谱: 档位「" + name + "」未找到"); }
         it.click(); await sleep(500); escMenus();
+        if (!this._selected(name)) throw new Error("智谱: 档位未生效"); // 点击被吞时不许静默成功
       },
       diagnose: function () {
         return [

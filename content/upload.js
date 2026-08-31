@@ -49,6 +49,12 @@
   function attr(el, name) {
     try { return el.getAttribute(name) || ""; } catch (e) { return ""; }
   }
+  // 独立于 token()：错误提示是普通 alert DIV，几乎从不命中 token() 的 visual/container 条件，
+  // 会被塌缩成同一个 ""，导致不同文案的新错误也被判成"已见过"（真机误判来源：F083）。
+  function errToken(el) {
+    const cls = typeof el.className === "string" ? el.className : "";
+    return [el.tagName || "", el.id || "", cls, (el.textContent || "").trim().slice(0, 120)].join("|");
+  }
   function token(el) {
     let bg = "";
     try { bg = getComputedStyle(el).backgroundImage || ""; } catch (e) {}
@@ -72,7 +78,7 @@
     const errors = new Set([...document.querySelectorAll('[role="alert"]')].filter((el) => {
       if (!visibleNear(el, anchor)) return false;
       return /upload|image|file|图片|文件|格式|大小|失败/i.test(el.textContent || "");
-    }).map(token));
+    }).map(errToken));
     return { tokens, busy, errors };
   }
   async function waitAttachments(anchor, before, deadline, fileNames) {

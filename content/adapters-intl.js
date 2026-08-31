@@ -63,7 +63,7 @@
           escMenus(); return;
         }
         // 回退：无 effort 入口的旧布局（窄屏 Adaptive 开关），仅切裸开关；开关也缺失时保持
-        // 静默——fast() 依赖"无思考控件自然降级为纯选模型"的语义（见 fast() 注释），不误伤
+        // 静默——fast() 只选模型、从不进入本函数，此静默仅影响 think()（例外清单第 2 条）
         const sw = this._thinkSwitch();
         if (sw) { if ((sw.getAttribute("aria-checked") === "true") !== on) clickEl(sw); await sleep(300); }
         escMenus();
@@ -72,15 +72,7 @@
         const e = document.querySelector('[data-testid="model-selector-dropdown"]');
         return e ? (e.getAttribute("aria-label") || "") : "";
       },
-      // 嵌入态被官方锁 haiku 的识别（同步）：① 确在 iframe（独立标签恒 false）；
-      // ② 模型入口显示原始兜底 id（正常 UI 只显示友好名，绝不显示 api id）——claude 官方嵌入门，无干净绕过
-      _isEmbedLocked: function () {
-        try { return window.self !== window.top && /haiku-latest|3-5-haiku/i.test(this._label()); }
-        catch (e) { return false; }
-      },
       diagnose: function () {
-        if (this._isEmbedLocked())
-          return [{ name: t("diag_iframeLimited"), ok: false }];
         return [
           { name: t("diag_modelEntry"), ok: !!document.querySelector('[data-testid="model-selector-dropdown"]') },
           { name: t("diag_modelReadable"), ok: /opus|sonnet|haiku|fable/i.test(this._label()) },
@@ -89,7 +81,6 @@
       // think = Fable 5 High；fast = Sonnet 5（快模型，使用该模型默认设置）。
       // 判档：模型名带 sonnet/haiku 恒 fast；Fable/Opus 再按 thinking/effort 后缀（Adaptive/High/Extra/Max=think，Low/无后缀=fast，其余 effort 不判）
       state: function () {
-        if (this._isEmbedLocked()) return null; // 受限态：不谎报 "fast"，HUD 不亮琥珀
         const t = this._label();
         if (!t) return null;
         if (/sonnet|haiku/i.test(t)) return "fast";
@@ -109,12 +100,10 @@
         return el.querySelector(".row-start-2") || el;
       },
       think: async function () {
-        if (this._isEmbedLocked()) throw new Error("Claude 在 iframe 中被官方限制为 haiku，档位不可切换（请在独立标签使用）");
         await this._selectModel(/fable\s*5/i); await this._setThinking(true, "high");
       },
       // fast 只选 Sonnet 5，使用该模型记忆的默认 effort，避免把思考档的 High 强加给快档。
       fast: async function () {
-        if (this._isEmbedLocked()) throw new Error("Claude 在 iframe 中被官方限制为 haiku，档位不可切换（请在独立标签使用）");
         await this._selectModel(/sonnet\s*5/i);
       },
       attach: function (files, el, deadline) {
@@ -176,7 +165,7 @@
         const rs = await this._openEffort();
         const item = top ? rs[rs.length - 1] : rs[0];
         if (!item) { escMenus(); throw new Error("ChatGPT: 档位为空"); }
-        clickEl(item); await sleep(400);
+        clickEl(item); await sleep(400); escMenus(); // 收尾：档位子菜单不关会罩住输入框，让随后的注入点空
       },
       // 模型子菜单靠原生 click 展开；通用 pointer 序列会连续触发开/关而把两级菜单一起收起。
       _selectModel: async function (re) {
@@ -192,7 +181,7 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_intelEntry"), ok: !!this._anchor() },
+          { name: t("diag_intelEntry"), ok: !!document.querySelector('button.__composer-pill[aria-haspopup="menu"]') }, // 只判入口层：_anchor() 还要求文本属档位标签集，混判会把「标签集漂移」误报成「按钮消失」
           { name: t("diag_tierReadable"), ok: this.state() != null },
         ];
       },
@@ -249,7 +238,7 @@
         await this._openModelMenu();
         const item = await waitFor(() => this._find(re));
         if (!item) { escMenus(); throw new Error("Gemini: 未找到模型 " + re); }
-        clickEl(item); await sleep(700);
+        clickEl(item); await sleep(700); escMenus(); // 收尾：不依赖后续 _setThinking 替它关菜单
       },
       // 当前布局把 Extended thinking 作为模型菜单直达开关；旧布局仍走 Thinking level 嵌套子菜单。
       _setThinking: async function (re, on = true) {

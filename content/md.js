@@ -1,7 +1,9 @@
 // content/md.js — 可见 DOM → Markdown 通用序列化（汇总复制用），挂到 __AMS.toMarkdown。
 // 不做逐站规则：九站回答区都是 markdown 渲染出的标准 HTML（h/p/ul/ol/table/pre/a/strong…），
 // 一个串行器全站通吃。遍历时剔除隐藏节点（第三方注入的水印/翻译克隆）与操作件（按钮/svg），
-// 所见即所得；链接保留为 [文本](href)（引用 chip 因此带回来源 URL），表格转 GFM 管道表。
+// 所见即所得；链接保留为 [文本](href)（引用 chip 因此带回来源 URL），href 中的圆括号会被
+// 百分号编码防止截断目标（同 console/archive-detail.js 的 markdownUrl）；表格转 GFM 管道表。
+// 图片不贴签名/临时 src（会产出死链或过期图），只保留 alt 占位，保证纯图回答 text 非空。
 // ponytail: 嵌套列表不缩进（平铺输出）——回答里深嵌套罕见，需要时再给 list 传递 depth。
 (function () {
   "use strict";
@@ -43,6 +45,9 @@
       return /^(https?:|mailto:|tel:)$/.test(url.protocol) ? url.href : "";
     } catch (e) { return ""; }
   }
+  // URL 归一化不编码圆括号，裸拼进 [文本](href) 会被 CommonMark 的括号配平规则截断目标
+  // （真机实证：带查询参数的右括号 URL）。只编码目标本身，链接文本仍显示原始 href。
+  function mdUrl(href) { return href.replace(/[()]/g, (c) => (c === "(" ? "%28" : "%29")); }
   function inline(node) {
     let out = "";
     for (const n of node.childNodes) {
@@ -57,7 +62,11 @@
         if (/^[A-Za-z0-9+#.-]{1,20}$/.test(t)) { pendingLang = t.toLowerCase(); continue; }
       }
       if (tag === "BR") { out += "\n"; continue; }
-      if (tag === "IMG") continue;
+      if (tag === "IMG") { // 不贴 src（多为签名/临时短效 URL），只留 alt 占位保证 text 非空
+        const alt = (n.getAttribute("alt") || "").trim().replace(/\s+/g, " ").replace(/([\\`*_\[\]])/g, "\\$1");
+        out += "[" + (alt || (typeof t === "function" ? t("md_image") : "图片")) + "]";
+        continue;
+      }
       if (tag === "CODE") { // 内容自带反引号时用双反引号+空格包裹（CommonMark），防提前截断
         const c = (n.textContent || "").trim();
         const fence = backtickFence(c, 1), pad = c.includes("`") ? " " : "";
@@ -66,7 +75,7 @@
       if (tag === "A") {
         const href = safeHref(n);
         const t = inline(n).trim();
-        out += href ? "[" + (t || href) + "](" + href + ")" : t;
+        out += href ? "[" + (t || href) + "](" + mdUrl(href) + ")" : t;
         continue;
       }
       if (tag === "STRONG" || tag === "B") { const t = inline(n).trim(); out += t ? "**" + t + "**" : ""; continue; }

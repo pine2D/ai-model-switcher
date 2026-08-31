@@ -1,9 +1,10 @@
 // bg/windows.js — 窗口层：工作区查询/创建/定位/联动（popup-only 铁律核心）
 const STRIP_H = 96;
 
-// 控制台管理的窗口 host→{id,owned}（会话级，跨 SW 休眠但不跨浏览器重启）。owned=true 为控制台新建
-// （closeAll 可自动关）；owned=false 为复用的用户窗口（不擅自关）。后续所有按 host
-// 的操作都认这里登记的 windowId，不再裸查 tabs——否则会误抓用户事后在主窗口开的同站标签。
+// 控制台管理的窗口 host→{id,owned,orphans}（会话级，跨 SW 休眠但不跨浏览器重启）。owned=true 为控制台
+// 新建（closeAll 可自动关）；owned=false 预留给「复用用户窗口」——该路径当前没有任何生产者，生产代码里
+// owned 恒为 true（F003），别把它当现役保护引用。orphans：被导航走后失联的旧受管窗 id，closeAll 一并回收。
+// 后续所有按 host 的操作都认这里登记的 windowId，不再裸查 tabs——否则会误抓用户事后在主窗口开的同站标签。
 function getWindows() {
   return new Promise((res) => chrome.storage.session.get("amsWindows", (o) => { void chrome.runtime.lastError; res((o && o.amsWindows) || {}); }));
 }
@@ -59,36 +60,30 @@ async function primaryWorkArea() {
   return wa;
 }
 
-// 平铺/伴侣窗的基准工作区 = console 中心点所在显示器（拖到哪屏就铺哪屏）；取不到回退主屏。
-// 同时根除 reserve 混坐标系问题：console 在副屏时 (c.top+c.height)-wa.top 曾被算成跨屏距离。
-async function consoleWorkArea() {
+// 平铺/伴侣窗的统一几何（一次解析，供 openTile / scope / compose / archive 共用）：
+// wa = console 中心点所在显示器的工作区（拖到哪屏就铺哪屏，取不到回退主屏）；left/top/bottom = console
+// 窗口的实际边；reserve = console 底边相对 wa.top 的占高。关键：c.top 已含窗口管理器在 Chrome 几何之外
+// 的上移装饰（如 X410 给每个窗口套的 ~30px 标题栏——请求 top=0 时 Chrome 报告 top=30），只用 c.height
+// 会漏掉这段、让平铺窗压在 console 上。工作区与 console 坐标必须来自同一次解析：console 中心点落在所有
+// workArea 之外（被拖进任务栏带、副屏刚拔掉）时 wa 回退主屏，此时 (c.top+c.height)-wa.top 就是跨屏距离，
+// 曾把整组平铺窗算到屏幕之外（F006）——故未命中显示器/非 popup/缺字段时一律按「贴 wa 顶部的 STRIP_H
+// 细条」估算（attached=false，调用方据此不拿 console 的 left 做锚点），绝不混坐标系。
+async function consoleGeometry() {
   const wa = await primaryWorkArea();
+  const strip = (area) => ({ wa: area, left: area.left, top: area.top, bottom: area.top + STRIP_H, reserve: STRIP_H, attached: false });
   const cid = await getConsoleWinId();
-  if (cid == null) return wa;
+  if (cid == null) return strip(wa);
   try {
     const [c, info] = [await chrome.windows.get(cid), await chrome.system.display.getInfo()];
     const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
     const d = info.find((x) => x.workArea && cx >= x.workArea.left && cx < x.workArea.left + x.workArea.width &&
       cy >= x.workArea.top && cy < x.workArea.top + x.workArea.height);
-    return (d && d.workArea) || wa;
-  } catch (e) { return wa; }
+    const area = (d && d.workArea) || wa;
+    if (!d || !d.workArea || c.type !== "popup" || c.top == null || c.height == null) return strip(area);
+    return { wa: area, left: c.left, top: c.top, bottom: c.top + c.height, reserve: Math.max(STRIP_H, c.top + c.height - area.top), attached: true };
+  } catch (e) { return strip(wa); }
 }
-
-// 平铺需保留的顶部高度 = 控制台窗口的「实际底边」相对工作区顶。
-// 关键：c.top 已含窗口管理器在 Chrome 几何之外的上移装饰（如 X410 windowed 模式给每个
-// 窗口套的 ~30px 标题栏——请求 top=0 时 Chrome 会报告 top=30）。故必须用 (c.top+c.height)
-// -wa.top 才是真实占高；只用 c.height 会漏掉这段上移，导致平铺窗口压在控制台上。
-// 取不到登记窗口时回退 STRIP_H（原生 Windows/macOS 无此上移，结果即 96）。
-async function consoleReserveHeight(wa) {
-  const cid = await getConsoleWinId();
-  if (cid != null) {
-    try {
-      const c = await chrome.windows.get(cid);
-      if (c && c.top != null && c.height != null) return Math.max(STRIP_H, (c.top + c.height) - wa.top);
-    } catch (e) {}
-  }
-  return STRIP_H;
-}
+async function consoleWorkArea() { return (await consoleGeometry()).wa; } // 只要工作区的调用点（compose/archive）
 
 async function getConsoleWinId() {
   if (consoleWinId != null) return consoleWinId;
@@ -109,12 +104,22 @@ async function getArchiveWinId() {
   return archiveWinId;
 }
 
-let _openingConsole = null; // in-flight 去重：SW 冷启动时连按 Alt+Q 两个 onCommand 背靠背派发会双开 console
-async function openConsole(prefillHost) {
-  if (_openingConsole) return _openingConsole;
-  _openingConsole = _openConsole(prefillHost).finally(() => { _openingConsole = null; });
-  return _openingConsole;
+// in-flight 去重（console/compose/archive/scope 四个开窗入口共用）：SW 冷启动时背靠背两条消息会双开窗
+// 并孤儿化前一个。但只看「有没有在途」会连第二次调用的参数一起吞掉——归档窗点「辅助综合」后立刻点
+// console 的「编辑」，第二条命中在途 promise，`mode:"synthesis"` 被静默丢弃、弹出普通编辑窗（F005）。
+// 故按参数指纹分桶：同指纹复用在途 promise；指纹不同的排到它后面重跑一遍（复用分支会把既有窗导航到
+// 正确 URL），参数不再被吞掉。
+const _inflight = new Map();
+function onceByKey(name, key, run) {
+  const cur = _inflight.get(name);
+  if (cur && cur.key === key) return cur.promise;
+  const rec = { key };
+  rec.promise = (cur ? cur.promise.catch(() => {}) : Promise.resolve()).then(run)
+    .finally(() => { if (_inflight.get(name) === rec) _inflight.delete(name); });
+  _inflight.set(name, rec);
+  return rec.promise;
 }
+async function openConsole(prefillHost) { return onceByKey("console", prefillHost || "", () => _openConsole(prefillHost)); }
 async function _openConsole(prefillHost) {
   // 幂等：已开则聚焦既有 console（经 type 校验，陈旧/撞日常窗 → 继续新建），杜绝重复 console 孤立旧窗
   const cid = await getConsoleWinId();
@@ -164,12 +169,9 @@ async function ensureConsoleReady(prefillHost, timeoutMs = 5000) { return new Pr
 // 伴侣编辑窗：控制面（同 console），绝不进 amsWindows；通过专属 id 随工作区联动和关闭。
 // anchor（可选）= console 输入框的视口内 {left,width}：据此把伴侣窗贴 console 底边、与输入框等宽，
 // 制造「输入框向下展开」的错觉。取不到 console 几何则回退居中。
-// in-flight 去重同 openConsole：背靠背两条 openCompose 消息会双开伴侣窗并孤儿化前一个。
-let _openingCompose = null;
+// in-flight 去重见 onceByKey：mode + anchor 一起进指纹，「辅助综合」不会被并发的普通「编辑」降级（F005）。
 async function openCompose(anchor, mode) {
-  if (_openingCompose) return _openingCompose;
-  _openingCompose = _openCompose(anchor, mode).finally(() => { _openingCompose = null; });
-  return _openingCompose;
+  return onceByKey("compose", (mode || "") + "|" + JSON.stringify(anchor || null), () => _openCompose(anchor, mode));
 }
 async function _openCompose(anchor, mode) {
   const desired = chrome.runtime.getURL("console/compose.html") + (mode === "synthesis" ? "?mode=synthesis" : "");
@@ -200,12 +202,7 @@ async function _openCompose(anchor, mode) {
 
 // 归档查看窗：与伴侣窗同款受管（专属登记 id、随 console 联动最小化/抬前、closeAll 一起关、
 // 绝不进 amsWindows）。幂等：已开则聚焦（经 type 校验，陈旧 id/撞日常窗 → 继续新建）。
-let _openingArchive = null;
-async function openArchive() {
-  if (_openingArchive) return _openingArchive;
-  _openingArchive = _openArchive().finally(() => { _openingArchive = null; });
-  return _openingArchive;
-}
+async function openArchive() { return onceByKey("archive", "", () => _openArchive()); }
 async function _openArchive() {
   const aid = await getArchiveWinId();
   if (aid != null && await updateIfPopup(aid, { focused: true, state: "normal" })) return;
@@ -283,11 +280,13 @@ async function getAutoRaise() {
   const o = await new Promise((r) => chrome.storage.local.get({ amsAutoRaise: true }, (v) => { void chrome.runtime.lastError; r(v); }));
   return o.amsAutoRaise !== false;
 }
-// 关闭全部：仅关闭控制台新建（owned）的窗口（复用/用户窗口不动），并清空登记；伴侣窗一起关
+// 关闭全部：关闭控制台新建（owned）的窗口，以及它留下的孤儿窗（被导航走后失联的旧受管窗，F001——
+// 当场不关是因为用户很可能正在那个窗里登录）；复用/用户窗口不动。随后清空登记；伴侣窗一起关。
 async function closeAll() {
   await clearLastRun();
   const wins = await getWindows();
   for (const host of Object.keys(wins)) {
+    for (const id of wins[host].orphans || []) await removeIfPopup(id);
     if (wins[host].owned) { await removeIfPopup(wins[host].id); }
   }
   await setWindows({});

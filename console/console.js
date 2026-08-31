@@ -120,21 +120,28 @@ function load() {
   });
 }
 // 排队操作忙碌态：openTile/closeAll/newSession/sendAll 在 bg 走 serializeOp 严格排队，群发中点这些
-// 按钮最长要等 ~22s 才真正执行——零反馈像卡死。禁用到回调返回，兜底定时器防回调丢失永久禁用。
+// 按钮最长要等纯文本 44s、带图 90s 才真正执行——零反馈像卡死。禁用到回调返回，兜底定时器按当前
+// 是否有带图群发在途取值防回调丢失永久禁用（F009）。
 function busy(btn, ms) {
   const reset = () => { btn.disabled = false; };
   btn.disabled = true;
-  const timer = setTimeout(reset, ms || 30000);
+  const inflightImage = progress.total && progress.done < progress.total && lastSend && lastSend.hasImage;
+  const timer = setTimeout(reset, ms || (inflightImage ? 110000 : 30000));
   return () => { clearTimeout(timer); reset(); };
 }
 document.getElementById("tile").addEventListener("click", (e) => {
   const sites = chosen(); if (!sites.length) return;
   ignoreResults = false; // 用户新动作：解除 closeAll 后的结果忽略态
   const free = busy(e.currentTarget);
-  // Task 7: 改用 state "send"
-  sites.forEach((s) => setDot(s.host, "send", t("con_winOpening")));
-  armDotTimeouts(sites.map((s) => s.host)); // 回调断掉时"开窗中"不永久挂起
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openTile", sites }, (resp) => { free(); applyResults(resp && resp.results); });
+  // F012：已处于 send 态（真在群发中）的芯片不属于这次"开窗中"提示的对象——既不能被立即改写，
+  // 响应回来时也不能被 openTile 的结果（如 reused）改写，否则群发进度会被平铺悄悄抹掉。
+  const alreadySending = new Set(sites.filter((s) => document.querySelector('.chip[data-host="' + s.host + '"]')?.classList.contains("send")).map((s) => s.host));
+  sites.forEach((s) => { if (!alreadySending.has(s.host)) setDot(s.host, "send", t("con_winOpening"), { kind: "hint", payload: "con_winOpening" }); });
+  armDotTimeouts(sites.filter((s) => !alreadySending.has(s.host)).map((s) => s.host)); // 回调断掉时"开窗中"不永久挂起
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "openTile", sites }, (resp) => {
+    free();
+    applyResults((resp && resp.results || []).filter((r) => !alreadySending.has(r.host)));
+  });
 });
 function markInvalid(el) { el.setAttribute("aria-invalid", "true"); el.focus(); }
 document.getElementById("send").addEventListener("click", async () => {
@@ -151,8 +158,12 @@ document.getElementById("send").addEventListener("click", async () => {
   catch (error) { elSend.disabled = false; flashNote(t("con_failed")); return; }
   pushHistory(text);
   lastSend = { text, ...run, tier: elTier.value || null, hasImage: images.length > 0, images };
-  const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, images.length ? 95000 : 48000);
-  sites.forEach((s) => setDot(s.host, "send", t("con_sendingTile")));
+  // F019：起表时刻是点击（早于 openTile），预算须覆盖 openTile 最坏耗时 + 后台绝对线，留 ≥20% 余量；
+  // 历史基线 95000（带图，仅约 5.5% 余量）保留 +15000 补足到约 22%，纯文本基线一并从 48000 上调到 60000。
+  const budget = images.length ? 95000 + 15000 : 60000;
+  const reEnableTimer = setTimeout(() => { elSend.disabled = false; }, budget);
+  sites.forEach((s) => setDot(s.host, "send", t("con_sendingTile"), { kind: "hint", payload: "con_sendingTile" }));
+  armDotTimeouts(sites.map((s) => s.host), budget); // F115：sendStart 广播丢失（SW 被杀/扩展重载）时的独立安全网
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "sendAll", sites, text, tier: elTier.value || null, images, run }, (resp) => {
     clearTimeout(reEnableTimer); elSend.disabled = false; applyResults(resp && resp.results);
   });
@@ -182,7 +193,10 @@ document.getElementById("archive").addEventListener("click", () => {
 document.getElementById("newsession").addEventListener("click", (e) => {
   const sites = chosen(); if (!sites.length) return;
   const free = busy(e.currentTarget);
-  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "newSession", sites }, () => { void chrome.runtime.lastError; free(); });
+  chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "newSession", sites }, () => {
+    void chrome.runtime.lastError; free();
+    document.getElementById("live").textContent = t("con_liveNewSession", sites.length); // F119
+  });
 });
 document.addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat || e.isComposing) return;
@@ -194,6 +208,7 @@ document.getElementById("closeall").addEventListener("click", (e) => {
   const free = busy(e.currentTarget);
   chrome.runtime.sendMessage({ source: "AMS_CONSOLE", action: "closeAll" }, () => { void chrome.runtime.lastError; free(); });
   clearRunState(); // 在途群发的迟到结果不得复活刚清空的芯片（下一次 sendStart/tile/checkup 解除）
+  document.getElementById("live").textContent = t("con_liveClosedAll"); // F119：须放在 clearRunState() 之后，避免被它内部的 updateFailSum 覆盖
 });
 elTier.addEventListener("change", () => { syncTierButtons(); save(); });
 elPrompt.addEventListener("input", () => {

@@ -4,12 +4,16 @@ applyI18n();
 const composeContextReady = ComposeContext.init().catch(() => false);
 const elText = document.getElementById("ch-text");
 const elList = document.getElementById("cmp-list");
+// F123：listbox 语义要求方向键导航 + aria-activedescendant，这里没有实现（每条都是独立 tab stop），
+// 静态 role="listbox" 会让读屏播报"用方向键选择"却完全无效——降级为纯按钮列表，与 archive.html 的既有先例一致
+elList.removeAttribute("role");
 const elActions = document.getElementById("cmp-actions");
 const elNameRow = document.getElementById("cmp-name");
 const elConfirm = document.getElementById("cmp-confirm");
 const finishButtons = ["ch-close", "ch-back", "ch-send"].map((id) => document.getElementById(id));
 let templates = [], history = [], historyCursor = null, historyLoadToken = 0, activeKind = "templates", selectedTemplate = -1;
 let finishing = false;
+let pendingDeleteId = null, pendingDeleteUntil = 0; // 模板删除确认目标（按 id 定位，不用下标——见 disarmTemplateDelete）
 
 function setFinishing(value) { finishing = value; finishButtons.forEach((button) => { button.disabled = value; }); }
 function requestConsoleReady() {
@@ -55,7 +59,9 @@ function restoreRowFocus() {
   rowOpener = null;
   try { target.focus(); } catch (e) {}
 }
+function disarmTemplateDelete() { pendingDeleteId = null; pendingDeleteUntil = 0; }
 function closeLibraryRow() { // 取消 / Escape / 删除确认取消共用的收尾
+  disarmTemplateDelete();
   showLibraryRow(elActions);
   restoreRowFocus();
 }
@@ -65,6 +71,9 @@ function syncTemplateActions() {
   document.getElementById("cmp-delete-template").disabled = selectedTemplate < 0;
 }
 function renderLibrary() {
+  // 删除确认开着时，任何重渲染（换选中条目/正文框改字/模板跨设备同步）都撤销它，目标绝不漂移（F113，同 archive.js 的 disarmDel）；
+  // 只在真有确认待处理时才收尾，避免顺带打断正在打开的「保存为模板…」命名行（两者互不相关）
+  if (pendingDeleteId) { disarmTemplateDelete(); showLibraryRow(elActions); }
   const items = activeKind === "templates" ? templates : history;
   elList.replaceChildren();
   if (!items.length) {
@@ -75,8 +84,8 @@ function renderLibrary() {
   }
   items.forEach((item, index) => {
     const button = document.createElement("button");
-    button.type = "button"; button.className = "cmp-item"; button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(activeKind === "templates" && index === selectedTemplate));
+    button.type = "button"; button.className = "cmp-item";
+    button.setAttribute("aria-current", String(activeKind === "templates" && index === selectedTemplate));
     const title = document.createElement("strong"); title.textContent = itemLabel(item);
     const preview = document.createElement("span"); preview.textContent = item.text || item.preview || "";
     button.append(title, preview);
@@ -139,13 +148,20 @@ document.getElementById("cmp-template-name").addEventListener("keydown", (event)
 });
 document.getElementById("cmp-delete-template").addEventListener("click", () => {
   if (selectedTemplate < 0) return;
+  pendingDeleteId = templates[selectedTemplate].id; pendingDeleteUntil = Date.now() + 3000;
   document.getElementById("cmp-confirm-text").textContent = t("con_delTpl", itemLabel(templates[selectedTemplate]));
   showLibraryRow(elConfirm); document.getElementById("cmp-confirm-no").focus();
+  // 确认行不设超时会无限期挂着（跨设备同步到来前都是漂移窗口）；到点自动撤销，双重校验防止旧计时器抢在重新武装后误关
+  setTimeout(() => { if (pendingDeleteId && Date.now() >= pendingDeleteUntil) closeLibraryRow(); }, 3100);
 });
 document.getElementById("cmp-confirm-yes").addEventListener("click", () => {
-  if (selectedTemplate >= 0) templates = templates.filter((_, index) => index !== selectedTemplate);
-  selectedTemplate = -1; chrome.storage.local.set({ amsTemplates: templates });
-  showLibraryRow(elActions); renderLibrary(); restoreRowFocus();
+  const targetId = pendingDeleteId;
+  if (templates.some((item) => item.id === targetId)) {
+    templates = templates.filter((item) => item.id !== targetId);
+    chrome.storage.local.set({ amsTemplates: templates });
+  }
+  selectedTemplate = -1;
+  renderLibrary(); restoreRowFocus(); // renderLibrary 顶部已撤销确认态；目标已漂移时这里只是安全放弃，不误删
 });
 document.getElementById("cmp-confirm-no").addEventListener("click", closeLibraryRow);
 elConfirm.addEventListener("keydown", (event) => { // 迁移时丢的：确认行原本可 Escape 关闭

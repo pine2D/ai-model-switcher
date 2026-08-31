@@ -27,7 +27,30 @@ function chooseImages(files) {
   if (list.some((file) => file.size < 1) || total > MAX_IMAGE_BYTES) {
     flashNote(t("con_imageSize")); return false;
   }
-  setPendingImages(list); return true;
+  setPendingImages(list);
+  verifyImages(pendingImages); // F092：魔数 + 解码校验前移到选图时刻，别等开窗后六站各报一次 image_invalid
+  return true;
+}
+// 只在环境具备字节读取能力时深度校验（真实 File 皆支持 .slice/.arrayBuffer）；测试/受限环境读不到
+// 字节就放行——宁可漏检也不能把不支持该 API 的宿主环境误判成坏图，content/upload.js 仍会兜底校验。
+const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10];
+async function isValidImage(file) {
+  if (typeof file.slice !== "function") return true;
+  try {
+    const bytes = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    const png = bytes.length >= 8 && PNG_SIG.every((v, i) => bytes[i] === v);
+    const jpeg = bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+    if (file.type === "image/png" ? !png : !jpeg) return false;
+    const bitmap = await createImageBitmap(file);
+    if (bitmap && typeof bitmap.close === "function") bitmap.close();
+    return true;
+  } catch (e) { return false; }
+}
+// list 是 setPendingImages 落地的那个数组引用：只在校验完成时仍是"当前选择"才生效，
+// 避免用户在校验期间又选了新一批，异步结果回来时把新选择错误地清空。
+async function verifyImages(list) {
+  const ok = (await Promise.all(list.map(isValidImage))).every(Boolean);
+  if (!ok && pendingImages === list) { setPendingImages([]); flashNote(t("con_imageType")); }
 }
 
 function imagePayload(file) {

@@ -2,6 +2,7 @@
 const ArchiveDetail = (() => {
   let cancelPendingNote = () => {};
   let renderGeneration = 0;
+  let lastFocusEntryId = null; // 同条目重渲染时用于续接备注焦点/选区（F112）
   const savingNotes = new Set();
   const successful = (result) => typeof result?.text === "string" && result.text.trim();
   const node = (tag, className, text) => {
@@ -21,7 +22,7 @@ const ArchiveDetail = (() => {
   }
   const markdownText = (value) => String(value).replace(/[\r\n]+/g, " ").replace(/[\\[\]]/g, "\\$&");
   const markdownUrl = (value) => value.replace(/[()]/g, (char) => char === "(" ? "%28" : "%29").replace(/\s/g, (char) => encodeURIComponent(char));
-  function entryMarkdown(entry, errorText = (result) => result.code || t("con_errNoAnswer")) {
+  function entryMarkdown(entry, errorText = () => t("con_errNoAnswer")) {
     const markdown = ["# " + t("arc_question"), "\n" + question(entry)];
     const url = sourceUrl(entry.source);
     if (url) markdown.push("\n**" + t("arc_source") + "**: [" + markdownText(entry.source.title || url) + "](" + markdownUrl(url) + ")");
@@ -42,6 +43,10 @@ const ArchiveDetail = (() => {
     const generation = ++renderGeneration;
     cancelPendingNote();
     const root = document.getElementById("ar-detail");
+    // 同条目重渲染（如收藏/胜出点击成功后的重绘）不该打断正在输入的备注：先记下光标，重建 DOM 后按 id 续接
+    const activeNote = document.activeElement;
+    const noteFocus = (entry.id === lastFocusEntryId && activeNote && activeNote.id === "ar-note")
+      ? { start: activeNote.selectionStart, end: activeNote.selectionEnd } : null;
     const save = (patch) => Promise.resolve().then(() => update(entry.id, patch)).then(() => true, () => false);
     root.replaceChildren(node("h1", "ar-question", question(entry)));
     const capturedAt = new Date(Number(entry.ts || entry.createdAt));
@@ -113,6 +118,12 @@ const ArchiveDetail = (() => {
       section.append(heading, body); sections.push(section);
     });
     root.appendChild(nav); root.append(...sections);
+    if (noteFocus) {
+      note.focus();
+      const len = note.value.length; // value 已在上方写好，裁剪选区防止越界
+      note.setSelectionRange(Math.min(noteFocus.start, len), Math.min(noteFocus.end, len));
+    }
+    lastFocusEntryId = entry.id;
   }
   return { render, entryMarkdown, question };
 })();

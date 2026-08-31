@@ -4,10 +4,10 @@ const DataAdmin = (() => {
   const LOCAL_KEYS = ["amsLang", "amsTheme", "displayMode", "amsAutoRaise", "amsConsole", "amsConsolePrompt",
     "amsConsolePrefill", "amsTemplates", "amsGroups", "amsHistory", "amsArchive", "amsSyncConfig", "amsSyncStatus"];
   const SESSION_KEYS = ["amsComposeContext", "amsComposeContextError", "amsComposeDispatchUntil", "amsLastRun",
-    "amsPendingRun", "amsPendingSynthesis"];
+    "amsPendingRun", "amsPendingSynthesis", "amsComposeSynthesis"];
   const liveIds = async (kind) => {
     const ids = [];
-    await SyncStore.iterate(kind, (record) => { if (!Object.hasOwn(record, "deletedAt")) ids.push(record.id); });
+    await (SyncStore.scanAll || SyncStore.iterate)(kind, (record) => { if (!Object.hasOwn(record, "deletedAt")) ids.push(record.id); });
     return ids;
   };
   async function clearHistory() {

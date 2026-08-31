@@ -3,7 +3,7 @@
 // MSG 由各 surface 任务填充：{ key: { en, zh_CN, zh_TW } }
 const MSG = {
   // —— console 段（I2）——
-  con_groupPh: { en: "Group", zh_CN: "分组", zh_TW: "分組" },
+  con_windowTitle: { en: "Broadcast Console", zh_CN: "群发控制台", zh_TW: "群發主控台" },
   con_scopeCount: { en: "{0}/{1} sites", zh_CN: "已选 {0}/{1}", zh_TW: "已選 {0}/{1}" },
   con_tierKeep: { en: "Tier: keep", zh_CN: "档位：不变", zh_TW: "檔位：不變" },
   con_tierThink: { en: "🧠 Deep think", zh_CN: "🧠 深度思考", zh_TW: "🧠 深度思考" },
@@ -11,13 +11,8 @@ const MSG = {
   con_tierKeepShort: { en: "Keep", zh_CN: "保持", zh_TW: "保持" },
   con_tierThinkShort: { en: "Think", zh_CN: "深思", zh_TW: "深思" },
   con_tierFastShort: { en: "Fast", zh_CN: "快速", zh_TW: "快速" },
-  con_tplPh: { en: "Template", zh_CN: "模板", zh_TW: "範本" },
-  con_histPh: { en: "History", zh_CN: "历史", zh_TW: "歷史" },
-  con_histTitle: { en: "Question history (use ↑/↓ in the input)", zh_CN: "提问历史（可在输入框中按 ↑/↓ 切换）", zh_TW: "提問記錄（可在輸入框中按 ↑/↓ 切換）" },
   con_collectDonePart: { en: "Summary of {0} sites copied ({1} without answers)", zh_CN: "已复制 {0} 站汇总（{1} 站无回答）", zh_TW: "已複製 {0} 站彙總（{1} 站無回答）" },
   con_autoRetried: { en: "auto-retried", zh_CN: "已自动重试", zh_TW: "已自動重試" },
-  con_exportTitle: { en: "Export summary as .md file", zh_CN: "汇总导出：保存为 .md 文件", zh_TW: "彙總匯出：儲存為 .md 檔案" },
-  con_exportDone: { en: "Summary of {0} sites saved as .md", zh_CN: "已导出 {0} 站汇总为 .md 文件", zh_TW: "已匯出 {0} 站彙總為 .md 檔案" },
   con_archiveTitle: { en: "Open result library (questions and answers)", zh_CN: "打开结果库（问题和各站回答）", zh_TW: "開啟結果庫（問題和各網站回答）" },
   arc_listAria: { en: "Result library entries", zh_CN: "结果库条目", zh_TW: "結果庫項目" },
   arc_empty: { en: "The result library is empty.", zh_CN: "结果库中暂无内容。", zh_TW: "結果庫中尚無內容。" },
@@ -47,23 +42,15 @@ const MSG = {
   con_imageSize: { en: "Images must total 10 MiB or less", zh_CN: "图片总大小必须小于或等于 10 MiB", zh_TW: "圖片總大小必須小於或等於 10 MiB" },
   con_imageRead: { en: "Could not read the images. Choose them again.", zh_CN: "读取图片失败，请重新选择。", zh_TW: "讀取圖片失敗，請重新選擇。" },
   con_sendAll: { en: "Send", zh_CN: "发送", zh_TW: "發送" },
-  con_tile: { en: "Tile", zh_CN: "平铺", zh_TW: "平鋪" },
-  con_collect: { en: "Copy", zh_CN: "汇总", zh_TW: "彙總" },
   con_scrollSitesLeft: { en: "Scroll sites left", zh_CN: "向左滚动站点", zh_TW: "向左捲動網站" },
   con_scrollSitesRight: { en: "Scroll sites right", zh_CN: "向右滚动站点", zh_TW: "向右捲動網站" },
   con_composeTitle: { en: "Open prompt workspace", zh_CN: "打开提示词工作区", zh_TW: "開啟提示詞工作區" },
   con_retryTitle: { en: "Retry failed sites · Alt+R", zh_CN: "重试失败的站点 · Alt+R", zh_TW: "重試失敗的網站 · Alt+R" },
   con_newSessionTitle: { en: "New session for selected sites (reload each window) · Alt+N", zh_CN: "为所选站点开启新会话（重载各窗口）· Alt+N", zh_TW: "為所選網站開啟新對話（重新載入各視窗）· Alt+N" },
   con_closeAllTitle: { en: "Close all windows opened by console", zh_CN: "关闭控制台开启的全部窗口", zh_TW: "關閉主控台開啟的全部視窗" },
-  con_grpSaveTitle: { en: "Save current selection as group", zh_CN: "把当前勾选存为分组", zh_TW: "將目前勾選儲存為群組" },
-  con_grpDelTitle: { en: "Delete selected custom group", zh_CN: "删除选中的自定义分组", zh_TW: "刪除選取的自訂群組" },
   con_groupTitle: { en: "Select sites: all, clear, toggle one, or apply a group", zh_CN: "选择站点：全部、清空、切换单站或应用分组", zh_TW: "選擇網站：全部、清空、切換單一網站或套用群組" },
   con_groupAria: { en: "Select sites", zh_CN: "选择站点", zh_TW: "選擇網站" },
   con_tierTitle: { en: "Tier before send", zh_CN: "发送前档位", zh_TW: "發送前檔位" },
-  con_tplTitle: { en: "Prompt template", zh_CN: "提示词模板", zh_TW: "提示詞範本" },
-  con_nameAria: { en: "Name (template / group)", zh_CN: "名称（模板/分组）", zh_TW: "名稱（範本／群組）" },
-  con_tplSaveTitle: { en: "Save current input as template", zh_CN: "保存当前输入为模板", zh_TW: "儲存目前輸入為範本" },
-  con_tplDelTitle: { en: "Delete selected template", zh_CN: "删除选中模板", zh_TW: "刪除選取的範本" },
   con_delete: { en: "Delete", zh_CN: "删除", zh_TW: "刪除" },
   con_cancel: { en: "Cancel", zh_CN: "取消", zh_TW: "取消" },
   con_sending: { en: "Sending {0}/{1}", zh_CN: "发送中 {0}/{1}", zh_TW: "發送中 {0}/{1}" },
@@ -81,24 +68,18 @@ const MSG = {
   con_grpNone: { en: "None", zh_CN: "清空", zh_TW: "清空" },
   con_grpIntl: { en: "International", zh_CN: "国外", zh_TW: "國際網站" },
   con_grpDomestic: { en: "China-based", zh_CN: "国内", zh_TW: "中國網站" },
-  con_grpSection: { en: "Presets", zh_CN: "预设", zh_TW: "預設" },
   con_grpSites: { en: "Toggle site", zh_CN: "切换单站", zh_TW: "切換單站" },
-  con_grpMine: { en: "My groups", zh_CN: "我的分组", zh_TW: "我的群組" },
-  con_more: { en: "More", zh_CN: "更多", zh_TW: "更多" },
-  con_moreTitle: { en: "Tools, templates, and history", zh_CN: "工具、模板与历史", zh_TW: "工具、範本與歷史" },
-  con_moreHistory: { en: "History", zh_CN: "历史", zh_TW: "歷史" },
-  con_moreTemplates: { en: "Templates", zh_CN: "模板", zh_TW: "範本" },
-  con_moreGroups: { en: "Groups", zh_CN: "分组", zh_TW: "群組" },
-  con_moreTools: { en: "Tools", zh_CN: "工具", zh_TW: "工具" },
-  con_moreTplSave: { en: "Save prompt as template…", zh_CN: "保存当前提示词为模板…", zh_TW: "儲存目前提示詞為範本…" },
-  con_moreTplDel: { en: "Delete applied template…", zh_CN: "删除已应用模板…", zh_TW: "刪除已套用範本…" },
   con_moreGrpSave: { en: "Save selection as group…", zh_CN: "保存当前选择为分组…", zh_TW: "儲存目前選擇為群組…" },
   con_moreGrpDel: { en: "Delete matching group…", zh_CN: "删除匹配当前选择的分组…", zh_TW: "刪除符合目前選擇的群組…" },
-  con_moreExport: { en: "Export summary (.md)", zh_CN: "导出汇总（.md）", zh_TW: "匯出彙總（.md）" },
   con_moreArchive: { en: "Open result library", zh_CN: "打开结果库", zh_TW: "開啟結果庫" },
   con_moreCheckup: { en: "Check selected sites", zh_CN: "巡检所选站点", zh_TW: "巡檢所選網站" },
-  con_moreNewSession: { en: "New session for selected sites", zh_CN: "为所选站点开启新会话", zh_TW: "為所選網站開啟新對話" },
   con_sendingDot: { en: "Sending…", zh_CN: "发送中", zh_TW: "發送中" },
+  // #live 播报（读屏专用，唯一进度通道，F119）
+  con_liveSendStart: { en: "Sending to {0} sites", zh_CN: "开始向 {0} 站发送", zh_TW: "開始向 {0} 站傳送" },
+  con_liveProgress: { en: "Progress {0}/{1}", zh_CN: "进度 {0}/{1}", zh_TW: "進度 {0}/{1}" },
+  con_liveTileDone: { en: "Tile done: {0} ready, {1} failed", zh_CN: "平铺完成：{0} 站已就绪，{1} 站失败", zh_TW: "平鋪完成：{0} 站已就緒，{1} 站失敗" },
+  con_liveNewSession: { en: "Started a new session for {0} sites", zh_CN: "已为 {0} 站开启新会话", zh_TW: "已為 {0} 站開啟新對話" },
+  con_liveClosedAll: { en: "Closed all sites", zh_CN: "已关闭全部站点", zh_TW: "已關閉全部網站" },
   // 群发失败原因（错误码 → 文案，console.js ERR_KEYS）
   con_errTimeout: { en: "Timed out. Check that the site is signed in and loaded, then retry.", zh_CN: "操作超时。请确认该站已登录且页面加载完成，然后重试。", zh_TW: "操作逾時。請確認該網站已登入且頁面載入完成，然後重試。" },
   con_errImageInvalid: { en: "The image data is invalid. Choose the images again.", zh_CN: "图片数据无效，请重新选择。", zh_TW: "圖片資料無效，請重新選擇。" },
@@ -117,7 +98,6 @@ const MSG = {
   con_failSum: { en: "{0} failed: {1}. Hover over a chip for details, then select Retry.", zh_CN: "{0} 站发送失败：{1}。将鼠标悬停在站点上可查看原因，然后点击重试。", zh_TW: "{0} 個網站傳送失敗：{1}。將游標停在網站上可查看原因，然後按一下重試。" },
   con_histPos: { en: "History {0}/{1}", zh_CN: "历史 {0}/{1}", zh_TW: "歷史 {0}/{1}" },
   con_historySaveFailed: { en: "Question history was not saved", zh_CN: "提问历史未保存", zh_TW: "提問歷史未儲存" },
-  con_checkupTitle: { en: "Check adapters for selected sites (read-only)", zh_CN: "只读检查所选站点的适配器", zh_TW: "以唯讀方式檢查所選網站的適配器" },
   con_checking: { en: "Checking…", zh_CN: "巡检中", zh_TW: "巡檢中" },
   con_checkupOk: { en: "Checkup passed", zh_CN: "自检通过", zh_TW: "自檢通過" },
   scope_checkDone: { en: "{0} passed · {1} need attention", zh_CN: "{0} 站正常 · {1} 站需处理", zh_TW: "{0} 站正常 · {1} 站需處理" },
@@ -125,6 +105,7 @@ const MSG = {
   scope_reportCopied: { en: "Diagnostic report copied", zh_CN: "已复制诊断报告", zh_TW: "已複製診斷報告" },
   scope_reportHint: { en: "When reporting, note: 1) does text appear in the composer 2) was it actually sent 3) any error message 4) which step broke. Submit: https://github.com/pine2D/polyask/issues/new/choose", zh_CN: "报障请说明：①输入框有没有出现文字 ②有没有真的发出去 ③有没有报错文案 ④坏在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose", zh_TW: "回報請說明：①輸入框有沒有出現文字 ②有沒有真的送出 ③有沒有錯誤文案 ④壞在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose" },
   con_errNoWindow: { en: "No window is open. Select Tile or Send first.", zh_CN: "尚未打开窗口，请先平铺或发送。", zh_TW: "尚未開啟視窗，請先平鋪或傳送。" },
+  con_errNoView: { en: "Site view unavailable", zh_CN: "站点视图不可用", zh_TW: "網站檢視無法使用" },
   con_errNotReady: { en: "Not ready. Reload the site tab; this often happens after the extension reloads.", zh_CN: "页面未就绪，请刷新该站标签页。扩展刚重载时常会出现此情况。", zh_TW: "頁面尚未就緒，請重新整理該網站的分頁。擴充功能剛重新載入時常會出現此情況。" },
   con_collectTitle: { en: "Copy the selected sites' latest answers as Markdown · Alt+C", zh_CN: "将所选站点的最新回答汇总为 Markdown 并复制 · Alt+C", zh_TW: "將所選網站的最新回答彙整為 Markdown 並複製 · Alt+C" },
   con_collectDone: { en: "Summary of {0} sites copied to clipboard", zh_CN: "已复制 {0} 站汇总到剪贴板", zh_TW: "已複製 {0} 站彙總到剪貼簿" },
@@ -158,42 +139,15 @@ const MSG = {
   cmp_scopeN:      { en: "{0} sites",                   zh_CN: "{0} 站",          zh_TW: "{0} 站" },
   cmp_scopeColon:  { en: ": ",                          zh_CN: "：",              zh_TW: "：" },
   // —— popup 段（I4）——
-  pop_think:       { en: "Deep Think",                                   zh_CN: "深度思考",                          zh_TW: "深度思考" },
-  pop_fast:        { en: "Fast Model",                                   zh_CN: "快速模型",                          zh_TW: "快速模型" },
   pop_openConsole: { en: "Open Broadcast Console",                      zh_CN: "打开群发控制台",                    zh_TW: "開啟群發主控台" },
   pop_unsupported: { en: "Tier switching works on AI site tabs (broadcast console is unaffected)", zh_CN: "档位切换需在 AI 站点页使用（群发控制台不受影响）", zh_TW: "檔位切換需在 AI 網站分頁中使用（群發主控台不受影響）" },
-  pop_grpLegend:   { en: "Broadcast",                                   zh_CN: "群发",                              zh_TW: "群發" },
-  pop_autoRaise:   { en: "Auto-raise all windows after send",           zh_CN: "发送后自动置顶全部窗口",            zh_TW: "群發後自動置頂全部視窗" },
-  pop_autoRaiseShort: { en: "Auto-raise after send",                     zh_CN: "发送后自动置顶",                    zh_TW: "群發後自動置頂" },
   pop_detecting:   { en: "Checking…",                                   zh_CN: "检测中…",                          zh_TW: "偵測中…" },
   pop_connected:   { en: "{0} connected",                              zh_CN: "{0} 已连接",                       zh_TW: "{0} 已連線" },
   pop_unsupportedShort: { en: "Unsupported page",                       zh_CN: "当前页面不支持",                    zh_TW: "目前頁面不支援" },
   pop_modeLabel:   { en: "Model mode",                                  zh_CN: "模型模式",                          zh_TW: "模型模式" },
   pop_thinkShort:  { en: "Think",                                       zh_CN: "深思",                              zh_TW: "深思" },
   pop_fastShort:   { en: "Fast",                                        zh_CN: "快速",                              zh_TW: "快速" },
-  pop_themeLegend: { en: "Console theme (broadcast & compose)",         zh_CN: "控制台主题（含群发控制台与编辑窗）", zh_TW: "主控台主題（含群發主控台與編輯窗）" },
-  pop_themeShort:  { en: "Theme",                                       zh_CN: "主题",                              zh_TW: "主題" },
-  pop_themeAutoShort: { en: "Auto",                                     zh_CN: "自动",                              zh_TW: "自動" },
-  pop_themeLightShort: { en: "Light",                                   zh_CN: "亮",                                zh_TW: "亮" },
-  pop_themeDarkShort: { en: "Dark",                                     zh_CN: "暗",                                zh_TW: "暗" },
-  pop_themeAuto:   { en: "Auto",                                        zh_CN: "随系统",                            zh_TW: "隨系統" },
-  pop_themeLight:  { en: "Light",                                       zh_CN: "亮色",                              zh_TW: "亮色" },
-  pop_themeDark:   { en: "Dark",                                        zh_CN: "暗色",                              zh_TW: "暗色" },
-  pop_dmLegend:    { en: "Floating widget",                             zh_CN: "悬浮控件显示",                      zh_TW: "浮動控件顯示" },
-  pop_dmShort:     { en: "Floating widget",                             zh_CN: "悬浮控件",                          zh_TW: "浮動控件" },
-  pop_dmHandleShort: { en: "Edge",                                      zh_CN: "贴边",                              zh_TW: "貼邊" },
-  pop_dmHandle:    { en: "Edge handle (hover to expand)",               zh_CN: "贴边把手（悬停展开）",              zh_TW: "貼邊把手（懸停展開）" },
-  pop_dmAlways:    { en: "Always show",                                 zh_CN: "始终显示",                          zh_TW: "始終顯示" },
-  pop_dmHidden:    { en: "Hidden (shortcuts only)",                     zh_CN: "隐藏（仅快捷键）",                  zh_TW: "隱藏（僅快捷鍵）" },
-  pop_diagLegend:  { en: "Health check",                                zh_CN: "健康自检",                          zh_TW: "健康自檢" },
-  pop_diag:        { en: "Diagnose current site",                       zh_CN: "诊断当前站点",                      zh_TW: "診斷目前網站" },
   pop_diagStale:   { en: "The site may have changed, or this language may not be supported", zh_CN: "站点可能已改版，或当前界面语言尚未适配", zh_TW: "網站可能已改版，或目前的介面語言尚未支援" },
-  pop_langLegend:  { en: "Language",                                    zh_CN: "语言 / Language",                   zh_TW: "語言 / Language" },
-  pop_langShort:   { en: "Language",                                    zh_CN: "语言",                              zh_TW: "語言" },
-  pop_langAuto:    { en: "Auto",                                        zh_CN: "随系统",                            zh_TW: "隨系統" },
-  pop_langAutoShort: { en: "Auto",                                      zh_CN: "自动",                              zh_TW: "自動" },
-  pop_langZhCNShort: { en: "简中",                                      zh_CN: "简中",                              zh_TW: "簡中" },
-  pop_langZhTWShort: { en: "繁中",                                      zh_CN: "繁中",                              zh_TW: "繁中" },
   pop_diagUnsupported: { en: "Current page not supported", zh_CN: "当前页面不支持", zh_TW: "目前頁面不支援" },
   pop_diagPass:        { en: "passed", zh_CN: "通过", zh_TW: "通過" },
   pop_diagFail:        { en: "failed", zh_CN: "失败", zh_TW: "失敗" },
@@ -214,7 +168,8 @@ const MSG = {
   cs_switchedThink:  { en: "Switched: Deep Think",                              zh_CN: "已切到：深度思考",                zh_TW: "已切到：深度思考" },
   cs_switchedFast:   { en: "Switched: Fast Model",                              zh_CN: "已切到：快速模型",                zh_TW: "已切到：快速模型" },
   cs_stopped:        { en: "Stopped",                                           zh_CN: "已停止",                          zh_TW: "已停止" },
-  cs_switchFail:     { en: "Switch failed: {0}",                                zh_CN: "切换失败：{0}",                   zh_TW: "切換失敗：{0}" },
+  cs_switchFailGeneric: { en: "Switch failed",                                  zh_CN: "切换失败",                        zh_TW: "切換失敗" },
+  md_image:          { en: "image",                                            zh_CN: "图片",                            zh_TW: "圖片" },
   cs_switchUnstable:      { en: "Switch not confirmed; sent using the current tier", zh_CN: "切换未确认，已按当前档位发送", zh_TW: "切換未確認，已依目前檔位傳送" },
   cs_pillThink:      { en: "🧠 Think",                                          zh_CN: "🧠 思考",                        zh_TW: "🧠 思考" },
   cs_pillFast:       { en: "⚡ Fast",                                           zh_CN: "⚡ 快速",                        zh_TW: "⚡ 快速" },
@@ -227,22 +182,23 @@ const MSG = {
   diag_modelEntry:   { en: "Model entry",                                       zh_CN: "模型入口",                        zh_TW: "模型入口" },
   diag_modelReadable:{ en: "Model detected",                                    zh_CN: "已识别模型",                      zh_TW: "已辨識模型" },
   diag_tierReadable: { en: "Tier detected",                                     zh_CN: "已识别档位",                      zh_TW: "已辨識檔位" },
-  diag_iframeLimited:{ en: "iframe limitation: Haiku only (Claude embed; use a standalone tab)", zh_CN: "iframe 受限：仅支持 Haiku（Claude 嵌入页，请改用独立标签页）", zh_TW: "iframe 受限：僅支援 Haiku（Claude 嵌入頁，請改用獨立分頁）" },
   diag_intelEntry:   { en: "Intelligence entry",                                zh_CN: "Intelligence 入口",               zh_TW: "Intelligence 入口" },
   diag_deepThink:    { en: "DeepThink toggle",                                  zh_CN: "DeepThink 开关",                  zh_TW: "DeepThink 開關" },
-  diag_modeSelect:   { en: "Mode select",                                       zh_CN: "模式选择",                        zh_TW: "模式選擇" },
   diag_modeBtn:      { en: "Mode button",                                       zh_CN: "模式按钮",                        zh_TW: "模式按鈕" },
   diag_modelDropdown:{ en: "Model dropdown",                                    zh_CN: "模型下拉",                        zh_TW: "模型下拉" },
   diag_thinkBtn:     { en: "Thinking toggle",                                   zh_CN: "思考开关",                        zh_TW: "思考開關" },
-  diag_deepThinking: { en: "Deep Thinking toggle",                              zh_CN: "Deep Thinking 开关",              zh_TW: "Deep Thinking 開關" },
   diag_thinkButton:  { en: "Thinking button",                                   zh_CN: "思考按钮",                        zh_TW: "思考按鈕" },
   diag_composer:     { en: "Composer",                                          zh_CN: "输入框",                          zh_TW: "輸入框" },
   diag_sendKey:      { en: "Send button",                                       zh_CN: "发送键",                          zh_TW: "發送鍵" },
 };
 const I18N_LANGS = ["en", "zh_CN", "zh_TW"];
 function _resolveAuto() {
+  // 判据须与 desktop/src/shared/copy.ts 的 resolveLocale 逐档一致（F106/F223）：两边都是
+  // 前缀匹配（非 includes），未命中任何 zh-* 分支一律落 en，不再兜底成 zh_CN —— 否则同一
+  // locale 在扩展内容脚本与 Desktop 外壳会显示不同语言。改这两个函数任一个都要保持同步。
   const ui = (chrome.i18n && chrome.i18n.getUILanguage && chrome.i18n.getUILanguage() || "en").toLowerCase();
-  if (ui.startsWith("zh")) return (ui.includes("tw") || ui.includes("hk") || ui.includes("hant")) ? "zh_TW" : "zh_CN";
+  if (ui === "zh" || ui.startsWith("zh-cn") || ui.startsWith("zh-hans")) return "zh_CN";
+  if (ui.startsWith("zh-tw") || ui.startsWith("zh-hk") || ui.startsWith("zh-mo") || ui.startsWith("zh-hant")) return "zh_TW";
   return "en";
 }
 let _lang = "en";
@@ -260,6 +216,7 @@ function t(key, ...subs) {
   return s;
 }
 function applyI18n(root) {
+  if (location.protocol !== "chrome-extension:") return; // 内容脚本跑在第三方站点 origin，宿主 <html>/data-i18n 不是我们的（F094）
   root = root || document;
   try { document.documentElement.lang = _lang.replace("_", "-"); } catch (e) {}
   root.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.getAttribute("data-i18n")); });

@@ -1,7 +1,10 @@
 // popup/popup.js — 当前站模式 + console 入口 + 快捷键
 applyI18n(); // i18n.js 已在 head 载入并从 localStorage 镜像同步了语言，立即本地化静态文案
 let statusSite = "";
-let statusConnected = false;
+// F122：三态而非二态——refreshState() 的 tabs 往返是异步的，i18n.js 的 storage.local.get 回调常先落地，
+// 若只有 connected/unsupported 两态，i18n:changed 会把仍在探测中的状态误判成「不支持」再跳回来（闪红）。
+// checking 是唯一初态，只由 refreshState() 的成功/失败分支推进；i18n:changed 只按当前态重渲文案。
+let statusState = "checking"; // "checking" | "connected" | "unsupported"
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -18,17 +21,23 @@ function siteFor(tab) {
 }
 function renderStatus() {
   const status = document.getElementById("site-status");
-  status.classList.remove("checking");
-  status.classList.toggle("connected", statusConnected);
-  status.classList.toggle("unsupported", !statusConnected);
-  document.getElementById("status-text").textContent = statusConnected ? t("pop_connected", statusSite) : t("pop_unsupportedShort");
+  if (statusState === "checking") {
+    status.classList.add("checking"); status.classList.remove("connected", "unsupported");
+  } else {
+    status.classList.remove("checking");
+    status.classList.toggle("connected", statusState === "connected");
+    status.classList.toggle("unsupported", statusState === "unsupported");
+  }
+  document.getElementById("status-text").textContent =
+    statusState === "connected" ? t("pop_connected", statusSite) :
+    statusState === "unsupported" ? t("pop_unsupportedShort") : t("pop_detecting");
 }
 async function refreshState() {
   try {
     const tab = await activeTab();
     const site = tab && siteFor(tab); if (!site) throw new Error("unsupported");
     const res = await chrome.tabs.sendMessage(tab.id, { source: "AMS", cmd: "getState" });
-    statusSite = site.label; statusConnected = true; renderStatus();
+    statusSite = site.label; statusState = "connected"; renderStatus();
     document.getElementById("think").classList.toggle("active", !!res && res.state === "think");
     document.getElementById("fast").classList.toggle("active", !!res && res.state === "fast");
     document.getElementById("think").setAttribute("aria-pressed", !!res && res.state === "think" ? "true" : "false");
@@ -38,7 +47,7 @@ async function refreshState() {
     document.getElementById("unsupported").style.display = "block";
     document.getElementById("think").disabled = true;
     document.getElementById("fast").disabled = true;
-    statusConnected = false; renderStatus();
+    statusState = "unsupported"; renderStatus();
   }
 }
 
@@ -49,7 +58,7 @@ for (const mode of ["think", "fast"]) {
       window.close(); // 切换在页面内异步执行，toast 会提示结果
     } catch (e) {
       document.getElementById("unsupported").style.display = "block";
-      statusConnected = false; renderStatus();
+      statusState = "unsupported"; renderStatus();
     }
   });
 }

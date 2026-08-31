@@ -88,8 +88,8 @@ if (globalThis.chrome?.runtime?.onMessage) chrome.runtime.onMessage.addListener(
       else {
         for (const row of msg.records || []) await Transfer.validateContent(row);
         const changed = await Data.importRecords(msg.records || []);
-        if (changed?.histories) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "historyChanged" });
-        if (changed?.archives) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" });
+        if (changed?.histories) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "historyChanged" }, () => void chrome.runtime.lastError);
+        if (changed?.archives) chrome.runtime.sendMessage({ source: "AMS_DATA", type: "archiveChanged" }, () => void chrome.runtime.lastError);
       }
     }
     return {};

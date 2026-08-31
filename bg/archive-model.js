@@ -19,13 +19,19 @@ const ArchiveModel = (() => {
     let url;
     try { url = new URL(value.url); } catch (_) { throw new Error("invalid_source"); }
     if (!["http:", "https:"].includes(url.protocol)) throw new Error("invalid_source");
-    return { kind: value.kind, title: clean(value.title), url: url.href, truncated: !!value.truncated,
+    // 与桌面端 desktop/src/shared/archive.ts 的 512 码点上限对齐（F213）：这里截断而非 throw——
+    // validMetadata 不比较 title，截断不会让存量记录判无效；桌面端遇到超长标题仍会拒绝导入，
+    // 靠这里的截断从源头避免产出超限记录。
+    return { kind: value.kind, title: [...clean(value.title)].slice(0, 512).join(""), url: url.href, truncated: !!value.truncated,
       capturedAt: Number.isSafeInteger(value.capturedAt) && value.capturedAt >= 0 ? value.capturedAt : 0 };
   }
   function cleanSynthesis(value) {
     if (value == null) return null;
+    // instruction 与桌面端 desktop/src/shared/synthesis.ts 的 4000 码点上限对齐（F214）：这里必须
+    // throw 而非截断——validMetadata 会用本函数的返回值与原始记录逐键比对，截断会让存量记录判无效。
     if (!exactKeys(value, ["host", "text", "state", "instruction", "createdAt"]) || !clean(value.host) || !bounded(clean(value.host), 256) ||
-      typeof value.text !== "string" || !value.text.trim() || typeof value.instruction !== "string" || !Number.isSafeInteger(value.createdAt) || value.createdAt < 0 || value.createdAt > 8_640_000_000_000_000)
+      typeof value.text !== "string" || !value.text.trim() || typeof value.instruction !== "string" || !bounded(value.instruction, 4000) ||
+      !Number.isSafeInteger(value.createdAt) || value.createdAt < 0 || value.createdAt > 8_640_000_000_000_000)
       throw new Error("invalid_synthesis");
     return { host: clean(value.host), text: value.text, state: ["think", "fast"].includes(value.state) ? value.state : null,
       instruction: clean(value.instruction), createdAt: value.createdAt };

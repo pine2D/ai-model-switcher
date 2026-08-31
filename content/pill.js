@@ -68,7 +68,10 @@
   document.addEventListener("i18n:changed", applyTexts);
 
   // 当前档位高亮（同步读，不开菜单）
+  // F091：hidden 模式下控件不可见，用户已明确关闭——早退，不做 adapter.state() 扫描。
+  // 切回 handle 由 openPill() 补读、切到 always 由 applyMode 的 refreshState() 补读，不会残留过期高亮。
   function refreshState() {
+    if (wrap.dataset.mode === "hidden") return;
     const s = window.__AMS && window.__AMS.getState ? window.__AMS.getState() : null;
     btnT.classList.toggle("active", s === "think");
     btnF.classList.toggle("active", s === "fast");
@@ -87,8 +90,13 @@
     refreshState();
     armCollapse();
   }
-  hdl.addEventListener("mouseenter", openPill);
-  hdl.addEventListener("click", () => { openPill(); (btnF.classList.contains("active") ? btnF : btnT).focus(); });
+  // F100：命中区（24px）比可见把手（6px）高，鼠标横扫宿主顶栏中央的透明区会被误吞。
+  // 保留 24px 命中区不退回（这是刻意的最小可点击尺寸），改用 hover-intent 延时：
+  // 划过不停留不弹出，把误触成本从「立刻弹出 4 秒 HUD」降到零；真要用仍可直接点击 handle。
+  let hoverOpenTimer = null;
+  hdl.addEventListener("mouseenter", () => { hoverOpenTimer = setTimeout(openPill, 350); });
+  hdl.addEventListener("mouseleave", () => clearTimeout(hoverOpenTimer));
+  hdl.addEventListener("click", () => { clearTimeout(hoverOpenTimer); openPill(); (btnF.classList.contains("active") ? btnF : btnT).focus(); });
   pill.addEventListener("mouseenter", () => { clearTimeout(collapseTimer); pill.classList.remove("idle"); });
   pill.addEventListener("mouseleave", () => { if (wrap.dataset.mode === "handle") armCollapse(); else if (wrap.dataset.mode === "always") armIdle(); });
   pill.addEventListener("focusin", () => clearTimeout(collapseTimer));

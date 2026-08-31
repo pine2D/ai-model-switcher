@@ -19,6 +19,8 @@
         if (!t) throw new Error("DeepSeek: DeepThink 开关未找到"); // 开关常驻 composer，缺失即异常（静默 return 会让 runMode 误报成功）
         if ((t.getAttribute("aria-pressed") === "true") !== on) clickEl(t);
         await sleep(300);
+        const after = this._deepThink(); // 点击被吞时不许静默成功
+        if (!after || (after.getAttribute("aria-pressed") === "true") !== on) throw new Error("DeepSeek: DeepThink 未生效");
       },
       _selectMode: async function (re) {
         // DeepSeek 模式 radio 只认原生 click(拒绝合成事件 isTrusted=false)；选择幂等，原生 click 安全。
@@ -172,6 +174,8 @@
         if (!clicked) leaf.click();
         await sleep(500);
         escMenus();
+        const after = this._trigger(); // 点完不复读会让换模型静默落空，见 F075
+        if (!after || !re.test((after.textContent || "").trim())) throw new Error("千问: 模型未生效");
       },
       _thinkBtn: function () {
         const menu = [...document.querySelectorAll('button[aria-haspopup="menu"]')].find((b) => {
@@ -197,11 +201,12 @@
           const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemcheckbox"]')].find((x) => {
             const r = x.getBoundingClientRect(); return r.width > 0 && r.height > 0 && re.test((x.textContent || "").trim());
           }), 1500);
-          if (!item) throw new Error("千问: 模式选项未找到");
+          if (!item) { escMenus(); throw new Error("千问: 模式选项未找到"); }
           item.click(); await sleep(500);
+          escMenus();
         } else { b.click(); await sleep(300); }
         const after = this._thinkBtn();
-        if (!after || this._isThink(after) !== on) throw new Error("千问: 思考开关未生效");
+        if (!after || this._isThink(after) !== on) { escMenus(); throw new Error("千问: 思考开关未生效"); }
       },
       diagnose: function () {
         return [
