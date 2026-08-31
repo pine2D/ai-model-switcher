@@ -8,6 +8,7 @@ import {
 } from "./diagnostics";
 import { PostAuthReloadTracker } from "./auth-navigation";
 import { navigationDisposition } from "./navigation";
+import { SiteNavigationPolicy } from "./navigation-guard";
 
 interface SiteViewCallbacks {
   readonly onLoading: () => void;
@@ -89,28 +90,32 @@ export function createSiteView(
   });
   contents.on("render-process-gone", (_event, details) => callbacks.onCrash(details.reason));
 
-  const guardNavigation = (event: Electron.Event<{
+  const policy = new SiteNavigationPolicy(site);
+  const guardNavigation = (isRedirect: boolean) => (event: Electron.Event<{
     readonly url: string;
     readonly isMainFrame: boolean;
   }>) => {
-    const disposition = navigationDisposition(site, event.url);
-    authRecovery.observe(disposition, event.isMainFrame);
-    if (disposition === "external" || disposition === "block") event.preventDefault();
+    const decision = policy.handleNavigation(event.url, event.isMainFrame, isRedirect);
+    authRecovery.observe(decision.disposition, event.isMainFrame);
+    if (!decision.allow) event.preventDefault();
   };
-  contents.on("will-navigate", guardNavigation);
-  contents.on("will-redirect", guardNavigation);
+  // will-navigate 是渲染端意图（恒主帧，程序化 loadURL/reload 不触发）；will-redirect 是
+  // 服务端 302（任意帧）。两者对 external 的放行规则不同，故分别标记来源。
+  contents.on("will-navigate", guardNavigation(false));
+  contents.on("will-redirect", guardNavigation(true));
+  // did-navigate 是主帧实际提交（loadURL/reload/window.open 改写的加载都会触发），是唯一
+  // 可靠的「auth 流进入/退出」信号——按意图武装会给钓鱼跳板留缝。
+  contents.on("did-navigate", (_event, url) => policy.commit(url));
   // window.open carries no originating frame, so it can come from any embedded
-  // third-party frame. Never account for it as a main-frame navigation, and only
-  // rewrite it into a top-level load for a login domain while the top level is
-  // still on this site — otherwise a hostile frame could raise a real OAuth
-  // consent page inside a chrome-less window.
+  // third-party frame. It is never allowed to raise a real window; the policy
+  // only decides whether the target may replace the guarded view (same-site
+  // pages, and login domains while on the site or inside an active auth flow).
   contents.setWindowOpenHandler(({ url }) => {
-    const disposition = navigationDisposition(site, url);
-    const onSite = navigationDisposition(site, contents.getURL()) === "site";
-    const rewrite = disposition === "auth" && onSite;
+    const decision = policy.handleWindowOpen(url, contents.getURL());
+    const rewrite = decision.rewrite;
     // Account only for the navigation we perform ourselves; a claim of
     // "main frame" from the opener would be worth nothing here.
-    authRecovery.observe(disposition, rewrite);
+    authRecovery.observe(decision.disposition, rewrite);
     if (rewrite) void contents.loadURL(url);
     return { action: "deny" };
   });

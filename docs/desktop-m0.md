@@ -64,7 +64,10 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 - 远程页面永不获得 `ipcRenderer`、`contextBridge`、文件系统、Shell 或任意 main-process 方法。
 - IPC 采用固定 channel 和数据白名单；main process 同时校验 sender、站点 key、当前 host 和请求结构。
-- 顶层导航限制为站点精确 host 及明确登录域。**新窗口一律 deny**；其中只有「目标属该站登录域、且当前顶层仍在本站」时，才把它改写成本视图的顶层导航——弹窗不携带来源帧，一律不按主帧记账，所以子帧的 `window.open` 不能借这条路径提权。
+- 顶层导航由 `navigation-guard.ts` 的 auth 流状态机裁决，区分导航来源：`will-navigate`（渲染端 `location.href`/链接/表单，恒主帧）与 `will-redirect`（服务端 302，任意帧）。`site`/`auth` 恒放行；`external` 主帧**只在「auth 流进行中」且「来自服务端 302」时放行**——真机三症状（Google SetSID 联邦跳转、OpenAI auth0/验证码域跳转）全是服务端 302，v0.23.0 之前一律拦下，造成「输完密码/验证码点按钮没反应、刷新却已登录」；而站内被攻陷脚本只能走渲染端 `will-navigate`，即便在 auth 流中其 external 目标也一律拦，堵死「先跳登录域武装、再跳任意站」的两步钓鱼。`auth` 流只由 `did-navigate`（主帧实际提交，程序化 `loadURL`/`reload`/弹窗改写的加载都触发）翻转：踏上登录域进入、提交回本站退出——按「提交」而非「意图」武装，杜绝「发起 auth 导航但永不提交」的钓鱼跳板与新会话后标志位卡死。已登记的登录域含 Google 三站的 `accounts.youtube.com`（联邦 SetSID）与 ChatGPT 的 `auth0.openai.com`（Claude 的 `accounts.youtube.com` 属推断性登记，未经真机验证）。
+- 子帧只拦非 https（验证码/嵌入登录 iframe 的服务端重定向属正常网页行为，`webSecurity` 与站点 CSP 才是子帧主防线）；子帧从不改变主帧流状态。注意：子帧的**初次**导航只触发未监听的 `will-frame-navigate`，本就无守卫——要守子帧应监听该事件，而非在 `will-redirect` 上加码。
+- **新窗口一律 deny 真窗口**；`window.open` 只有两种改写进本受管视图的情形——目标是本站页面且顶层也在本站（豆包登录按钮走这条），或目标是登录域且「顶层仍在本站 / auth 流进行中」（SSO 弹窗链）。弹窗不携带来源帧，一律不按主帧记账，子帧的 `window.open` 不能借此提权。
+- 主帧停在 `external` 会被健康检查标为 `error` 并进工作台注意力清单，不再伪装成「一切正常」。**auth 流中停靠的外部源同样继承第 68 行的 `SITE_PERMISSION_ALLOWLIST`（fullscreen / pointerLock / clipboard-sanitized-write）**——这是该权限段此前未覆盖的事实。
 - 每个远程 Session 的权限请求处理器**只放行显式白名单**（`clipboard-sanitized-write`、`fullscreen`、`pointerLock`），其余一律拒绝——包括通知、摄像头、麦克风、地理位置、MIDI、`clipboard-read` 与 `window-management`。白名单是 `desktop/src/main/view-manager.ts` 的 `SITE_PERMISSION_ALLOWLIST`，两个 handler 都读它，改动须同步本节。
 - 站点视图开启 `safeDialogs`，限制页面用 `alert`/`confirm` 刷屏冻住整个单窗口；**未启用 `disableDialogs`**——站点自身的确认框仍要能用，关掉它之前需要真机验证九站登录与离开确认。
 - 不关闭 Chromium sandbox，不忽略证书错误，不允许 HTTP 内容。

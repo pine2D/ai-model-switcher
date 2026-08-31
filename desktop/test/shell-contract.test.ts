@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+
+import { SiteNavigationPolicy } from "../src/main/navigation-guard";
+import { SITES } from "../src/main/sites";
+
+const chatgptSite = SITES.find((s) => s.key === "chatgpt")!;
 import test from "node:test";
 
 test("shell segmented controls expose state and site changes use a live region", () => {
@@ -81,15 +86,32 @@ test("site views grant an explicit permission allowlist and no more", () => {
   assert.match(manager, /setPermissionRequestHandler\(\(_contents, permission, callback\) =>\s*callback\(SITE_PERMISSION_ALLOWLIST\.has\(permission\)\)\)/);
 });
 
-test("site popups never raise a login page from an embedded frame", () => {
+test("site view wires split navigation guards, a commit signal and deny-only popups", () => {
   const siteView = readFileSync("src/main/site-view.ts", "utf8");
+  assert.match(siteView, /contents\.on\("will-navigate", guardNavigation\(false\)\)/);
+  assert.match(siteView, /contents\.on\("will-redirect", guardNavigation\(true\)\)/);
+  assert.match(siteView, /contents\.on\("did-navigate", \(_event, url\) => policy\.commit\(url\)\)/);
   const handler = siteView.slice(siteView.indexOf("contents.setWindowOpenHandler("));
-  assert.match(handler, /const rewrite = disposition === "auth" && onSite/);
-  assert.match(handler, /navigationDisposition\(site, contents\.getURL\(\)\) === "site"/);
-  assert.match(handler, /authRecovery\.observe\(disposition, rewrite\)/);
-  assert.doesNotMatch(handler, /authRecovery\.observe\(disposition, true\)/);
-  assert.doesNotMatch(handler, /disposition === "site" \|\| disposition === "auth"/);
+  assert.match(handler, /policy\.handleWindowOpen\(url, contents\.getURL\(\)\)/);
+  assert.doesNotMatch(handler, /action: "allow"/);
   assert.match(handler, /action: "deny"/);
+});
+
+test("navigation policy behavior: renderer external blocked, server redirect flows, flow arms on commit", () => {
+  const policy = new SiteNavigationPolicy(chatgptSite);
+  // 流外：任何 external 都拦
+  assert.equal(policy.handleNavigation("https://evil.example.com/", true, true).allow, false);
+  // 提交进 auth 流后：服务端 302(external) 放行，渲染端 external 仍拦
+  policy.commit("https://auth.openai.com/authorize");
+  assert.equal(policy.authFlowActive, true);
+  assert.equal(policy.handleNavigation("https://verify.example/step", true, true).allow, true);
+  assert.equal(policy.handleNavigation("https://evil.example.com/", true, false).allow, false);
+  // 回本站提交清零流
+  policy.commit("https://chatgpt.com/");
+  assert.equal(policy.authFlowActive, false);
+  // window.open 恒不放真窗口：external 拒、跨站同站目标拒
+  assert.equal(policy.handleWindowOpen("https://evil.example.com/", "https://chatgpt.com/").rewrite, false);
+  assert.equal(policy.handleWindowOpen("https://chatgpt.com/logout", "https://evil.example.com/").rewrite, false);
 });
 
 test("site view security is read back from the live view and rate-limits dialogs", () => {

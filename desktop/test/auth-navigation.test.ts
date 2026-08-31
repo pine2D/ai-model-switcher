@@ -38,7 +38,7 @@ test("Gemini ignores authentication redirects from an embedded frame", () => {
   assert.equal(tracker.shouldReload("site"), false);
 });
 
-test("site views use Electron navigation details to identify the main frame", () => {
+test("site views arm the reload tracker with real Electron frame details", () => {
   const source = readFileSync("src/main/site-view.ts", "utf8");
-  assert.match(source, /authRecovery\.observe\(disposition, event\.isMainFrame\)/);
+  assert.match(source, /authRecovery\.observe\(decision\.disposition, event\.isMainFrame\)/);
 });

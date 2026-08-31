@@ -53,6 +53,10 @@ export function buildSiteHealth(input: HealthInput): SiteHealth {
   const checks = normalizeDiagnosticChecks(input.checks);
   let state: SiteHealthState = "unknown";
   if (input.navigation === "auth") state = "sign-in";
+  // 主帧停在既非本站、也非登记登录域的外部源：登录流早已是毫秒级 302 中间态，持久停在这里
+  // 属异常（站点异常跳转，或——见 navigation-guard——auth 流中被导到外部页）。标 error 让它
+  // 进健康检查告警与工作台注意力清单，堵住「外部页却显示一切正常」这个钓鱼放大器。
+  else if (input.navigation === "external") state = "error";
   else if (input.phase === "failed" || input.phase === "crashed") state = "error";
   else if (input.navigation === "site" && checks.length) {
     state = checks.every((check) => check.ok) ? "ready" : "error";
