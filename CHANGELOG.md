@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.23.0] - 2026-08-31
+
 ### 新增
 
 - console 群发过程新增读屏播报：开场站点数、逐站进度与平铺、新会话、关闭全部的完成回执，不再只在终态出声
@@ -630,7 +632,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.22.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/pine2D/polyask/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/pine2D/polyask/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/pine2D/polyask/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/pine2D/polyask/compare/v0.20.0...v0.20.1
