@@ -34,7 +34,7 @@ export interface SiteHealthSummary {
 interface HealthInput {
   readonly site: SiteKey;
   readonly phase: string;
-  readonly navigation: "site" | "auth" | "external" | "block";
+  readonly navigation: "site" | "auth" | "transit" | "external" | "block";
   readonly checks?: unknown;
 }
 

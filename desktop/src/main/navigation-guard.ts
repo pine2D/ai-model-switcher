@@ -39,6 +39,11 @@ export class SiteNavigationPolicy {
     //  这里能看到的 isMainFrame=false 仅来自子帧的服务端 will-redirect。）
     if (!isMainFrame) return { disposition, allow: true };
     if (disposition === "site" || disposition === "auth") return { disposition, allow: true };
+    // transit 主帧（一方反滥用/同意中转域）：只作为服务端 302 的中间跳板放行——攻击者无法凭空
+    // 制造服务端重定向；渲染端主动导航过去(will-navigate)一律拦，避免把用户格子导到 google.com
+    // 首页一类。不进 auth 流、不改流状态（commit 里同样不动）。这是 Gemini 首屏 www.google.com/sorry
+    // 反滥用页被拦→白屏的修复。
+    if (disposition === "transit") return { disposition, allow: isRedirect };
     // external 主帧：仅服务端重定向且处于 auth 流时放行；渲染端发起或流外一律拦。
     return { disposition, allow: isRedirect && this.authFlow };
   }

@@ -18,6 +18,7 @@ export interface SiteDefinition {
   readonly label: string;
   readonly url: string;
   readonly authHosts: readonly string[];
+  readonly transitHosts?: readonly string[];
   readonly image: boolean;
   readonly intl: boolean;
 }

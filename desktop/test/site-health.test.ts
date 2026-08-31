@@ -25,6 +25,7 @@ test("health summary separates ready, sign-in, error and unknown", () => {
 test("health classification requires explicit evidence", () => {
   assert.equal(buildSiteHealth({ site: "gemini", phase: "ready", navigation: "auth" }).state, "sign-in");
   assert.equal(buildSiteHealth({ site: "chatgpt", phase: "ready", navigation: "external" }).state, "error");
+  assert.equal(buildSiteHealth({ site: "gemini", phase: "loading", navigation: "transit" }).state, "unknown");
   assert.equal(buildSiteHealth({ site: "claude", phase: "ready", navigation: "site" }).state, "unknown");
   assert.equal(buildSiteHealth({ site: "claude", phase: "ready", navigation: "site", checks: [{ name: "Composer", ok: true }] }).state, "ready");
   assert.equal(buildSiteHealth({ site: "claude", phase: "ready", navigation: "site", checks: [{ name: "Composer", ok: false }] }).state, "error");

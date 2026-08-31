@@ -110,6 +110,51 @@ test("authHost lookalikes are external, not auth", () => {
   assert.equal(nav(p, "https://accounts.google.com.evil.com/", true, true), false);
 });
 
+// —— 根因回归：Gemini 首屏 www.google.com/sorry 反滥用中转页 ——
+const SORRY = "https://www.google.com/sorry/index?continue=https://gemini.google.com/app&q=abc";
+test("google anti-abuse transit (server 302) is allowed on first screen, before any auth flow", () => {
+  const p = new SiteNavigationPolicy(site("gemini"));
+  assert.equal(p.handleNavigation("https://gemini.google.com/app", true, false).disposition, "site");
+  p.commit("https://gemini.google.com/app");
+  assert.equal(p.authFlowActive, false, "首屏还没进登录流");
+  const d = p.handleNavigation(SORRY, true, true);
+  assert.equal(d.disposition, "transit");
+  assert.equal(d.allow, true, "服务端 302 到反滥用中转页必须放行，否则 Gemini 白屏");
+  // sorry 302 回本站后一切照常
+  assert.equal(p.handleNavigation("https://gemini.google.com/app", true, true).allow, true);
+});
+test("transit is a server-redirect-only bridge: renderer navigation and popups are refused", () => {
+  const p = new SiteNavigationPolicy(site("gemini"));
+  assert.equal(p.handleNavigation(SORRY, true, false).allow, false, "渲染端主动导航到中转域一律拦");
+  assert.equal(p.handleWindowOpen(SORRY, "https://gemini.google.com/app").rewrite, false, "中转域不作为 window.open 目标改写");
+});
+test("transit opens NO path to external: a following external 302 stays blocked", () => {
+  const p = new SiteNavigationPolicy(site("gemini"));
+  p.commit("https://gemini.google.com/app");
+  assert.equal(p.handleNavigation(SORRY, true, true).allow, true, "sorry 放行");
+  p.commit("https://www.google.com/sorry/index");
+  assert.equal(p.authFlowActive, false, "transit 不武装登录流");
+  // 核心不变量：transit 没有打开 external 闸门——紧跟的 external 服务端 302 仍被拦
+  assert.equal(p.handleNavigation("https://evil.example.com/", true, true).allow, false);
+  // 停在 transit 页时 window.open 一律不改写（同站要 current==site、登录域要 current==site||流中，均不满足）
+  assert.equal(p.handleWindowOpen("https://www.google.com/anything", "https://www.google.com/sorry/index").rewrite, false);
+  assert.equal(p.handleWindowOpen("https://gemini.google.com/x", "https://www.google.com/sorry/index").rewrite, false);
+});
+
+test("transit does not arm or clear the auth flow", () => {
+  const p = new SiteNavigationPolicy(site("gemini"));
+  p.commit("https://accounts.google.com/v3/signin"); // 进流
+  assert.equal(p.authFlowActive, true);
+  p.commit("https://www.google.com/sorry/index"); // transit 提交不改流状态
+  assert.equal(p.authFlowActive, true, "中转不清流；流内 external 服务端 302 仍受流保护");
+});
+test("transit hosts are registered for the google-login sites", () => {
+  for (const key of ["gemini", "claude", "chatgpt"]) {
+    assert.ok(site(key).transitHosts?.includes("www.google.com"), `${key} 缺 www.google.com 中转`);
+    assert.ok(site(key).transitHosts?.includes("consent.google.com"), `${key} 缺 consent.google.com 中转`);
+  }
+});
+
 test("federation hosts are registered for the google-auth sites", () => {
   for (const key of ["claude", "chatgpt", "gemini"]) {
     assert.ok(site(key).authHosts.includes("accounts.youtube.com"), `${key} 缺 accounts.youtube.com`);
