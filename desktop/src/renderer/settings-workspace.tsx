@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DesktopCopy } from "../shared/copy";
 import { formatCopy } from "../shared/copy";
@@ -42,17 +42,20 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
       || firstFailedSyncStage(createSyncDiagnosticSnapshot(props.status, props.runtime)) !== null
   );
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [clearingCloud, setClearingCloud] = useState(false);
+  // Only a destructive write may hold the page hostage; waiting on browser
+  // authorization (up to five minutes) must never lock the exit.
+  const closeLocked = clearingCloud;
+  const pendingFocus = useRef(false);
   const busy = actionBusy || props.status.state === "syncing";
   const statusText = describeSync(props.copy, props.status);
   useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape" && !busy) props.onClose(); };
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape" && !closeLocked) props.onClose(); };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [busy, props.onClose]);
+  }, [closeLocked, props.onClose]);
   useEffect(() => {
-    const next = createSyncDiagnosticSnapshot(props.status, props.runtime);
-    setDiagnostics(next);
-    if (firstFailedSyncStage(next)) setDiagnosticsOpen(true);
+    setDiagnostics(createSyncDiagnosticSnapshot(props.status, props.runtime));
   }, [props.runtime, props.status]);
   useEffect(() => {
     if (props.initialSection !== "drive-diagnostics") return;
@@ -60,6 +63,9 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     queueMicrotask(() => document.getElementById("sync-diagnostics-toggle")?.focus());
   }, [props.initialSection]);
   useEffect(() => {
+    // Background status pushes update the panel; only an explicit action moves focus.
+    if (!pendingFocus.current) return;
+    pendingFocus.current = false;
     const failed = diagnosticsOpen ? firstFailedSyncStage(diagnostics) : null;
     if (failed) queueMicrotask(() => document.getElementById(`sync-stage-${failed.id}`)?.focus());
   }, [diagnostics, diagnosticsOpen]);
@@ -74,6 +80,8 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     setActionBusy(true);
     try {
       const next = await action();
+      pendingFocus.current = true;
+      if (firstFailedSyncStage(createSyncDiagnosticSnapshot(next, props.runtime))) setDiagnosticsOpen(true);
       props.onStatus(next);
       const message = describeSync(props.copy, next);
       setFeedback(message);
@@ -87,6 +95,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
   };
   const refreshDiagnostics = async (announceFailure = true): Promise<void> => {
     if (diagnosticsBusy) return;
+    if (announceFailure) pendingFocus.current = true;
     setDiagnosticsBusy(true);
     try {
       const next = await window.polyask.syncDiagnostics();
@@ -137,7 +146,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             mode: props.runtime.distribution === "portable" ? props.copy.portableMode : props.copy.installedMode
           })}</span>
         </div>
-        <button type="button" title={props.copy.closeSettings} aria-label={props.copy.closeSettings} disabled={busy} onClick={props.onClose}><CloseIcon /></button>
+        <button type="button" title={props.copy.closeSettings} aria-label={props.copy.closeSettings} disabled={closeLocked} onClick={props.onClose}><CloseIcon /></button>
       </header>
       <div className="settings-body">
         <section className="settings-card sync-overview" aria-labelledby="sync-title">
@@ -161,6 +170,9 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
               <button type="button" className="primary" disabled={busy || !props.status.oauthConfigured} onClick={() => void run(() => window.polyask.connectSync())}>{props.copy.syncConnect}</button>
             ) : <button type="button" className="primary" disabled={busy} onClick={() => void run(() => window.polyask.syncNow())}>{props.copy.syncNow}</button>}
             {props.status.connected ? <button type="button" disabled={busy} onClick={() => void run(() => window.polyask.disconnectSync())}>{props.copy.syncDisconnect}</button> : null}
+            {!props.status.connected && props.status.hasStoredToken ? (
+              <button type="button" title={props.copy.syncRevokeHint} disabled={busy} onClick={() => void run(() => window.polyask.disconnectSync())}>{props.copy.syncRevoke}</button>
+            ) : null}
           </div>
           <SyncDiagnosticsPanel
             copy={props.copy}
@@ -185,11 +197,14 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
           <button
             type="button"
             disabled={busy || !props.status.connected || confirmation !== CLEAR_REMOTE_CONFIRMATION}
-            onClick={() => void run(async () => {
-              const next = await window.polyask.clearRemoteSync(confirmation);
-              setConfirmation("");
-              return next;
-            })}
+            onClick={() => {
+              setClearingCloud(true);
+              void run(async () => {
+                const next = await window.polyask.clearRemoteSync(confirmation);
+                setConfirmation("");
+                return next;
+              }).finally(() => setClearingCloud(false));
+            }}
           >{props.copy.syncClear}</button>
         </section>
         <label className="settings-card preference-card">

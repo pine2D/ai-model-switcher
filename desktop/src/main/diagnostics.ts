@@ -6,7 +6,11 @@ export const SITE_VIEW_SECURITY = {
   sandbox: true,
   contextIsolation: true,
   nodeIntegration: false,
-  webSecurity: true
+  webSecurity: true,
+  // Rate-limit JavaScript dialogs so a page cannot lock the shared window with a
+  // loop of alert()/confirm(). Not disableDialogs: sites still need their own
+  // confirmations, and turning them off needs on-device verification first.
+  safeDialogs: true
 } as const;
 
 export interface DiagnosticSiteInput {
@@ -17,6 +21,9 @@ export interface DiagnosticSiteInput {
   readonly sandbox: boolean;
   readonly contextIsolation: boolean;
   readonly nodeIntegration: boolean;
+  // Optional so older snapshots stay readable; only an explicit false is a
+  // violation, matching "webSecurity was never turned off".
+  readonly webSecurity?: boolean;
   readonly attached: boolean;
   readonly bounds: ViewBounds;
 }
@@ -55,7 +62,7 @@ export function buildDiagnosticSnapshot(input: DiagnosticInput): DiagnosticSnaps
     if (site.partition !== SITE_PARTITION || !site.sameSession) {
       violations.push(`site_session:${site.site}`);
     }
-    if (!site.sandbox || !site.contextIsolation || site.nodeIntegration) {
+    if (!site.sandbox || !site.contextIsolation || site.nodeIntegration || site.webSecurity === false) {
       violations.push(`insecure_site:${site.site}`);
     }
     if (site.attached && !hasPositiveBounds(site.bounds)) violations.push(`site_bounds:${site.site}`);

@@ -64,16 +64,29 @@ function normalizeResult(value: unknown): SiteResult {
   return result;
 }
 
+// 码点上限：远超任何真实回答长度，只挡病态注入（撑爆 DOM 反灌回来的巨串）；
+// 超限不静默丢弃——改用 answer_truncated code 携带截断事实，由 copy.answerTruncated 三语提示。
+const TEXT_LIMIT = 1_000_000;
+
+function boundText(text: string): { readonly value: string; readonly truncated: boolean } {
+  if (text.length <= TEXT_LIMIT) return { value: text, truncated: false }; // 码点数 <= UTF-16 单元数，快速放行常见情形
+  const points = [...text];
+  return points.length > TEXT_LIMIT
+    ? { value: points.slice(0, TEXT_LIMIT).join(""), truncated: true }
+    : { value: text, truncated: false };
+}
+
 function normalizeCollection(value: unknown): SiteCollectionResult {
   if (!value || typeof value !== "object") return { code: "no_answer" };
   const candidate = value as Record<string, unknown>;
-  const text = typeof candidate.text === "string" && candidate.text.trim() ? candidate.text : undefined;
+  const raw = typeof candidate.text === "string" && candidate.text.trim() ? candidate.text : undefined;
   const state = typeof candidate.state === "string" ? candidate.state.slice(0, 64) : undefined;
   const code = typeof candidate.code === "string" ? candidate.code.slice(0, 64) : undefined;
+  const bounded = raw ? boundText(raw) : null;
   return {
-    ...(text ? { text } : {}),
+    ...(bounded ? { text: bounded.value } : {}),
     ...(state ? { state } : {}),
-    ...(!text ? { code: code || "no_answer" } : code ? { code } : {})
+    ...(!bounded ? { code: code || "no_answer" } : bounded.truncated ? { code: "answer_truncated" } : code ? { code } : {})
   };
 }
 

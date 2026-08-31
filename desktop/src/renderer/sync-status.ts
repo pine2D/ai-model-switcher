@@ -36,6 +36,8 @@ export function describeSync(copy: DesktopCopy, status: SyncStatus): string {
   if (status.reason === "drive_response") return copy.syncReasonDriveResponse;
   if (status.reason === "drive_unauthorized") return copy.syncReasonDriveUnauthorized;
   if (status.reason === "network_timeout") return copy.syncReasonTimeout;
+  if (status.reason === "clear_pending") return copy.syncReasonClearPending;
+  if (status.reason === "revoke_failed") return copy.syncReasonRevokeFailed;
   if (!status.connected && status.state === "idle") return copy.syncStateLocalOnly;
   return byState[status.state];
 }

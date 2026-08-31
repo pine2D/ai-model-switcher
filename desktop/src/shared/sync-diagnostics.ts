@@ -46,7 +46,7 @@ const SAFE_REASONS = new Set([
   "oauth_invalid_client", "oauth_redirect_mismatch", "oauth_refresh_missing",
   "oauth_provider_error", "oauth_rejected", "oauth_response", "token_storage",
   "drive_network_timeout", "drive_network", "drive_response", "drive_unauthorized",
-  "network_timeout", "revoke_failed"
+  "network_timeout", "revoke_failed", "clear_pending"
 ]);
 const BROWSER_FAILURES = new Set(["oauth_callback_timeout", "oauth_rejected"]);
 const TOKEN_FAILURES = new Set([
@@ -126,7 +126,7 @@ function deriveStages(status: SyncStatus): SyncDiagnosticStage[] {
 
   if (status.state === "syncing" && reason !== "oauth" && reason !== "drive_check") {
     set("last-sync", "checking");
-  } else if (["offline", "auth", "blocked", "error"].includes(status.state) && reason) {
+  } else if (["offline", "auth", "blocked", "error"].includes(status.state)) {
     set("last-sync", "failed", reason);
   } else if (status.state === "waiting" || status.state === "schema") {
     set("last-sync", "warning", status.state);

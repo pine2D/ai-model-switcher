@@ -128,6 +128,10 @@ if (process.platform === "win32") {
 }
 
 const coordinator = new BroadcastCoordinator();
+// Assisted synthesis owns a second coordinator: BroadcastCoordinator.send aborts
+// whatever the same instance is still dispatching, so sharing one would let a
+// synthesis prompt tear down an in-flight broadcast. polyask:cancel cancels both.
+const synthesisCoordinator = new BroadcastCoordinator();
 let mainWindow: BrowserWindow | null = null;
 let viewManager: ViewManager | null = null;
 let desktopDatabase: DesktopDatabase | null = null;
@@ -367,7 +371,7 @@ async function createWindow(): Promise<void> {
     navigate: (site, url) => manager.navigate(site, url),
     send: (request) => {
       for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
-      return coordinator.send(
+      return synthesisCoordinator.send(
         request,
         (site, command, signal) => manager.sendCommand(site, command, signal),
         44_000,
@@ -401,6 +405,7 @@ async function createWindow(): Promise<void> {
     manager,
     workspace,
     coordinator,
+    synthesisCoordinator,
     collection,
     archives,
     history,

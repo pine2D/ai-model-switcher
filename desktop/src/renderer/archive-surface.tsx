@@ -86,6 +86,19 @@ export function createArchiveRefresh(
   };
 }
 
+// preferredId 只在它第一次出现时应该抢占选中项（比如刚发出的综合任务落库）；
+// 之后每次筛选变化重跑同一个 effect 都会把它带上,若不加消费标记会一直把选中项拉回该记录,
+// 用户在筛出别的记录后仍会被拽回去。lastConsumed 记录"已经用掉的那个 preferredId"。
+export function resolveFilterRefreshTarget(
+  preferredId: string | null,
+  lastConsumed: string | null
+): { readonly target: string | undefined; readonly consumed: string | null } {
+  if (preferredId !== null && preferredId !== lastConsumed) {
+    return { target: preferredId, consumed: preferredId };
+  }
+  return { target: undefined, consumed: lastConsumed };
+}
+
 export function startArchiveFilterIntent<T>(
   requestEpoch: ArchiveRequestEpoch,
   setFilter: (value: T) => void,
@@ -93,8 +106,10 @@ export function startArchiveFilterIntent<T>(
   setLoading: (value: boolean) => void,
   setStatus: (value: string) => void
 ): void {
+  // 只作废在途请求、清空旧状态文案；不在按键当下置 loading——那会让整个防抖窗口里
+  // 结果区反复闪成占位态。真正的 loading 由 createArchiveRefresh 在实际发起搜索时置位。
+  void setLoading;
   requestEpoch.invalidate();
-  setLoading(true);
   setStatus("");
   setFilter(value);
 }
@@ -111,6 +126,7 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   const [status, setStatus] = useState("");
   const [synthesisId, setSynthesisId] = useState<string | null>(null);
   const requestEpoch = useRef<ReturnType<typeof createArchiveRequestEpoch> | null>(null);
+  const consumedPreferredId = useRef<string | null>(null);
   const currentFilters = useRef<ArchiveFilters>({ query: "", favorite: false, tag: "" });
   const refresh = useRef<ReturnType<typeof createArchiveRefresh> | null>(null);
   const actionQueue = useRef<SerialActions | null>(null);
@@ -146,7 +162,11 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   const load = refresh.current;
 
   useEffect(() => {
-    const timer = setTimeout(() => { void load(props.preferredId ?? undefined); }, query ? 180 : 0);
+    const { target, consumed } = resolveFilterRefreshTarget(props.preferredId, consumedPreferredId.current);
+    const timer = setTimeout(() => {
+      consumedPreferredId.current = consumed;
+      void load(target);
+    }, query ? 180 : 0);
     return () => clearTimeout(timer);
   }, [favoriteOnly, load, props.preferredId, query, selectedTag]);
 

@@ -16,6 +16,9 @@ export interface SyncPullDrive {
 type StateMap = Record<string, StateFragment>;
 
 export class SyncPull {
+  /** Corrupt files seen in this round only; the stored count is a snapshot, not a tally. */
+  private roundCorrupt = 0;
+
   constructor(
     private readonly repository: SyncRepository,
     private readonly drive: SyncPullDrive,
@@ -24,6 +27,7 @@ export class SyncPull {
   ) {}
 
   async run(signal: AbortSignal): Promise<void> {
+    this.roundCorrupt = 0;
     const token = this.repository.config().pageToken;
     try {
       if (token) await this.incremental(token, signal);
@@ -144,7 +148,7 @@ export class SyncPull {
     const readOnly = future.size > 0 || merged.readOnly;
     this.repository.saveConfig({
       readOnly,
-      errorCount: this.repository.config().errorCount + merged.corrupt,
+      errorCount: this.roundCorrupt + merged.corrupt,
       futureFileIds: [...future]
     });
     if (merged.changed) this.onWorkspaceChanged?.();
@@ -152,8 +156,7 @@ export class SyncPull {
 
   private noteCorrupt(fileId: string): void {
     this.repository.deleteDriveFile(fileId);
-    const config = this.repository.config();
-    this.repository.saveConfig({ errorCount: config.errorCount + 1 });
+    this.roundCorrupt += 1;
   }
 }
 

@@ -193,6 +193,15 @@ button { cursor: default; }
   position: absolute; top: 4px; right: 3px; width: 5px; height: 5px;
   border: 1px solid var(--panel); border-radius: 50%; background: var(--danger); content: "";
 }
+/* F166：attentionCount 曾经只落进 data-attention-count 却没有任何 CSS 消费它——补一个数字徽标；
+   sync-attention 已有单独的圆点样式，两者共用 ::after 会互相覆盖，故这里排除 .sync-attention。 */
+.workspace-actions > button.more-trigger { position: relative; }
+.workspace-actions > button.more-trigger[data-attention-count]:not(.sync-attention)::after {
+  position: absolute; top: 2px; right: 2px; min-width: 14px; height: 14px; padding: 0 3px;
+  display: flex; align-items: center; justify-content: center; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 9px; font-weight: 700; line-height: 1;
+  content: attr(data-attention-count);
+}
 .workspace-actions > button.sync-syncing::after { background: var(--accent); }
 .workspace-actions > button.sync-waiting::after,
 .workspace-actions > button.sync-schema::after,

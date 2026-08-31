@@ -40,6 +40,8 @@ export interface SyncStatus {
   readonly readOnly: boolean;
   readonly oauthConfigured: boolean;
   readonly secureTokenStorage: boolean;
+  /** A Google refresh token is still held on this device even while disconnected. */
+  readonly hasStoredToken?: boolean;
 }
 
 export interface VersionedSyncValue {

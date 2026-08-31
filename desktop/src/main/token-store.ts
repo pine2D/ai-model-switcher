@@ -44,7 +44,8 @@ export class TokenStore {
       return this.memoryToken;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw error;
+      await this.clear();
+      return null;
     }
   }
 

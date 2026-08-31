@@ -74,7 +74,6 @@ export interface PolyAskDesktopApi {
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
-  onFocusPrompt(listener: () => void): () => void;
   onCommand(listener: (id: CommandId) => void): () => void;
   onWorkspaceState(listener: (value: WorkspaceState) => void): () => void;
   onPromptLibrary(listener: (value: PromptLibraryState) => void): () => void;
@@ -133,7 +132,6 @@ const api: PolyAskDesktopApi = Object.freeze({
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>
     subscribe("polyask:display-preferences", listener),
-  onFocusPrompt: (listener: () => void) => subscribe("polyask:focus-prompt", listener),
   onCommand: (listener: (id: CommandId) => void) => subscribe("polyask:command", listener),
   onWorkspaceState: (listener: (value: WorkspaceState) => void) =>
     subscribe("polyask:workspace-state", listener),

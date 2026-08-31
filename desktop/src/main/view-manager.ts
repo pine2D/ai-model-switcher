@@ -54,6 +54,20 @@ import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 import { reconcileVisibleSiteKeys } from "./view-visibility";
 
+// Consecutive probes that read no state (renderer busy, adapter without a
+// generation hook, view momentarily off-site) before monitoring gives up. A
+// single miss must never end the watch: that stranded whole runs on "submitted".
+const GENERATION_MISS_LIMIT = 5;
+const GENERATION_PROBE_INTERVAL = 900;
+// Permissions the nine site views may use. Everything else — camera, microphone,
+// geolocation, MIDI, notifications, clipboard-read, window-management — stays
+// denied. Keep docs/desktop-m0.md in step with this list.
+const SITE_PERMISSION_ALLOWLIST = new Set<string>([
+  "clipboard-sanitized-write",
+  "fullscreen",
+  "pointerLock"
+]);
+
 interface ViewManagerOptions {
   readonly initialUiState?: DesktopUiState;
   readonly selectedSites?: readonly SiteKey[];
@@ -70,6 +84,7 @@ export class ViewManager {
   private readonly generationTimers = new Map<SiteKey, NodeJS.Timeout>();
   private readonly generationDeadlines = new Map<SiteKey, number>();
   private readonly generationObserved = new Set<SiteKey>();
+  private readonly generationMisses = new Map<SiteKey, number>();
   private mode: "overview" | "focus" = "overview";
   private renderedMode: "overview" | "focus" = "overview";
   private focused: SiteKey = "claude";
@@ -104,10 +119,19 @@ export class ViewManager {
       const current = resolveSitePage(this.selected, this.page);
       this.page = current.page;
       this.pageCount = current.pageCount;
-      this.focused = resolveFocusedSite(current.keys, this.focused, this.focusedByPage.get(current.page));
+      // Restoring: the remembered site wins. `this.focused` is still the field
+      // default here, so passing it as `current` would always shadow the memory.
+      this.focused = resolveFocusedSite(
+        current.keys,
+        this.focusedByPage.get(current.page) ?? this.focused,
+        this.focused
+      );
     }
-    this.siteSession.setPermissionCheckHandler(() => false);
-    this.siteSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    this.siteSession.setPermissionCheckHandler(
+      (_contents, permission) => SITE_PERMISSION_ALLOWLIST.has(permission)
+    );
+    this.siteSession.setPermissionRequestHandler((_contents, permission, callback) =>
+      callback(SITE_PERMISSION_ALLOWLIST.has(permission)));
 
     for (const site of SITES) this.createView(site);
     this.layout();
@@ -266,6 +290,7 @@ export class ViewManager {
     if (!definition || definition.url !== url || !view || view.webContents.isDestroyed()) {
       throw new Error("invalid_navigation");
     }
+    this.invalidateGeneration(site);
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
     await view.webContents.loadURL(url);
@@ -276,9 +301,13 @@ export class ViewManager {
     this.onStatus(this.currentStatus(status.site));
   }
 
+  // A retry reuses the run id, so only the resubmitted sites are rearmed and the
+  // sites still streaming keep their timer, deadline and observed flag. A new run
+  // id (or a retry after cancel) resets every site.
   beginGenerationRun(runId: string, sites: readonly SiteKey[]): void {
-    this.cancelGenerationRun();
-    this.generation.begin(runId, sites);
+    const resumed = this.generation.begin(runId, sites);
+    if (resumed) for (const site of sites) this.clearGenerationTracking(site);
+    else this.clearGenerationTracking();
   }
 
   watchGeneration(runId: string, site: SiteKey): void {
@@ -287,12 +316,31 @@ export class ViewManager {
     void this.probeGeneration(runId, site);
   }
 
+  invalidateGeneration(site: SiteKey): void {
+    this.generation.forget(site);
+    this.clearGenerationTracking(site);
+  }
+
   cancelGenerationRun(): void {
     this.generation.invalidate();
-    for (const timer of this.generationTimers.values()) clearTimeout(timer);
-    this.generationTimers.clear();
-    this.generationDeadlines.clear();
-    this.generationObserved.clear();
+    this.clearGenerationTracking();
+  }
+
+  private clearGenerationTracking(site?: SiteKey): void {
+    if (site === undefined) {
+      for (const timer of this.generationTimers.values()) clearTimeout(timer);
+      this.generationTimers.clear();
+      this.generationDeadlines.clear();
+      this.generationObserved.clear();
+      this.generationMisses.clear();
+      return;
+    }
+    const timer = this.generationTimers.get(site);
+    if (timer) clearTimeout(timer);
+    this.generationTimers.delete(site);
+    this.generationDeadlines.delete(site);
+    this.generationObserved.delete(site);
+    this.generationMisses.delete(site);
   }
 
   owns(contents: WebContents): SiteKey | null {
@@ -307,6 +355,12 @@ export class ViewManager {
     if (!view || view.webContents.isDestroyed()) {
       return Promise.resolve({ ok: false, code: "no_view" });
     }
+    // A crashed or failed page has no preload left to answer, so the request
+    // would burn the whole budget and land on submit_unconfirmed — "maybe sent".
+    // It was never dispatched, so report the certain failure instead. Never
+    // reload and resend here: automatic resends are forbidden.
+    const pageFailure = this.pageFailureCode(site);
+    if (pageFailure) return Promise.resolve({ ok: false, code: pageFailure });
     const definition = SITES.find((candidate) => candidate.key === site);
     if (!definition || navigationDisposition(definition, view.webContents.getURL()) !== "site") {
       return Promise.resolve({ ok: false, code: "not_ready" });
@@ -324,6 +378,8 @@ export class ViewManager {
   collect(site: SiteKey, deadline: number): Promise<SiteCollectionResult> {
     const view = this.views.get(site);
     if (!view || view.webContents.isDestroyed()) return Promise.resolve({ code: "no_view" });
+    const pageFailure = this.pageFailureCode(site);
+    if (pageFailure) return Promise.resolve({ code: pageFailure });
     const definition = SITES.find((candidate) => candidate.key === site);
     if (!definition || navigationDisposition(definition, view.webContents.getURL()) !== "site") {
       return Promise.resolve({ code: "not_ready" });
@@ -378,8 +434,12 @@ export class ViewManager {
     if (!this.generation.accepts(runId, site)) return;
     const view = this.views.get(site);
     const definition = SITES.find((candidate) => candidate.key === site);
-    if (!view || view.webContents.isDestroyed() || !definition ||
-      navigationDisposition(definition, view.webContents.getURL()) !== "site") return;
+    const reachable = !!view && !view.webContents.isDestroyed() && !!definition &&
+      navigationDisposition(definition, view.webContents.getURL()) === "site";
+    if (!reachable || !view) {
+      this.scheduleGenerationProbe(runId, site, false);
+      return;
+    }
     const command: GenerationSiteCommand = {
       source: "AMS",
       cmd: "generation",
@@ -392,7 +452,13 @@ export class ViewManager {
     if (!this.generation.accepts(runId, site)) return;
     const state = "state" in response ? parseGenerationState(response.state) : null;
     const phase = this.generation.accept(runId, site, state);
-    if (!phase || state === null) return;
+    if (!phase) return;
+    // No state this round: keep polling until the miss budget runs out, so one
+    // busy renderer cannot freeze the site on "submitted" for the whole run.
+    if (state === null) {
+      this.scheduleGenerationProbe(runId, site, false);
+      return;
+    }
     if (phase === "generating" && !this.generationObserved.has(site)) {
       this.generationObserved.add(site);
       this.generationDeadlines.set(site, Date.now() + 15 * 60_000);
@@ -400,11 +466,24 @@ export class ViewManager {
     if ((phase === "generating" || phase === "complete") && this.currentStatus(site).phase !== phase) {
       this.markStatus({ site, phase });
     }
-    if (phase === "complete" || Date.now() >= (this.generationDeadlines.get(site) ?? 0)) return;
+    // Only the settled terminal phase stops the watch — the debounce window
+    // inside GenerationMonitor still reports "generating" and must keep polling.
+    if (phase === "complete") return;
+    this.scheduleGenerationProbe(runId, site, true);
+  }
+
+  private scheduleGenerationProbe(runId: string, site: SiteKey, observed: boolean): void {
+    if (observed) this.generationMisses.delete(site);
+    else {
+      const misses = (this.generationMisses.get(site) ?? 0) + 1;
+      this.generationMisses.set(site, misses);
+      if (misses >= GENERATION_MISS_LIMIT) return;
+    }
+    if (Date.now() >= (this.generationDeadlines.get(site) ?? 0)) return;
     const timer = setTimeout(() => {
       this.generationTimers.delete(site);
       void this.probeGeneration(runId, site);
-    }, 900);
+    }, GENERATION_PROBE_INTERVAL);
     timer.unref?.();
     this.generationTimers.set(site, timer);
   }
@@ -479,12 +558,22 @@ export class ViewManager {
     return effectiveStatus(this.runStatus.get(site), pageStatus);
   }
 
+  private pageFailureCode(site: SiteKey): "renderer_crashed" | "load_failed" | null {
+    const phase = this.pageStatus.get(site)?.phase;
+    if (phase === "crashed") return "renderer_crashed";
+    if (phase === "failed") return "load_failed";
+    return null;
+  }
+
   private updatePageStatus(status: SiteStatus): void {
     this.pageStatus.set(status.site, statusWithUnread(status, this.isSiteVisible(status.site)));
     this.onStatus(this.currentStatus(status.site));
   }
 
   private clearVisibleUnread(): void {
+    // Mirror isSiteVisible: paging or reselecting while the archive, settings or
+    // command surface is up must not mark hidden site badges as read.
+    if (this.surface !== "sites") return;
     for (const site of this.visibleSites()) {
       for (const statuses of [this.pageStatus, this.runStatus]) {
         const status = statuses.get(site);

@@ -29,7 +29,10 @@ export class CompletionNotifier {
       return false;
     }
     const key = `${status.site}:${status.phase}`;
-    if (!this.enabled || this.options.focused() || !status.unread || this.delivered.has(key)) return false;
+    // unread 只服务页签角标（见 status.ts 的 statusWithUnread）：它按当前显示的站点/页面判定,
+    // 与「窗口是否聚焦」无关——后台窗口停在某个站点页时,当前页的站点 unread 会是 false,
+    // 若在此再判一次会把该窗口最典型的姿势下的完成通知整体吞掉。去重已由 delivered 保证。
+    if (!this.enabled || this.options.focused() || this.delivered.has(key)) return false;
     this.delivered.add(key);
     this.options.show({
       title: this.options.copy.title,

@@ -21,7 +21,7 @@ interface SyncRuntimeOptions {
 
 export async function createSyncRuntime(options: SyncRuntimeOptions): Promise<SyncEngine> {
   const credentials = await loadOAuthClientCredentials({
-    environment: process.env,
+    environment: app.isPackaged ? undefined : process.env,
     resourcePath: app.isPackaged
       ? join(process.resourcesPath, "oauth.json")
       : join(app.getAppPath(), "resources", "oauth.json")

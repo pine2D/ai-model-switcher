@@ -110,7 +110,7 @@ export function CommandBar(props: CommandBarProps): React.JSX.Element {
       ) : (
         <button type="button" className="send primary-action priority-p0" title={props.sendBlockedReason ?? undefined} disabled={props.auxiliaryBusy || !props.text.trim() || props.selectedCount === 0 || !!props.sendBlockedReason} onClick={props.onSubmit}><SendIcon /><span>{props.copy.send}</span><kbd>{props.isMac ? "⌘↵" : "Ctrl+↵"}</kbd></button>
       )}
-      <WorkspaceActions copy={props.copy} disabled={busy} retryCount={props.failureCount + props.cancelledCount} synthesisPending={props.synthesisPending} syncStatus={props.syncStatus} onOpenMore={props.onOpenMore} />
+      <WorkspaceActions copy={props.copy} disabled={busy} failureCount={props.failureCount} cancelledCount={props.cancelledCount} synthesisPending={props.synthesisPending} syncStatus={props.syncStatus} onOpenMore={props.onOpenMore} />
     </header>
   );
 }

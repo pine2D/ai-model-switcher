@@ -96,18 +96,21 @@ function normalizeCredentials(clientId: unknown, clientSecret: unknown): OAuthCl
 interface LoopbackReceiver {
   readonly port: number;
   readonly receive: Promise<{ readonly code?: string; readonly state?: string; readonly error?: string }>;
+  expect(state: string): void;
   close(): Promise<void>;
 }
 
 export async function listenLoopback(): Promise<LoopbackReceiver> {
   let resolve!: (value: { code?: string; state?: string; error?: string }) => void;
   const receive = new Promise<{ code?: string; state?: string; error?: string }>((done) => { resolve = done; });
+  let expectedState: string | undefined;
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     const code = url.searchParams.get("code") ?? undefined;
     const state = url.searchParams.get("state") ?? undefined;
     const error = url.searchParams.get("error") ?? undefined;
     if (!code && !error) { response.writeHead(404).end(); return; }
+    if (expectedState !== undefined && state !== expectedState) { response.writeHead(404).end(); return; }
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", Connection: "close" });
     response.end(OAUTH_CALLBACK_HTML);
     resolve({ code, state, error });
@@ -118,7 +121,12 @@ export async function listenLoopback(): Promise<LoopbackReceiver> {
   });
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("oauth_listener_failed");
-  return { port: address.port, receive, close: () => closeServer(server) };
+  return {
+    port: address.port,
+    receive,
+    expect: (state) => { expectedState = state; },
+    close: () => closeServer(server)
+  };
 }
 
 interface AuthorizeInput {
@@ -137,6 +145,7 @@ export async function authorizeWithPkce(input: AuthorizeInput): Promise<TokenSet
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const request = await buildAuthorizationRequest({ clientId: input.clientId, port: receiver.port, scope: input.scope });
+    receiver.expect(request.state);
     const timedOut = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new Error("oauth_timeout")), input.timeoutMs ?? 300_000);
     });

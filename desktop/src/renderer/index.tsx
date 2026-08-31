@@ -79,6 +79,7 @@ function App(): React.JSX.Element {
   const copy = useMemo(() => getCopy(navigator.language), []);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const bootstrapStarted = useRef(false);
+  const sitesRef = useRef<readonly SiteDefinition[]>([]);
   const layoutPage = useRef(0);
   const requestedPage = useRef<{ readonly page: number; readonly inputMethod: "keyboard" | "pointer" } | null>(null);
   const actionLock = useRef<ExclusiveActionLock | null>(null);
@@ -146,6 +147,7 @@ function App(): React.JSX.Element {
   const acceptBootstrap = (state: BootstrapState): void => {
     setRuntime(state.runtime);
     setSites(state.sites);
+    sitesRef.current = state.sites;
     setStatuses(Object.fromEntries(state.statuses.map((status) => [status.site, status])));
     layoutPage.current = state.layout.page;
     setLayout(state.layout);
@@ -169,7 +171,8 @@ function App(): React.JSX.Element {
     }
     const offStatus = window.polyask.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
-      setAnnouncement(`${status.site}: ${describeStatus(copy, status)}`);
+      const label = sitesRef.current.find((site) => site.key === status.site)?.label ?? status.site;
+      setAnnouncement(`${label}: ${describeStatus(copy, status)}`);
     });
     const offLayout = window.polyask.onLayout((next) => {
       if (next.page !== layoutPage.current) {
@@ -184,7 +187,6 @@ function App(): React.JSX.Element {
       setLayout(next);
     });
     const offDisplay = window.polyask.onDisplayPreferences(acceptDisplayPreferences);
-    const offFocusPrompt = window.polyask.onFocusPrompt(() => promptRef.current?.focus());
     const offCommand = window.polyask.onCommand((id) => executeCommand(id, commandActions.current));
     const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
     const offPromptLibrary = window.polyask.onPromptLibrary(setPromptLibrary);
@@ -193,7 +195,6 @@ function App(): React.JSX.Element {
       offStatus();
       offLayout();
       offDisplay();
-      offFocusPrompt();
       offCommand();
       offWorkspace();
       offPromptLibrary();
@@ -368,6 +369,7 @@ function App(): React.JSX.Element {
     changeSurface("sites");
     requestedPage.current = { page, inputMethod: "keyboard" };
     setPageInputMethod("keyboard");
+    setAnnouncement(formatCopy(copy.sitePageChanged, { page: page + 1, total: layout.pageCount }));
     window.polyask.setPage(page);
   };
   const nextUnfinished = nextSiteForStatus(

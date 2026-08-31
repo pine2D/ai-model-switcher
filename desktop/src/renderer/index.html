@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#17171a" media="(prefers-color-scheme: dark)">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws:">
+    <!--
+      connect-src 允许 ws://localhost:* 是为了本地 Forge/webpack-dev-server 的 HMR 连接
+      （其开发地址固定为 http://localhost:<port>，见 @electron-forge/plugin-webpack 的
+      WebpackConfig baseUrl）；生产包走 file:// 协议，这条规则天然打不到任何真实连接，
+      不能整段删掉——meta CSP 与响应头 CSP 取交集，删了本地开发的 HMR socket 会直接连不上。
+      这份 html 是 dev/prod 共用的静态文件，没有按环境模板化的注入点。
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*; base-uri 'self'; form-action 'self'">
     <title>PolyAsk · AI 众答</title>
   </head>
   <body><div id="root"></div></body>

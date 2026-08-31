@@ -10,6 +10,7 @@ import {
   type SyncStatus
 } from "../shared/sync";
 import type { DriveChange, DriveFile } from "./drive-client";
+import { classifySyncFailure, type FailureStage } from "./sync-failures";
 import { SyncPull } from "./sync-pull";
 import { SyncRepository } from "./sync-repository";
 
@@ -39,7 +40,6 @@ export interface SyncAuth {
 }
 
 type QueuedOperation = OutboxOperation & { readonly revision: number };
-type FailureStage = "oauth" | "drive" | "sync";
 export class SyncEngine {
   private readonly now: () => number;
   private chain: Promise<unknown> = Promise.resolve();
@@ -57,6 +57,10 @@ export class SyncEngine {
     const config = this.options.repository.config();
     if (!config.connected && config.state === "syncing") {
       this.options.repository.saveConfig({ state: "idle", reason: undefined });
+    }
+    // A clear interrupted by a crash must not keep the engine parked forever.
+    if (config.clearRunning || config.clearProgress) {
+      this.options.repository.saveConfig({ clearRunning: false, clearProgress: 0 });
     }
     this.disposeOutbox = this.options.repository.onLocalChange(() => this.scheduleLocal());
     this.periodicTimer = setInterval(() => { void this.syncNow("periodic"); }, 15 * 60_000);
@@ -86,7 +90,8 @@ export class SyncEngine {
       ...(config.diagnostic ? { diagnostic: config.diagnostic } : {}),
       readOnly: config.readOnly,
       oauthConfigured: this.options.auth.configured(),
-      secureTokenStorage: this.options.auth.securePersistence()
+      secureTokenStorage: this.options.auth.securePersistence(),
+      ...(config.tokenStored ? { hasStoredToken: true } : {})
     };
   }
 
@@ -100,6 +105,7 @@ export class SyncEngine {
       try {
         this.setStatus("syncing", { reason: "oauth" });
         await this.options.auth.connect();
+        this.options.repository.saveConfig({ tokenStored: true });
         this.options.repository.enqueue({ key: "state", kind: "state", nextAt: 0, attempt: 0 });
         return await this.run("drive_check", true);
       } catch (error) { return this.fail(error, "oauth"); }
@@ -113,13 +119,7 @@ export class SyncEngine {
 
   disconnect(): Promise<SyncStatus> {
     this.activeController?.abort();
-    return this.serialize(async () => {
-      let failed = false;
-      try { await this.options.auth.disconnect(); } catch { failed = true; }
-      this.options.repository.clearDriveFiles();
-      this.options.repository.saveConfig({ connected: false, pageToken: undefined, stateFileId: undefined, readOnly: false, reason: failed ? "revoke_failed" : undefined });
-      return this.setStatus(failed ? "auth" : "idle");
-    });
+    return this.serialize(() => this.finishDisconnect());
   }
 
   clearRemote(): Promise<SyncStatus> {
@@ -127,26 +127,43 @@ export class SyncEngine {
     return this.serialize(async () => {
       const config = this.options.repository.config();
       if (!config.connected) return this.setStatus("auth");
-      this.options.repository.saveConfig({ clearRunning: true, clearProgress: config.clearProgress ?? 0 });
+      const base = config.clearProgress ?? 0;
+      this.options.repository.saveConfig({ clearRunning: true, clearProgress: base });
+      const controller = new AbortController();
+      this.activeController = controller;
       try {
-        await this.options.drive.clearAll((count) => {
-          this.options.repository.saveConfig({ clearProgress: (config.clearProgress ?? 0) + count });
-        });
-        await this.options.auth.disconnect();
-        this.options.repository.clearDriveFiles();
-        this.options.repository.saveConfig({ connected: false, readOnly: false, pageToken: undefined, stateFileId: undefined, clearRunning: false, clearProgress: 0 });
-        return this.setStatus("idle");
+        await this.options.drive.clearAll(
+          (count) => { this.options.repository.saveConfig({ clearProgress: base + count }); },
+          controller.signal
+        );
       } catch (error) {
-        this.options.repository.saveConfig({ clearRunning: true });
-        await this.fail(error);
+        // Releasing the flag keeps ordinary syncing alive; the user retries the clear.
+        this.options.repository.saveConfig({ clearRunning: false, clearProgress: base });
+        this.fail(error);
         throw error;
+      } finally {
+        if (this.activeController === controller) this.activeController = null;
       }
+      return this.finishDisconnect({ clearRunning: false, clearProgress: 0 });
     });
+  }
+
+  /** Revoking may fail on its own; it is reported as a reason, never as a stuck state. */
+  private async finishDisconnect(patch: Record<string, unknown> = {}): Promise<SyncStatus> {
+    let failed = false;
+    try { await this.options.auth.disconnect(); } catch { failed = true; }
+    this.options.repository.clearDriveFiles();
+    this.options.repository.saveConfig({
+      connected: false, pageToken: undefined, stateFileId: undefined, readOnly: false,
+      tokenStored: false, ...patch, reason: failed ? "revoke_failed" : undefined
+    });
+    return this.setStatus(failed ? "auth" : "idle");
   }
 
   private async run(reason: string, establishingConnection = false): Promise<SyncStatus> {
     const config = this.options.repository.config();
-    if ((!config.connected && !establishingConnection) || config.clearRunning) return this.status();
+    if (!config.connected && !establishingConnection) return this.status();
+    if (config.clearRunning) return this.setStatus(config.state, { reason: "clear_pending" });
     this.activeController?.abort();
     const controller = new AbortController();
     this.activeController = controller;
@@ -180,7 +197,10 @@ export class SyncEngine {
           const code = (error as { code?: string }).code;
           if (code !== "rate_limited" && code !== "server_error") throw error;
           const attempt = operation.attempt + 1;
-          this.options.repository.enqueue({ ...operation, attempt, nextAt: this.now() + ((error as { retryAfter?: number }).retryAfter ?? retryDelay(attempt)) });
+          // Retry-After may only push the retry further out, never pull it forward.
+          const hint = (error as { retryAfter?: number }).retryAfter;
+          const wait = Math.max(retryDelay(attempt), typeof hint === "number" && hint > 0 ? hint : 0);
+          this.options.repository.enqueue({ ...operation, attempt, nextAt: this.now() + wait });
           waiting = true;
         }
       }
@@ -219,39 +239,8 @@ export class SyncEngine {
   }
 
   private fail(error: unknown, stage: FailureStage = "sync"): SyncStatus {
-    const code = (error as { code?: string; message?: string }).code ?? (error as { message?: string }).message;
-    if (code === "oauth_timeout") return this.setStatus("offline", { reason: "oauth_callback_timeout" });
-    if (code === "network_timeout") return this.setStatus("offline", {
-      reason: stage === "oauth" ? "oauth_network_timeout" : stage === "drive" ? "drive_network_timeout" : "network_timeout"
-    });
-    if (code === "network_error" || error instanceof TypeError) return this.setStatus("offline", {
-      reason: stage === "oauth" ? "oauth_network" : stage === "drive" ? "drive_network" : undefined
-    });
-    if (code === "token_store_failed") return this.setStatus("error", { reason: "token_storage" });
-    if (code === "oauth_token_failed" || code === "oauth_invalid_response") return this.setStatus("error", { reason: "oauth_response" });
-    if (code === "invalid_response" && stage === "drive") return this.setStatus("error", { reason: "drive_response" });
-    if (code === "oauth_invalid_client" || code === "oauth_redirect_mismatch") {
-      return this.setStatus("blocked", { reason: code });
-    }
-    if (code === "oauth_provider_error") {
-      const diagnostic = oauthProviderDiagnostic(error);
-      return diagnostic
-        ? this.setStatus("auth", { reason: code, diagnostic })
-        : this.setStatus("auth", { reason: "oauth_rejected" });
-    }
-    if (code === "oauth_invalid_grant") return this.setStatus("auth", { reason: code });
-    if (code === "refresh_token_missing") return this.setStatus("auth", { reason: "oauth_refresh_missing" });
-    if (code === "unauthorized" && stage === "drive") return this.setStatus("auth", { reason: "drive_unauthorized" });
-    if (code === "unauthorized" || code === "auth_failed") {
-      return this.setStatus("auth", { reason: stage === "oauth" || stage === "drive" ? "oauth_rejected" : undefined });
-    }
-    if (code === "oauth_not_configured") return this.setStatus("blocked", { reason: code });
-    if (code === "forbidden") {
-      const reason = String((error as { reason?: string }).reason ?? "").toLowerCase();
-      return this.setStatus("blocked", { reason: /notconfigured|disabled/.test(reason) ? "drive_disabled" : /quota|limit|rate/.test(reason) ? "quota" : "policy" });
-    }
-    if (code === "rate_limited" || code === "server_error") return this.setStatus("waiting", { reason: undefined });
-    return this.setStatus("error", { reason: undefined });
+    const { state, ...patch } = classifySyncFailure(error, stage);
+    return this.setStatus(state, { reason: undefined, ...patch });
   }
 
   private setStatus(state: SyncStatus["state"], patch: Record<string, unknown> = {}): SyncStatus {
@@ -276,12 +265,4 @@ export class SyncEngine {
     this.chain = run.catch(() => undefined);
     return run;
   }
-}
-
-function oauthProviderDiagnostic(error: unknown): string | null {
-  const failure = error as { providerCode?: unknown; providerDetail?: unknown };
-  if (typeof failure.providerCode !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(failure.providerCode)) return null;
-  const detail = typeof failure.providerDetail === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(failure.providerDetail)
-    ? ` / ${failure.providerDetail}` : "";
-  return `${failure.providerCode}${detail}`;
 }

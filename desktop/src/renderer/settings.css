@@ -121,3 +121,6 @@
   .settings-workspace { background: #17171a; }
   .danger-zone input { background: #19191d; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .preference-switch span::after { transition: none; }
+}

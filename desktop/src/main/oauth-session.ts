@@ -65,12 +65,17 @@ export class OAuthSession implements AccessTokenProvider {
       this.options.fetch,
       this.now
     );
-    this.token = { ...token, refreshToken };
+    const rotatedRefreshToken = token.refreshToken && token.refreshToken !== refreshToken ? token.refreshToken : refreshToken;
+    if (rotatedRefreshToken !== refreshToken) {
+      try { await this.options.tokenStore.save(rotatedRefreshToken); }
+      catch { /* keep the rotated token in memory even if persisting it fails */ }
+    }
+    this.token = { ...token, refreshToken: rotatedRefreshToken };
     return token.accessToken;
   }
 
   async disconnect(): Promise<void> {
-    const token = this.token?.refreshToken ?? await this.options.tokenStore.load() ?? this.token?.accessToken;
+    const token = this.token?.refreshToken ?? await this.options.tokenStore.load().catch(() => null) ?? this.token?.accessToken;
     this.token = null;
     try { if (token) await (this.options.revoke ?? revokeGoogleToken)(token, this.options.fetch); }
     finally { await this.options.tokenStore.clear(); }

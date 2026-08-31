@@ -47,6 +47,9 @@ interface ShellIpcOptions {
   readonly manager: ViewManager;
   readonly workspace: WorkspaceService;
   readonly coordinator: BroadcastCoordinator;
+  // Assisted synthesis dispatches through its own coordinator so that opening the
+  // archive and sending a synthesis prompt cannot abort an in-flight broadcast.
+  readonly synthesisCoordinator: BroadcastCoordinator;
   readonly collection: CollectionService;
   readonly archives: ArchiveService;
   readonly history: HistoryService;
@@ -102,7 +105,7 @@ function strictId(value: unknown): string {
 }
 
 export function registerShellIpc(options: ShellIpcOptions): () => void {
-  const { window, manager, workspace, coordinator, collection, archives, history, promptLibrary, synthesis, sync } = options;
+  const { window, manager, workspace, coordinator, synthesisCoordinator, collection, archives, history, promptLibrary, synthesis, sync } = options;
   const trustedShell = (event: ShellIpcEvent) =>
     event.sender.id === window.webContents.id &&
     event.senderFrame?.parent === null &&
@@ -148,10 +151,15 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (request.images.length && unsupportedImageSites(request.sites, SITES).length) {
       throw new Error("image_sites_unsupported");
     }
-    manager.beginGenerationRun(request.runId, request.sites);
+    // beginRun first: a stale retry throws before generation monitoring is touched.
     collection.beginRun(request.runId, request.sites);
+    manager.beginGenerationRun(request.runId, request.sites);
+    // Recorded before dispatch, matching the extension (console/console.js pushes
+    // history ahead of sendAll): a question the user actually asked belongs in the
+    // library even when every site fails.
+    history.record(request.text);
+    publishPromptLibrary();
     for (const site of request.sites) manager.markStatus({ site, phase: "sending" });
-    let historyRecorded = false;
     const results = await coordinator.send(
       request,
       (site, command, signal) => manager.sendCommand(site, command, signal),
@@ -159,11 +167,6 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       (result) => {
         manager.markStatus(statusForResult(result.site, result));
         if (result.ok) manager.watchGeneration(request.runId, result.site);
-        if (result.ok && !historyRecorded) {
-          history.record(request.text);
-          publishPromptLibrary();
-          historyRecorded = true;
-        }
       }
     );
     return results;
@@ -273,6 +276,9 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   ipcMain.on("polyask:cancel", (event) => {
     if (trustedShell(event)) {
       coordinator.cancel();
+      // Cancel reaches both dispatch paths; the synthesis coordinator is separate
+      // from the broadcast one and would otherwise keep typing into a site.
+      synthesisCoordinator.cancel();
       manager.cancelGenerationRun();
       synthesis.cancel();
     }

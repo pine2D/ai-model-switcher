@@ -25,11 +25,14 @@ type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 const API = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
 
+/** A hint of zero (or an already elapsed HTTP-date) is no hint: it would defeat backoff. */
 function retryAfter(value: string | null): number | undefined {
   if (!value) return undefined;
-  if (/^\d+$/.test(value)) return Number(value) * 1_000;
+  if (/^\d+$/.test(value)) return Number(value) > 0 ? Number(value) * 1_000 : undefined;
   const at = Date.parse(value);
-  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+  if (Number.isNaN(at)) return undefined;
+  const wait = at - Date.now();
+  return wait > 0 ? wait : undefined;
 }
 
 export class DriveClient {

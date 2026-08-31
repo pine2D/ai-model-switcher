@@ -13,6 +13,11 @@ function errorCopy(copy: DesktopCopy, code: ImageInputError): string {
   }[code];
 }
 
+// 群发进行中粘贴/拖入图片时的拒收提示；idle=false 时不应静默丢弃这次输入。
+export function imageSelectionBlockedMessage(copy: DesktopCopy, idle: boolean): string | null {
+  return idle ? null : copy.imagesBusy;
+}
+
 export function useImageSelection(
   copy: DesktopCopy,
   idle: boolean,
@@ -31,7 +36,8 @@ export function useImageSelection(
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const choose = async (files: readonly File[]) => {
-    if (!idle) return;
+    const blocked = imageSelectionBlockedMessage(copy, idle);
+    if (blocked) { announce(blocked); return; }
     const request = ++epoch.current;
     const result = await readDesktopImages(files);
     if (request !== epoch.current) return;

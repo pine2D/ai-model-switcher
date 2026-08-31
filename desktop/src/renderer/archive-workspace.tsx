@@ -87,27 +87,25 @@ export function ArchiveWorkspace(props: ArchiveWorkspaceProps): React.JSX.Elemen
         </div>
       </header>
       <div className="archive-body">
-        {props.loading || !props.items.length ? (
-          <div className="archive-empty" role="status">
-            {props.loading ? copy.archiveLoading : emptyText}
-          </div>
-        ) : (
-          <>
-            <aside className="archive-list" aria-label={copy.archiveTitle}>
-              {props.items.map((record) => (
-                <button type="button" key={record.id} aria-current={record.id === selected?.id ? "true" : undefined} disabled={props.busy} onClick={() => props.onSelect(record.id)}>
-                  <time dateTime={new Date(record.ts).toISOString()}>{formatDateTime(record.ts, props.locale)}</time>
-                  <span>{record.task || record.preview || "—"}</span>
-                  <small>{record.results.map((result) => result.label).join(" · ")}</small>
-                  {record.favorite || record.tags.length ? <span className="archive-badges">{record.favorite ? <StarIcon /> : null}{record.tags.map((tag) => <i key={tag}>{tag}</i>)}</span> : null}
-                </button>
-              ))}
-            </aside>
-            <main className="archive-detail-pane">
-              {props.detailOverride ?? (selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} pendingSynthesis={props.pendingSynthesis} synthesisCandidate={props.synthesisCandidate} busy={props.busy} onSynthesize={props.onSynthesize} onCollectSynthesis={props.onCollectSynthesis} onSaveSynthesis={props.onSaveSynthesis} /> : null)}
-            </main>
-          </>
-        )}
+        <aside className="archive-list" aria-label={copy.archiveTitle}>
+          {props.loading || !props.items.length ? (
+            <div className="archive-empty" role="status">
+              {props.loading ? copy.archiveLoading : emptyText}
+            </div>
+          ) : (
+            props.items.map((record) => (
+              <button type="button" key={record.id} aria-current={record.id === selected?.id ? "true" : undefined} disabled={props.busy} onClick={() => props.onSelect(record.id)}>
+                <time dateTime={new Date(record.ts).toISOString()}>{formatDateTime(record.ts, props.locale)}</time>
+                <span>{record.task || record.preview || "—"}</span>
+                <small>{record.results.map((result) => result.label).join(" · ")}</small>
+                {record.favorite || record.tags.length ? <span className="archive-badges">{record.favorite ? <StarIcon /> : null}{record.tags.map((tag) => <i key={tag}>{tag}</i>)}</span> : null}
+              </button>
+            ))
+          )}
+        </aside>
+        <main className="archive-detail-pane">
+          {props.detailOverride ?? (selected ? <ArchiveDetail copy={copy} locale={props.locale} record={selected} onPatch={props.onPatch} onOpenSource={props.onOpenSource} pendingSynthesis={props.pendingSynthesis} synthesisCandidate={props.synthesisCandidate} busy={props.busy} onSynthesize={props.onSynthesize} onCollectSynthesis={props.onCollectSynthesis} onSaveSynthesis={props.onSaveSynthesis} /> : null)}
+        </main>
       </div>
       <div className="archive-status" role="status" aria-live="polite">{props.status}</div>
     </section>

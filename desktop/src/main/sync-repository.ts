@@ -42,6 +42,7 @@ export interface SyncConfig {
   readonly diagnostic?: string;
   readonly clearRunning?: boolean;
   readonly clearProgress?: number;
+  readonly tokenStored?: boolean;
   readonly futureFileIds?: readonly string[];
 }
 
@@ -86,15 +87,25 @@ export class SyncRepository {
     }));
     const settings = {
       ...(previous?.settings ?? {}),
-      "amsConsole.selected": { value: selected, updatedAt: workspace.updatedAt, deviceId },
+      "amsConsole.selected": {
+        value: { ...unknownSelection(remoteStates), ...selected },
+        updatedAt: workspace.updatedAt,
+        deviceId
+      },
       "amsConsole.tier": { value: workspace.tier ?? "", updatedAt: workspace.updatedAt, deviceId }
     };
-    const groups = Object.fromEntries(this.database.state.entries<WorkspaceGroup>("group:").map(({ value }) => [
-      value.id,
-      "deletedAt" in value
-        ? value
-        : { id: value.id, name: value.name, hosts: value.sites.flatMap((key) => hostFor(key) ?? []), updatedAt: value.updatedAt, deviceId: value.deviceId }
-    ]));
+    // Groups whose cloud copy names a host this build cannot resolve are consumed
+    // read-only: re-projecting them would upload a truncated host list that wins
+    // the tie against the complete one (same updatedAt, same deviceId).
+    const foreign = groupsWithUnknownHosts(remoteStates);
+    const groups = Object.fromEntries(this.database.state.entries<WorkspaceGroup>("group:")
+      .filter(({ value }) => "deletedAt" in value || !foreign.has(value.id))
+      .map(({ value }) => [
+        value.id,
+        "deletedAt" in value
+          ? value
+          : { id: value.id, name: value.name, hosts: value.sites.flatMap((key) => hostFor(key) ?? []), updatedAt: value.updatedAt, deviceId: value.deviceId }
+      ]));
     const localTemplates = this.database.state.list<unknown>("template:").filter(isStoredPromptTemplate);
     const templates = mergeStateFragments([
       previous ?? { schema: SYNC_SCHEMA, deviceId, settings: {}, templates: {}, groups: {} },
@@ -183,6 +194,31 @@ export class SyncRepository {
   }
   deleteDriveFile(fileId: string): void { this.database.driveFiles.delete(fileId); }
   clearDriveFiles(): void { this.database.driveFiles.clear(); }
+}
+
+function hostMap(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+/** Site toggles for hosts this build does not know, carried from the newest cloud copy. */
+function unknownSelection(remoteStates: Readonly<Record<string, StateFragment>>): Record<string, unknown> {
+  let winner: VersionedSyncValue | undefined;
+  for (const fragment of Object.values(remoteStates)) {
+    const candidate = fragment?.settings?.["amsConsole.selected"];
+    if (candidate && (!winner || compareSyncVersion(candidate, winner) > 0)) winner = candidate;
+  }
+  return Object.fromEntries(Object.entries(hostMap(winner?.value)).filter(([host]) => !keyFor(host)));
+}
+
+function groupsWithUnknownHosts(remoteStates: Readonly<Record<string, StateFragment>>): Set<string> {
+  const ids = new Set<string>();
+  for (const fragment of Object.values(remoteStates)) {
+    for (const [id, group] of Object.entries(fragment?.groups ?? {})) {
+      const hosts = (group as { readonly hosts?: unknown }).hosts;
+      if (Array.isArray(hosts) && hosts.some((host) => typeof host === "string" && !keyFor(host))) ids.add(id);
+    }
+  }
+  return ids;
 }
 
 function selectionFromSetting(setting?: VersionedSyncValue): SiteKey[] | null {
