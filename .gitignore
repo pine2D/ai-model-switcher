@@ -1,6 +1,9 @@
 .DS_Store
 
-# 本地工作文档与工具产物；发布与开发契约继续跟踪
+# docs/ 默认不入库：里面多是一次性排查稿与历史规划。白名单只放两类——发布与开发契约，
+# 以及 CHANGELOG 已发布段落引用过的历史审计报告（docs/audit-2026-07.md：不是契约，但
+# Release notes 里的路径不能变成死链）。给入库文档加引用前先确认它在这份白名单里，
+# 否则 scripts/verify.sh 的文档引用检查（按 git ls-files 判定）会直接红。
 /docs/*
 !/docs/adapters.md
 !/docs/audit-2026-07.md

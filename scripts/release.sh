@@ -80,6 +80,18 @@ grep -Eq "^\[未发布\]: .*/compare/$TAG\.\.\.HEAD$" CHANGELOG.md || {
 grep -Eq "^\[$VERSION\]: .*/(compare/.*\.\.\.$TAG|releases/tag/$TAG)$" CHANGELOG.md || {
   echo "CHANGELOG.md 缺少 [$VERSION] 版本链接" >&2; exit 1;
 }
+# F191_UNRELEASED_GUARD_START
+# 只在 --publish 拦：临发版补写进 [未发布] 段的条目会被下次 prepare-release.sh 整体错记到下一版号，
+# 且不会出现在本次 Release 说明里。--build-only 同时被 ci.yml/release.yml 的普通 CI 步骤调用，
+# 「未发布段非空」是那里的常态，一律拦会把日常 PR/CI 变红。
+if [ "$MODE" = "publish" ]; then
+  UNRELEASED=$(awk '/^## \[未发布\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)
+  ! grep -q '^- ' <<< "$UNRELEASED" || {
+    echo "CHANGELOG.md 的 [未发布] 段仍有未晋升条目；发版前应先跑 prepare-release.sh 晋升，不要临发版补写" >&2
+    exit 1
+  }
+fi
+# F191_UNRELEASED_GUARD_END
 packaged_version=$(unzip -p "$ZIP" manifest.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).version))')
 [ "$packaged_version" = "$VERSION" ] || { echo "ZIP 内 manifest 版本不一致" >&2; exit 1; }
 (cd "$DIST_DIR" && sha256sum "$ZIP_NAME" > "${ZIP_NAME}.sha256")

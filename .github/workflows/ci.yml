@@ -9,12 +9,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true # 同一分支/PR 推新提交时，老的 verify/desktop 跑一半直接取消，不占并发名额
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10 # 实测最大 145s(2.4min)，上浮 ≥50% 留量级余量（含 xvfb 冒烟测试，偶发慢一档也不误杀）
     steps:
       - name: 检出源码
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,6 +39,12 @@ jobs:
       - name: 安装桌面端依赖
         working-directory: desktop
         run: npm ci
+
+      - name: 审计 Electron 运行时依赖
+        # `npm audit --omit=dev`（下一步 typecheck/package 用不到，但发版清单里那条 `npm audit --omit=dev`
+        # 结构性看不到 electron——它按 npm 惯例总是 devDependency。见 scripts/audit-runtime.mjs 文件头注释。
+        working-directory: desktop
+        run: node scripts/audit-runtime.mjs
 
       - name: 测试桌面端
         working-directory: desktop
@@ -60,6 +71,7 @@ jobs:
   desktop-cross-platform:
     name: Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10 # 实测最大 122s(2.03min，Windows)，上浮 ≥50% 留量级余量
     strategy:
       fail-fast: false
       matrix:

@@ -7,8 +7,11 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # publish 半途失败要能重跑补齐；取消在制品会让发布产物半成品
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -16,6 +19,10 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # 实测 <10s；留量级余量，不是贴着实测值写
+    permissions:
+      contents: read
+      actions: read # gh run list 查 CI 结论必需；顶层降权后这里必须显式保留，否则误判「无记录」exit 1
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -45,6 +52,9 @@ jobs:
   extension:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10 # 实测最大 20s，上浮远超 50% 留量级余量
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -90,6 +100,9 @@ jobs:
             maker: "@electron-forge/maker-zip"
             asset: macos-arm64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10 # 实测最大值（Windows Squirrel + 便携版打包）约 167s=2.8min，上浮 ≥50% 留量级余量
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -144,6 +157,9 @@ jobs:
   publish:
     needs: [extension, desktop]
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # 实测最大 28s；这里需要真正的 contents: write 来发布 Release
+    permissions:
+      contents: write
     steps:
       - name: 汇总发布资产
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
