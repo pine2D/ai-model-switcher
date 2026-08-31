@@ -40,8 +40,11 @@ for p in "${RUNTIME[@]}"; do
   cp -r "$p" "$STAGE/$p"
 done
 find "$STAGE" -exec touch -d "@$SOURCE_DATE_EPOCH" {} +
+# 条目顺序也必须确定：zip -r 按 readdir 目录遍历序打包，ext4 与 CI 文件系统顺序不同会让
+# 「同一提交字节相同」跨机不成立（v0.23.0 实测本机与 CI 产物哈希不同的根因）。改为
+# find | LC_ALL=C sort 出稳定清单再 -@ 喂给 zip；目录条目不入清单（-type f），zip 不写目录项（-D）。
 # 排除任何隐藏文件 / .DS_Store / 临时备份
-( cd "$STAGE" && TZ=UTC zip -rXq "$OUT_ABS" "${RUNTIME[@]}" -x '*/.*' -x '*.DS_Store' -x '*~' )
+( cd "$STAGE" && find "${RUNTIME[@]}" -type f ! -path '*/.*' ! -name '.DS_Store' ! -name '*~' -print | LC_ALL=C sort | TZ=UTC zip -XqD "$OUT_ABS" -@ )
 
 # —— 产物对账：manifest/HTML/CSS/importScripts 引用的每个文件必须真的在 zip 里 ——
 # v0.5.0/v0.6.0 坏包事故根因：RUNTIME 白名单漏项只在干净机器装 zip 时才暴露；这里让它在打包时就炸。
