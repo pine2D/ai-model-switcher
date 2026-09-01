@@ -31,8 +31,8 @@
       // diag 不含模式 radio：它仅空对话首屏存在，聊天中缺失属正常态，列进来会让巡检恒红误报
       diagnose: function () {
         return [
-          { name: t("diag_deepThink"), ok: !!this._deepThink() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_deepThink"), ok: !!this._deepThink(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       // 档位真值优先读常驻 composer 的 DeepThink 开关（真机实证 2026-07-11：radio 首条消息后
@@ -110,8 +110,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modeBtn"), ok: !!this._modeBtn() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_modeBtn"), ok: !!this._modeBtn(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       state: function () {
@@ -210,9 +210,9 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modelDropdown"), ok: !!this._trigger() },
-          { name: t("diag_thinkBtn"), ok: !!this._thinkBtn() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_modelDropdown"), ok: !!this._trigger(), kind: "control" },
+          { name: t("diag_thinkBtn"), ok: !!this._thinkBtn(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       state: function () {

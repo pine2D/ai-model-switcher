@@ -76,8 +76,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modelEntry"), ok: !!document.querySelector('[data-testid="model-selector-dropdown"]') },
-          { name: t("diag_modelReadable"), ok: /opus|sonnet|haiku|fable/i.test(this._label()) },
+          { name: t("diag_modelEntry"), ok: !!document.querySelector('[data-testid="model-selector-dropdown"]'), kind: "control" },
+          { name: t("diag_modelReadable"), ok: /opus|sonnet|haiku|fable/i.test(this._label()), kind: "tier" },
         ];
       },
       // think = Fable 5 + 在场最高 effort（当前 Max）；fast = Sonnet 5（快模型，使用该模型默认设置）。
@@ -169,8 +169,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modelEntry"), ok: !!this._modelBtn() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_modelEntry"), ok: !!this._modelBtn(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       // aria-label 只报模式名（"…currently Pro/Flash"），不含 Extended thinking 状态，故按粗档位判；

@@ -225,10 +225,11 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
   const sendButton = { disabled: false, click() { clicks++; }, // 站点忽略合成点击
     getBoundingClientRect: () => ({ left: 420, right: 452, top: 505, bottom: 537, width: 32, height: 32 }) };
   // 侧栏里标题含「发送」二字的历史项按钮：同样匹配选择器、DOM 顺序在前、位置远离输入框（真机 2026-08-14
-  // Claude：querySelector 取文档顺序第一个 → 真发送键从没被点过，带图时确认窗口空转满 90s）
+  // Claude：querySelector 取文档顺序第一个 → 真发送键从没被点过，带图时确认窗口空转满 90s）。
+  // 尺寸取真机形态（24x24、纵向落在带内、横向差着几百像素）——旧桩写成 0x0，被 width>0 挡掉，是假绿。
   let sidebarClicks = 0;
   const sidebarDecoy = { disabled: false, click() { sidebarClicks++; },
-    getBoundingClientRect: () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }) };
+    getBoundingClientRect: () => ({ left: 12, right: 36, top: 360, bottom: 384, width: 24, height: 24 }) };
   class FakeEvent { constructor(type, options) { this.type = type; Object.assign(this, options); } }
   const context = {
     window: {}, location: { hostname: "claude.ai" }, innerHeight: 800, innerWidth: 900,
@@ -244,6 +245,7 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
     matchMedia: () => ({ matches: true }), setTimeout, clearTimeout, Date, getSelection: () => { throw new Error("no selection"); },
   };
   vm.runInNewContext(source("content/core.js"), context);
+  vm.runInNewContext(source("content/send.js"), context);
   const result = await context.window.__AMS.submitPrompt("hello", 0);
   assert.equal(result.ok, true, "发送键点不动时必须退回 Enter 并确认提交成功");
   assert.ok(clicks >= 1, "回退前仍应先尝试原生发送键");

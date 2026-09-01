@@ -175,7 +175,9 @@ document.getElementById("scope-intl").addEventListener("click", () => applyHosts
 document.getElementById("scope-domestic").addEventListener("click", () => applyHosts(DOMESTIC_HOSTS));
 const CHECK_ERR_KEYS = { no_window: "con_errNoWindow", not_ready: "con_errNotReady" };
 function checkText(result) {
-  if (result.ok) return t("con_checkupOk");
+  // note = 档位读不出这类「合法但不可判」的软信号，不再算巡检失败。**必须用带说明的词条**：
+  // 光把失败项的名字拼在「自检通过」后面会读成「这项通过了」，语义正好反过来。
+  if (result.ok) return result.note ? t("con_checkupOkAdvisory", result.note) : t("con_checkupOk");
   return result.reason || t(CHECK_ERR_KEYS[result.code] || "con_errGeneric");
 }
 // #scope-live 同样不缓存成品串：只记「按哪个词条 + 什么参数」现算，语言切换后 refreshLive() 能补算一次。

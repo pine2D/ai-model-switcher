@@ -47,6 +47,7 @@ Object.defineProperty(globalThis, "chrome", {
 
 require("../../../i18n.js");
 require("../../../content/core.js");
+require("../../../content/send.js");
 require("../../../content/upload.js");
 require("../../../content/md.js");
 require("../../../content/adapters-intl.js");

@@ -97,8 +97,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_intelEntry"), ok: !!this._anchor() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_intelEntry"), ok: !!this._anchor(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       state: function () {

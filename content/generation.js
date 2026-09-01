@@ -6,7 +6,10 @@
   if (!S || !S.adapters) return;
 
   const stopSelectors = {
-    "claude.ai": '[data-testid="stop-button"],button[aria-label*="stop response" i],button[aria-label*="停止回答"]',
+    // chat-input-stop 是 Claude 生产包里的 testid 常量（同族的 chat-input / chat-input-send /
+    // chat-input-attach 均已真机核实）；stop-button 是 ChatGPT 的形状，Claude 上零命中，
+    // 保留它只为万一回归。aria-label 由 react-intl 产出、随界面语言变，只能当兜底不能当锚点。
+    "claude.ai": '[data-testid="chat-input-stop"],[data-testid="stop-button"],button[aria-label*="stop response" i],button[aria-label*="停止回答"]',
     "chatgpt.com": '[data-testid="stop-button"],button[aria-label*="stop answering" i],button[aria-label*="stop generating" i],button[aria-label*="停止回答"]',
     "gemini.google.com": 'button[aria-label*="stop response" i],button[aria-label*="停止回答"]',
     "deepseek.com": '[aria-label*="stop" i],[aria-label*="停止"]',

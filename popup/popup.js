@@ -72,14 +72,16 @@ document.getElementById("diag").addEventListener("click", async () => {
     for (const c of checks) {
       const row = document.createElement("div");
       const mark = document.createElement("span");
+      // 档位读不出（kind:"tier"）是合法状态不是故障——用提示色与「提示」标签，别和真改版混为一谈
+      const soft = !c.ok && c.kind === "tier";
       mark.className = "ck " + (c.ok ? "ok" : "bad"); // SVG 标记，不用 ✓/✗ 字形
       mark.setAttribute("aria-hidden", "true");
       row.append(mark, document.createTextNode(c.name));
-      row.setAttribute("aria-label", c.name + " · " + t(c.ok ? "pop_diagPass" : "pop_diagFail"));
-      row.style.color = c.ok ? "#16a34a" : "#dc2626";
+      row.setAttribute("aria-label", c.name + " · " + t(c.ok ? "pop_diagPass" : soft ? "pop_diagAdvisory" : "pop_diagFail"));
+      row.style.color = c.ok ? "#16a34a" : soft ? "#b45309" : "#dc2626";
       out.append(row);
     }
-    if (checks.some((c) => !c.ok)) {
+    if (checks.some((c) => !c.ok && c.kind !== "tier")) {
       const tip = document.createElement("div");
       tip.textContent = t("pop_diagStale");
       tip.className = "hint"; // 用变量色，暗色下保持可读

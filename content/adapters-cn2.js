@@ -71,8 +71,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modelEntry"), ok: !!document.querySelector(".current-model") },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_modelEntry"), ok: !!document.querySelector(".current-model"), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       state: function () {
@@ -176,8 +176,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_modeBtn"), ok: !!(this._modeBtn() || this._toggle()) },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_modeBtn"), ok: !!(this._modeBtn() || this._toggle()), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       state: function () {
@@ -261,8 +261,8 @@
       },
       diagnose: function () {
         return [
-          { name: t("diag_thinkButton"), ok: !!this._trigger() },
-          { name: t("diag_tierReadable"), ok: this.state() != null },
+          { name: t("diag_thinkButton"), ok: !!this._trigger(), kind: "control" },
+          { name: t("diag_tierReadable"), ok: this.state() != null, kind: "tier" },
         ];
       },
       // 极致 / 深度 都算 think（深度是极致缺席时的降级目标）；标准若回归仍判 null，不猜。

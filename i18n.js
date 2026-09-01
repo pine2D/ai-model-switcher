@@ -100,6 +100,8 @@ const MSG = {
   con_historySaveFailed: { en: "Question history was not saved", zh_CN: "提问历史未保存", zh_TW: "提問歷史未儲存" },
   con_checking: { en: "Checking…", zh_CN: "巡检中", zh_TW: "巡檢中" },
   con_checkupOk: { en: "Checkup passed", zh_CN: "自检通过", zh_TW: "自檢通過" },
+  // {0} 是**未通过**的档位类检查名。必须显式说明它是「读不出」，直接拼在「自检通过」后面会读成「这项通过了」，语义正好反过来
+  con_checkupOkAdvisory: { en: "Checkup passed · tier not readable: {0}", zh_CN: "自检通过 · 档位读不出：{0}", zh_TW: "自檢通過 · 檔位讀不出：{0}" },
   scope_checkDone: { en: "{0} passed · {1} need attention", zh_CN: "{0} 站正常 · {1} 站需处理", zh_TW: "{0} 站正常 · {1} 站需處理" },
   scope_report: { en: "Copy diagnostic report", zh_CN: "复制诊断报告", zh_TW: "複製診斷報告" },
   scope_reportCopied: { en: "Diagnostic report copied", zh_CN: "已复制诊断报告", zh_TW: "已複製診斷報告" },
@@ -151,6 +153,8 @@ const MSG = {
   pop_diagUnsupported: { en: "Current page not supported", zh_CN: "当前页面不支持", zh_TW: "目前頁面不支援" },
   pop_diagPass:        { en: "passed", zh_CN: "通过", zh_TW: "通過" },
   pop_diagFail:        { en: "failed", zh_CN: "失败", zh_TW: "失敗" },
+  // 档位读不出属合法状态（各站 state() 是刻意的偏函数），既不是通过也不是失败，见 docs/adapters.md
+  pop_diagAdvisory:    { en: "advisory", zh_CN: "提示", zh_TW: "提示" },
   pop_shortcutUnset:   { en: "not set",                  zh_CN: "未设置",      zh_TW: "未設定" },
   pop_consoleKeys:     { en: "Console shortcuts",        zh_CN: "控制台内快捷键", zh_TW: "主控台內快捷鍵" },
   pop_manageShortcuts: { en: "Manage shortcuts",         zh_CN: "管理快捷键",     zh_TW: "管理快速鍵" },

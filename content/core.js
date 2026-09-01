@@ -146,16 +146,16 @@
       } catch (e) { return { ok: false, code: "error", reason: String((e && e.message) || e) }; }
     }
     // 通用提交优先原生发送按钮，无可用按钮再发 Enter；所有路径都用 confirmSubmitted 防假成功。
-    // 发送键必须挨着输入框再认：`aria-label*="发送"` 会命中侧栏里标题含「发送」二字的历史项按钮，而
-    // querySelector 取文档顺序第一个（侧栏在前）→ 真发送键从没被点过（真机 2026-08-14，它其实一点就发）。
-    const sendBtn = () => { const y = (findComposer() || el).getBoundingClientRect().top;
-      return [...document.querySelectorAll('button[data-testid*="send" i], button[aria-label*="send" i], button[aria-label*="发送"]')]
-        .find((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && Math.abs(r.top - y) < 240; }) || null; };
-    const _txtBefore = readText(el); let btn = sendBtn();
+    // 发送键定位在 content/send.js（纵向锚点取裁剪祖先、横向择近、跳过不可用项，两个真机坑记在那里）；
+    // 该文件缺席时退化成纯 Enter 兜底。expired() 是尾段闸门：尾段最坏在绝对截止线后 6s 才走完，而那时
+    // 后台早已结算成 submit_unconfirmed——「告知未确认之后消息又真的发出去」最坏。只挡动作，不缩短确认
+    // 窗口（缩窗口不阻止迟到发送，只会把「贴线点了、确认到了」的成功例误转成失败）。
+    const sendBtn = () => (window.__AMS.sendBtn ? window.__AMS.sendBtn(el) : null);
+    const expired = () => !!deadline && Date.now() >= deadline; const _txtBefore = readText(el); let btn = sendBtn();
     // 点击只给 3s 确认：带图时 confirmUntil 是 90s 绝对截止线，在这里等满会把下面的 Enter 回退整个吃掉
-    if (btn && !btn.disabled) { btn.click(); if (await confirmSubmitted(_txtBefore, Date.now() + 3000)) return { ok: true }; }
-    ["keydown", "keypress", "keyup"].forEach((t) => el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
-    await sleep(150); btn = sendBtn(); if (btn && !btn.disabled) btn.click(); // Enter 没发出去且按钮可用 → 原生点
+    if (btn && !btn.disabled && !expired()) { btn.click(); if (await confirmSubmitted(_txtBefore, Date.now() + 3000)) return { ok: true }; }
+    if (!expired()) ["keydown", "keypress", "keyup"].forEach((t) => el.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true })));
+    await sleep(150); btn = sendBtn(); if (btn && !btn.disabled && !expired()) btn.click(); // Enter 没发出去且按钮可用 → 原生点
     return (await confirmSubmitted(_txtBefore, confirmUntil)) ? { ok: true } : { ok: false, code: "submit_unconfirmed" };
   }
 
@@ -244,9 +244,9 @@
   // 只读健康自检：适配器自带 diagnose() 优先，否则回退为档位可读性
   function diagnose() {
     const a = pickAdapter();
-    if (!a) return [{ name: t("cs_siteAdapter"), ok: false }];
-    if (a.diagnose) { try { return a.diagnose(); } catch (e) { return [{ name: t("cs_diagError"), ok: false }]; } }
-    return [{ name: t("diag_tierReadable"), ok: getState() != null }];
+    if (!a) return [{ name: t("cs_siteAdapter"), ok: false, kind: "probe" }];
+    if (a.diagnose) { try { return a.diagnose(); } catch (e) { return [{ name: t("cs_diagError"), ok: false, kind: "probe" }]; } }
+    return [{ name: t("diag_tierReadable"), ok: getState() != null, kind: "tier" }];
   }
 
   // 快捷键/弹窗入口：runtime 消息只来自本扩展，无需 origin 校验。

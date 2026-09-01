@@ -27,7 +27,7 @@
 | --- | --- | --- | --- |
 | `think` / `fast` | ✓ | `async ()` | 切到目标档。**关键控件缺失一律 `throw`**——静默 `return` 会让 `runMode` 误报「已切到」并弹假成功 toast（例外见下一节） |
 | `state()` | ✓ | 同步 | `"think"` / `"fast"` / `null`。只表示粗档位，不能证明模型版本/强度/开关精确 |
-| `diagnose()` | ✓ | 同步 | 锚点命中报告，供巡检标芯片。只列**常驻**控件，会随对话阶段消失的控件不许列（否则巡检恒红误报） |
+| `diagnose()` | ✓ | 同步 | 锚点命中报告，供巡检标芯片。只列**常驻**控件，会随对话阶段消失的控件不许列（否则巡检恒红误报）。**每条检查必须带 `kind`**，见下方「检查项的 `kind`」 |
 | `submit(el, deadline)` | | `async` | `false` = 发送键此刻不可用 → 落回通用链；**抛异常 = core 直接 `code:"error"` 终止、不回退**，所以内部必须自行判空返回 false。点击成功也要过 `confirmSubmitted` 才算成功 |
 | `inject(el, text)` | | 同步 | `false` = 交回通用注入链（beforeinput→execCommand→textContent）；**抛异常 = 通用链对本站不安全**（Kimi），core 直接报 `inject_failed` 不回退 |
 | `answer()` | | 同步 | 最后一条 AI 回答的**根节点**（或字符串）或 null；core 用 `content/md.js` 统一序列化为 Markdown，**逐站不维护 markdown 规则** |
@@ -42,13 +42,40 @@
 
 **巡检通用检查（`content/diag.js`）**：在全部适配器分卷之后注入，按已填充的注册表统一包装每站 `diagnose()`，前置两条只读检查——「输入框」（`findComposer()`，九站全部）与「发送键」（仅声明了 `sendSel` 的站）。新站/新分卷自动获得，无需自己写这两条；**有意不做全站发送键检查**：ChatGPT 等站空输入框时发送键被语音键替换，通用检查会在巡检（输入框常为空）时恒红误报。新开适配器分卷（如 `adapters-cn3.js`）挂 manifest 时**必须排在 `content/diag.js` 之前**，否则该卷站点拿不到通用检查（注册晚于包装，静默缺席不报错）。
 
+### 检查项的 `kind`（机器字段，不产用户可见文案）
+
+每条 `{ name, ok }` 都要再带一个 `kind`。**不能按 `name` 分类**——`name` 在源头就已本地化（`i18n.js` 的 `diag_*` 词条），按显示名匹配在非英文界面下必然失效，也撞 CLAUDE.md「绝不正则匹配文案」。
+
+| `kind` | 含义 | 红了意味着 |
+| --- | --- | --- |
+| `reach` | 站点可达性（输入框在不在）。`content/diag.js` 统一前置，每站**恰有一条** | 整条群发链必然 `composer_not_found` |
+| `control` | 切档控件在不在 | 多半是站点改版，要修适配器 |
+| `tier` | 当前档位读不读得出（`state() != null`） | **不代表站点坏了**，见下 |
+| `probe` | 探测本身出错（适配器缺席 / `diagnose` 抛异常） | 适配器层面出问题 |
+
+**为什么 `tier` 单独一档**：各站 `state()` 是**刻意的偏函数**，只认自己 `think()`/`fast()` 能产出的那两档；用户手动停在任何其它合法档位都返回 `null`——千问「Qwen3.7-千问 + 快速」（think 的模型配 fast 的模式）、Kimi「Instant」（非 K3）、元宝「Expert」（工具执行档）都是如此。真机 2026-08-31 实测：九站里这三站因此**常态**被判「发现异常」，反而把真正的改版信号淹掉了。现在 Desktop 的 `buildSiteHealth` 只让非 `tier` 的红项决定可用性，`tier` 红项在详情页显示成「提示」，扩展侧巡检把它降为 `note`、popup 用提示色且不再弹「站点可能已改版」。
+
+**金丝雀没有丢**：`scripts/probe-drift.js` 逐项比对 `ok`（不看 `kind`），标签集真漂移时仍会报警。
+
+**漏标的后果**：`normalizeDiagnosticChecks` 把缺省与未知值一律归成 `control`——方向是安全的（保留「红即告警」的现状，绝不制造假绿），但等于没修。`scripts/test-diag-runtime.js` 有一条九站不变量断言守着：每条检查必须带合法 `kind`，且每站恰有一条 `reach`。
+
+### 通用发送键定位（`content/send.js`）
+
+`submitPromptNow` 的按钮路径不自己找发送键，统一走 `__AMS.sendBtn(el)`。**该文件必须排在 `content/core.js` 之后**（它读 `window.__AMS`），两端都要登记：`manifest.json` 的 `content_scripts[0].js` 与 `desktop/src/preload/site.ts` 的 `require` 列表。漏登记是**静默**的——九站按钮路径全部退化成纯 Enter 兜底，没有任何报错；`scripts/test-desktop-shared-runtime.js` 的顺序断言与运行期断言守着。
+
+两个真机坑决定了它的写法（改之前先读源码注释）：
+
+- **纵向锚点取输入框的裁剪祖先，不取编辑节点本身**。Claude 的 ProseMirror 随行数无限长高并溢出裁剪容器，而发送键贴的是容器下沿。按编辑节点 `top` 作锚，`|send.top − composer.top|` 随行数线性增长（真机 2026-08-31：空框 57 / 8 行 189 / **15 行 343**），越过 240 带后整条按钮路径失效。Desktop 的三宫格 tile 只有全宽的约 1/3，同样字数折行多 2~3 倍，比浏览器里早得多就触发。
+- **横向按「离输入区最近」择优，不设绝对像素阈值**。`claude.ai` 侧栏每条会话一个 `More options for <会话标题>` 按钮，标题含 send/发送 时就匹配同一选择器，且文档序在输入框之前、纵向也落在带内（真机 2026-08-31 带内 9 个）。它在另一列、差着整个栏宽。**不写死远近阈值**——窗口越窄各列挨得越近，任何固定像素数都会在某个宽度上翻车。
+- 簇内优先可用项（`disabled` 与 `aria-disabled` 都算不可用）；全簇不可用时仍返回首个，由调用点的 `btn && !btn.disabled` 拦下并落到 Enter 兜底。
+
 **什么时候才写 `submit`**：群发的发送/切档复用 `content/core.js` 的通用 `submitPrompt`/`runMode`，多数站点无需写 `submit`；**仅当通用 button 选择子或 Enter 提交覆盖不了本站时**才加。当前实现分布：`submit` 4 站（DeepSeek / 豆包 / Kimi / 元宝）、`inject` 1 站（Kimi）、`submitted` 1 站（Kimi）、`stop` 1 站（ChatGPT）、`thinkImage`/`fastImage` 1 站（DeepSeek）。
 
 ## 九站发送路径
 
 | 站点 | 路径 | 关键选择子 / 说明 |
 | --- | --- | --- |
-| Claude | core 通用链 | 无 `submit`；发送键 `aria-label="Send message"`，原生 `btn.click()` 一点就发（真机 2026-08-14 复核）|
+| Claude | core 通用链 | 无 `submit`；发送键锚点是 `button[data-testid="chat-input-send"]`（同族 `chat-input` / `chat-input-attach` 一并核实，真机 2026-08-31），原生 `btn.click()` 一点就发。其 `aria-label="Send message"` 由 react-intl 产出、随界面语言变，**只作现象描述，不可当锚点**。注入后约 80ms 解禁（core 等 250ms，余量充足）|
 | ChatGPT | core 通用链 | 无 `submit`（先试 `send`/`发送` 标签按钮，点不动再 Enter） |
 | Gemini | core 通用链 | 无 `submit` |
 | DeepSeek | `submit(el, deadline)` | `[role="button"].ds-button--primary.ds-button--circle` 取最后一个，`waitFor` 到既无 `ds-button--disabled` 类也无 `aria-disabled="true"` 才原生 `click()`；超时（deadline 剩余，无 deadline 则 10s）返回 false |
@@ -128,7 +155,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 - **档位项与模型项同为 `menuitemradio` 且同时在 DOM**（顶层 4 个模型 + 子菜单 5 个档位），`_effortItems()` 做**两层语义校验**：① 所属 `[role=menu]` 的 `aria-labelledby` 必须指回 effort 入口的 `id`；② 文本须命中 `_EFFORT` 档位标签集（由低到高的有序表）。少一层都会把「最高档」点成模型——一个叫「Max Preview」的模型就能骗过纯文本校验。`_setEffort()` 取 rank 最高的一项（撤掉 Max 自动退 Extra，再撤退 High），点完 `waitFor` 复读 `_label()` 命中 `_THINK` 才算成功，否则抛「Claude: 目标 effort 未生效」。
 - **「无 effort 入口静默 return」的例外已撤销（2026-08-31）**：控件仍在，只是选择子变了；入口缺失 / 档位为空一律 throw。旧的 `_thinkSwitch()` 裸开关分支同时删除（真机已无该开关）。
 - **模型菜单已下沉（2026-08）**：顶层保留 Fable 5 / Opus 5 / Sonnet 5 / Haiku 4.5，其余进「more models / 更多模型」子菜单，`_selectModel` 顶层等 900ms 找不到才展开子菜单；选中后 `sleep(700)` + **`escMenus()`**（子菜单不关会罩住输入框并让后续动作点空；Base UI 菜单 Escape 有效，与 Gemini/智谱/Kimi 三站不同）。
-- 发送键 `aria-label="Send message"`，原生 click 有效；此前「拒绝合成点击」的结论是误判——当时点的是侧栏同名假按钮（见发送路径表）。`answer()` 取末条 `.font-claude-response` → `.row-start-2`（折叠的思考头在 `.row-start-1`），取不到回退整块。`attach` 走 `input[data-testid="file-upload"]` + `S.setInputFiles`。
+- 发送键 `button[data-testid="chat-input-send"]`（真机 2026-08-31；`aria-label="Send message"` 随界面语言变，只当兜底），原生 click 有效；此前「拒绝合成点击」的结论是误判——当时点的是侧栏同名假按钮（见发送路径表）。**两个已知坑**：侧栏每条会话的 `More options for <标题>` 按钮标题含 send/发送 时会匹配同一选择器且纵向落在带内（真机带内 9 个）；长提示词把 ProseMirror 撑高后发送键会跌出旧的 240 纵向带（15 行即失效）。两者都由 `content/send.js` 处理。停止键 testid 是 `chat-input-stop`（`stop-button` 是 ChatGPT 的形状，Claude 上零命中）。`answer()` 取末条 `.font-claude-response` → `.row-start-2`（折叠的思考头在 `.row-start-1`），取不到回退整块。`attach` 走 `input[data-testid="file-upload"]` + `S.setInputFiles`。
 
 ### ChatGPT（`chatgpt.com`，**`content/adapters-intl2.js`**）
 

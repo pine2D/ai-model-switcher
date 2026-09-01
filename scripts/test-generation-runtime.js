@@ -49,6 +49,15 @@ test("generation probe reports only a visible nearby stop control as generating"
   };
   assert.equal(run("claude.ai", { answer: () => ({}) }, [visible]).generation(), "generating");
   assert.equal(run("claude.ai", { answer: () => ({}) }, [hidden]).generation(), "complete");
+
+  // Claude 的停止键 testid 是 chat-input-stop（同族 chat-input / chat-input-send / chat-input-attach
+  // 均已真机核实）；stop-button 是 ChatGPT 的形状，Claude 上零命中。只剩 aria-label 兜底时，
+  // 界面一切成非英文就会把「生成中」误判成已完成。
+  const selectors = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "..", "content/generation.js"), "utf8");
+  const claudeLine = selectors.split("\n").find((line) => line.includes('"claude.ai":'));
+  assert.ok(claudeLine && claudeLine.includes('[data-testid="chat-input-stop"]'),
+    "claude.ai 的停止键选择子必须含 chat-input-stop");
 });
 
 test("a stop control the selector list cannot name stays unseen", () => {

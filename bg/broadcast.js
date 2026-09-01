@@ -235,8 +235,12 @@ async function checkupAll(sites, timeoutMs = 8000) {
       const r = await messageBefore(() => chrome.tabs.sendMessage(tabs[0].id, { source: "AMS", cmd: "diagnose" }), deadline);
       if (r === MESSAGE_TIMEOUT) return { host: s.host, ok: false, code: "not_ready" };
       if (!r || !Array.isArray(r.checks)) return { host: s.host, ok: false, code: "not_ready" };
-      const bad = r.checks.filter((c) => !c.ok).map((c) => c.name);
-      return bad.length ? { host: s.host, ok: false, reason: bad.join(" / ") } : { host: s.host, ok: true, code: "checkup_ok" };
+      // kind:"tier"（档位读不出）不算故障：各站 state() 只认自己两档预设，用户停在任何其它
+      // 合法档位都返回 null。它随 ok 结果以 note 附带，不再把三个正常站点常态标红。
+      const bad = r.checks.filter((c) => !c.ok && c.kind !== "tier").map((c) => c.name);
+      const soft = r.checks.filter((c) => !c.ok && c.kind === "tier").map((c) => c.name);
+      if (bad.length) return { host: s.host, ok: false, reason: bad.join(" / ") };
+      return { host: s.host, ok: true, code: "checkup_ok", ...(soft.length ? { note: soft.join(" / ") } : {}) };
     } catch (e) { return { host: s.host, ok: false, code: "not_ready" }; }
   }));
 }

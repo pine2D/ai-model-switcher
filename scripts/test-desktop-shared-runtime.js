@@ -141,6 +141,31 @@ function manifestAndDesktopPreloadShareContentScriptsExceptKnownExemptions() {
     "core.js 拆分或新增适配器文件时若只改一边，这里会红"
   );
   // diag.js 必须排在全部 adapters-*.js 之后：该顺序约束已由 scripts/test-diag-runtime.js 单独守着，此处只比较集合。
+  // send.js 必须排在 core.js 之后（它读 window.__AMS），两端都要——集合相等挡不住顺序错。
+  for (const [label, files] of [["manifest", manifestFiles], ["desktop preload", preloadFiles]]) {
+    const core = files.indexOf("content/core.js");
+    const send = files.indexOf("content/send.js");
+    assert.ok(core >= 0 && send > core,
+      label + " 里 content/send.js 必须排在 content/core.js 之后，否则它读不到 window.__AMS 直接静默退出");
+  }
+}
+
+// 漏登记 send.js 的后果是静默的：九站按钮路径全部退化成纯 Enter 兜底，没有任何报错。
+// 这条断言按两端真实加载顺序跑一遍，确认 sendBtn 真的挂上了并且能选出发送键。
+function sendBtnMustBeExposedByTheSharedRuntime() {
+  const composerRect = { left: 100, right: 700, top: 418, bottom: 440, width: 600, height: 22 };
+  const composer = { getBoundingClientRect: () => composerRect, parentElement: null };
+  const button = { disabled: false, getAttribute: () => null,
+    getBoundingClientRect: () => ({ left: 660, right: 692, top: 475, bottom: 507, width: 32, height: 32 }) };
+  const context = {
+    window: { __AMS: { findComposer: () => composer } },
+    document: { querySelectorAll: () => [button] },
+    getComputedStyle: () => ({ overflowX: "visible", overflowY: "visible" }),
+  };
+  vm.runInNewContext(source("content/send.js"), context);
+  assert.equal(typeof context.window.__AMS.sendBtn, "function",
+    "content/send.js 必须把 sendBtn 挂到 __AMS 上（漏登记时九站按钮路径静默退化成纯 Enter）");
+  assert.equal(context.window.__AMS.sendBtn(composer), button, "sendBtn 必须选出挨着输入框的发送键");
 }
 
 i18nMustExposeDesktopNamespace();
@@ -151,4 +176,5 @@ adapterMustResolveTranslation("content/adapters-cn.js", "deepseek.com", "diag_de
 adapterMustResolveTranslation("content/adapters-cn2.js", "kimi.com", "diag_modelEntry");
 diagMustResolveTranslationAcrossModuleBoundary();
 manifestAndDesktopPreloadShareContentScriptsExceptKnownExemptions();
+sendBtnMustBeExposedByTheSharedRuntime();
 console.log("desktop shared runtime tests passed");

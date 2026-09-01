@@ -34,8 +34,8 @@ test("composer 缺失 / sendSel 未命中 → 对应检查为 fail；无 sendSel
   const ctx = context(document, { "a.com": withSend, "b.com": noSend }, null);
   vm.runInNewContext(source("content/diag.js"), ctx);
   assert.deepEqual(plain(withSend.diagnose()), [
-    { name: "diag_composer", ok: false },
-    { name: "diag_sendKey", ok: false },
+    { name: "diag_composer", ok: false, kind: "reach" },
+    { name: "diag_sendKey", ok: false, kind: "control" },
   ]);
   assert.deepEqual(plain(noSend.diagnose().map((c) => c.name)), ["diag_composer", "orig"]);
 });
@@ -45,8 +45,8 @@ test("无 diagnose 的适配器：通用检查 + 档位可读兜底（core 回�
   const ctx = context({ querySelector: () => null }, { "c.com": bare }, { el: true }, "think");
   vm.runInNewContext(source("content/diag.js"), ctx);
   assert.deepEqual(plain(bare.diagnose()), [
-    { name: "diag_composer", ok: true },
-    { name: "diag_tierReadable", ok: true },
+    { name: "diag_composer", ok: true, kind: "reach" },
+    { name: "diag_tierReadable", ok: true, kind: "tier" },
   ]);
 });
 
@@ -55,8 +55,8 @@ test("原 diagnose 抛异常时通用检查仍在，追加一条诊断异常项"
   const ctx = context({ querySelector: () => null }, { "d.com": bad }, { el: true });
   vm.runInNewContext(source("content/diag.js"), ctx);
   assert.deepEqual(plain(bad.diagnose()), [
-    { name: "diag_composer", ok: true },
-    { name: "cs_diagError", ok: false },
+    { name: "diag_composer", ok: true, kind: "reach" },
+    { name: "cs_diagError", ok: false, kind: "probe" },
   ]);
 });
 
@@ -98,6 +98,36 @@ test("集成：真实 DeepSeek 适配器包装后通用检查在前、原检查�
   const checks = ctx.window.__AMS.adapters["deepseek.com"].diagnose();
   assert.deepEqual(plain(checks.map((c) => c.name)), ["diag_composer", "diag_sendKey", "diag_deepThink", "diag_tierReadable"]);
   assert.ok(checks.every((c) => c.ok));
+});
+
+// 九站每条检查都必须带合法 kind：desktop 的健康判定按 kind 决定「拦路 / 只是提示」，
+// 漏标一处该检查会被归成 control 继续报 error——方向安全但等于没修，只有这条断言看得见。
+test("九站 diagnose 的每条检查都带合法 kind，且恰有一条 reach", () => {
+  const KINDS = new Set(["reach", "control", "tier", "probe"]);
+  const document = {
+    querySelector: () => ({ getAttribute: () => "", textContent: "", className: "" }),
+    querySelectorAll: () => [],
+  };
+  const ctx = context(document, {}, { el: true });
+  Object.assign(ctx.window.__AMS, {
+    waitFor: async () => null, findByText: () => null, openMenu() {}, clickEl() {},
+    sleep: () => Promise.resolve(), escMenus() {},
+  });
+  for (const file of ["content/adapters-intl.js", "content/adapters-intl2.js",
+    "content/adapters-cn.js", "content/adapters-cn2.js"]) vm.runInNewContext(source(file), ctx);
+  vm.runInNewContext(source("content/diag.js"), ctx);
+
+  const hosts = Object.keys(ctx.window.__AMS.adapters);
+  assert.equal(hosts.length, 9, "九站适配器未全部注册，本断言的覆盖面已失效");
+  for (const host of hosts) {
+    const checks = plain(ctx.window.__AMS.adapters[host].diagnose());
+    assert.ok(checks.length, `${host} 的 diagnose 返回空`);
+    for (const check of checks) {
+      assert.ok(KINDS.has(check.kind), `${host} 的检查「${check.name}」缺少合法 kind（拿到 ${check.kind}）`);
+    }
+    assert.equal(checks.filter((c) => c.kind === "reach").length, 1,
+      `${host} 必须恰有一条 reach 检查（diag.js 的前置不变量）`);
+  }
 });
 
 test("sendSel 与 submit 的选择子字面量同步（漂移守卫）", () => {

@@ -25,6 +25,7 @@
 - **判定阈值绝不贴着实测值写**：`findComposer` 的高度阈值是 `>=16` 不是 `>=20`。标称 20px 的编辑器在开了显示缩放的机器上实测 19.999998px，零余量的 `>=20` 筛掉唯一真编辑器 → `findComposer` 返回 null → 整条群发链空跑到 44s 截止线（v0.15.2 事故根因）。**凡拿实测值定阈值，一律留 ≥20% 余量**（标称 20 → 写 16）。
 - **`deadline` 是绝对时间戳、全链路透传**：`bg/broadcast.js` 算出 → content `submitPrompt` → `adapter.submit`/`attach` → `confirmSubmitted`。**循环等待、以及 ≥1s 的固定等待，一律夹取**：`Math.min(x, Math.max(0, deadline - Date.now()))`。唯一例外是「让编辑器/菜单渲染跟上」的毫秒级 sleep（inject 后 150ms、点击后 250/400ms）——既有惯例可不夹取，但单条 ≤500ms，且不得在一条路径上叠成秒级。console 客户端兜底必须严格大于后台预算。
 - **只产 `code`，不产用户可见文案**：bg/content 返回错误码，console 翻译；bg 轮询认 `r.code`，**绝不正则匹配文案**。新增可见码须补**五张**扩展翻译表与三语词条（位置见 `docs/console-windows.md`）；两端都会出现的码还要补 `desktop/src/shared/status-copy.ts` 与 `desktop/src/shared/copy.ts` 三语。漏一处就裸露英文 reason。
+- **`diagnose()` 每条检查必须带 `kind`**（`reach`/`control`/`tier`/`probe`，机器字段不产文案）。Desktop 只让**非 `tier`** 的红项决定站点可用性——各站 `state()` 是刻意的偏函数，用户停在任何非预设的合法档位（千问 Qwen3.7+快速、Kimi Instant、元宝 Expert）都返回 null，那不是故障。漏标一处会被归成 `control` 继续误报（方向安全但等于没修），`scripts/test-diag-runtime.js` 的九站不变量守着。
 - **适配器协议**：每站必需 `{think, fast, state, diagnose}` 四项，其余钩子可选、不实现 = 该能力静默降级（不是报错）。`state`/`diagnose`/`answer`/`submitted` **只读同步，不得开菜单**。`return false` = 落回 core 通用链；`throw` = 通用链对本站不安全，core 直接失败**不回退**。全表与九站映射见 `docs/adapters.md`。
 - **切档控件缺失一律 `throw`，不要静默 `return`**——静默 return 会让 `runMode` 误报「已切到」并弹假成功 toast。例外只有 4 处（DeepSeek 首屏 radio、Claude 无-effort-入口回退、Gemini 两处），全部写死在适配器里；加新例外前先读 `docs/adapters.md` 的例外清单及其理由。
 - **站点 UI 三条通用规则**（细节与反例见 `docs/adapters.md`）：① 控件在下沉到二级子菜单，默认「顶层找不到 → 展开子菜单 → 再找」，别假设一层列表；② 同一 role 可能承载不同语义的列表，取列表必须校验语义，否则「最高档」被点成末位模型；③ **每个菜单动作自己 `escMenus()` 收尾**，子菜单不关会罩住输入框并让后续动作点空。
@@ -54,7 +55,7 @@ bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--b
 ## 架构（先在这里定位入口文件）
 
 - **群发编排**：`background.js`（SW 入口）→ `bg/`（窗口/平铺/群发/伴侣窗/读页/辅助综合）。
-- **站点适配**：`content/core.js` + `content/{md,upload,pill,diag,generation,adapters-intl,adapters-intl2,adapters-cn,adapters-cn2}.js`（`pill.js` 只进扩展、`generation.js` 只进 Desktop preload，两条豁免见 `docs/adapters.md`）。
+- **站点适配**：`content/core.js` + `content/{send,md,upload,pill,diag,generation,adapters-intl,adapters-intl2,adapters-cn,adapters-cn2}.js`（`pill.js` 只进扩展、`generation.js` 只进 Desktop preload，两条豁免见 `docs/adapters.md`）。
 - **数据与同步**：`bg/` 的 8 个数据模块；`store` 使用 IndexedDB `polyask`。
 - **扩展页面**：`console/`（96px 细条主 console + compose/scope/archive 三个独立 popup）、`popup/`、`options/`、根 `i18n.js`。
 - **桌面预览版**：`desktop/src/{main,preload,renderer}/`；复用 content 适配器，独立打包、独立会话。
