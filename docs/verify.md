@@ -40,6 +40,7 @@
 ## 探测坑
 
 - **Gemini 会 prerender 出同 URL 双 page target**：按 `urlSub` 匹配会打到影子页，发送与探测对不上。探前先 `/json/list` 数同站 target 数、关掉多余的再操作。
+- **批量刷新站点标签会触发 Google 反滥用插页**：`reload-sites.js` 并行刷九站时，Gemini 可能被 302 到 `www.google.com/sorry` 的「unusual traffic」验证码页而不是站点首屏。**认它要看当前 URL，不能看 DOM**——此时 composer 与登录锚点全不在场，极易被误判成掉登录或站点改版（同上面的强证据原则）。同一个反滥用中转也是 Desktop 导航策略必须登记 `transit` 域的原因，见 `docs/desktop-m0.md`。
 - 站点级的 DOM/时序坑（豆包中英文间插空格、chatglm 水合期 ~30s、Kimi 换模型跳 `/agent`）写在 `docs/adapters.md` 的站点卡里，本节只记 CDP 与探针工具本身的坑。
 
 ## 快捷键链路

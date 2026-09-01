@@ -160,7 +160,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 ### ChatGPT（`chatgpt.com`，**`content/adapters-intl2.js`**）
 
 - **本站单独一卷**：`adapters-intl.js` 触及 300 行上限后按站分卷，ChatGPT 移到 `adapters-intl2.js`（Claude / Gemini 留在 `adapters-intl.js`）。分卷的五处登记见本文「加新站点」与文末分卷说明。
-- 档位：think = `_selectModel(/^GPT-5\.6\s*Sol\b/i)` + `_pickEdge(true)`（滑块推到**最右端** = 最高档）；fast = 同模型 + `_pickEdge(false)`（推到最左端）。**不写死档位标签**，站点加减档自适应。`state()`：pill 为空或命中 `_OPEN_PILL`（`thinking effort|思考(强度|力度)?`）→ null（**菜单开着时 pill 显示的是控件名，不是档位，属非终态**）；`_tier()`（先剥版本前缀 `/^(?:gpt-?)?5\.[3456](?:\s*sol)?/i`）命中 `instant|medium|极速|即时|均衡|中` → fast；原始文本命中旧模型 `(?:gpt-?)?5\.[345](?!\d)|\bo3\b` → null（不许冒充 5.6 的 think）；命中 `high|pro|高` → think；其余 null。
+- 档位：think = `_selectModel(/^GPT-5\.6\s*Sol$/i)` + `_pickEdge(true)`（滑块推到**最右端** = 最高档）；fast = 同模型 + `_pickEdge(false)`（推到最左端）。**不写死档位标签**，站点加减档自适应。`state()`：pill 为空或命中 `_OPEN_PILL`（`thinking effort|思考(强度|力度)?`）→ null（**菜单开着时 pill 显示的是控件名，不是档位，属非终态**）；`_tier()`（先剥版本前缀 `/^(?:gpt-?)?5\.[3456](?:\s*sol)?/i`）命中 `instant|medium|极速|即时|均衡|中` → fast；原始文本命中旧模型 `(?:gpt-?)?5\.[345](?!\d)|\bo3\b` → null（不许冒充 5.6 的 think）；命中 `high|pro|高` → think；其余 null。
 - **2026-08-31 改版：档位从 radio 列表换成一根滑块**。菜单是 Radix popper `[data-testid="composer-intelligence-picker-content"]`，里面**没有任何 `aria-haspopup` 子菜单入口**——旧的 `_openEffort()`/`_tiers()` 因此永远找不到档位列表，think/fast 双双抛错而 `diagnose()` 全绿（本次事故的表象）。现结构：① `[role=menuitem][aria-label="Select model"]`（文本是当前档名）；② `[role=menuitem][aria-label="Power"]`，`aria-keyshortcuts="ArrowLeft ArrowRight"`，内含 `[data-model-reasoning-effort-slider]` 与一个 `[role=slider]`（`aria-valuenow/min/max` = 当前位次 / 0 / 4）。
 - **档位真值只认位次「X of N」，不认档名**：0–3 档的档名不在任何可选中节点上，只出现在 Power 项 `aria-describedby` 指向的朗读文本里（`Pro, 5 of 5.` / `Use Left and Right arrow keys to adjust power.`）。`_level()` 先读 `[role=slider]` 的三个 aria 数值，读不出才回退正则解析那句朗读文本。位次映射（真机实测全表）：0=Instant / 1=Medium / 2=High / 3=Extra High / 4=Pro。
 - **切档靠键盘，且只有左右方向键有效**：`_pickEdge` 聚焦 Power 项后逐格发 `ArrowRight`/`ArrowLeft`（`KeyboardEvent` 必须 `bubbles:true`），每格 220ms、循环上界 = 档位数，端点会饱和不越界。**`End` / `Home` 真机实测无效**（值纹丝不动），不要拿它们省循环。收尾比对 `lv.now === goal`，不等就抛「ChatGPT: 档位未到端点」。
@@ -180,7 +180,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 - **`state()` 按模式名判粗档位，不是复合条件**：aria-label 现为 `Open mode picker, currently <Mode>`（切到深度思考后是 `currently Pro Extended`）。判定顺序是 `flash` → fast，否则 `\bpro\b|extended|扩展` → think，其余 null——aria-label 不报 Extended thinking 开关状态，所以不能拿它证明思考已开；`think()` 仍会幂等地把 Extended thinking 一并打开。
 - `_setThinking` 双布局：当前布局是模型菜单里的直达开关（按 `.selected` 类或 `aria-checked` 幂等点击）；旧布局走 `/thinking level|思考(等级|程度)?/i` 嵌套子菜单，最多重开子菜单（`openMenu(trig)` 指针序列，**不是 hover**——重发 hover 那招是 Kimi 的，两站机理不同别互抄）并重取目标项 6 轮，命中后先 `focus()` + Enter keydown 再 `clickEl`。**子菜单在但目标等级缺失必须抛「Gemini: 思考等级选项未找到」**；整段子菜单缺席才算合法静默跳过。
 - **有意不实现 `attach`**（Gemini 忽略合成 drop，附件菜单要求可信点击且不保留 file input）。`answer()` 取末个 `message-content` → `.markdown`，回退整块。
-- 中文界面报「切不动」时，先真机核对「扩展」这个标签再改正则——英文 Extended 已真机确认，中文是直译候选。真机探测坑（同 URL 双 page target；**批量刷新站点标签可能触发 Google「unusual traffic」验证码插页**）见 `docs/verify.md`。
+- 中文界面报「切不动」时，先真机核对「扩展」这个标签再改正则——英文 Extended 已真机确认，中文是直译候选。真机探测坑（同 URL 双 page target；**批量刷新站点标签可能触发 Google「unusual traffic」验证码插页**）见 `docs/verify.md`「探测坑」。
 
 ### DeepSeek（`chat.deepseek.com` / 适配器键 `deepseek.com`，`content/adapters-cn.js`）
 
@@ -193,7 +193,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 ### 豆包（`www.doubao.com` / 键 `doubao.com`，`content/adapters-cn.js`）
 
 - 档位：think = `_select(/专家$/, "think")`、fast = `_select(/快速$/, "fast")`。**锚定的是后缀不是前缀**——菜单项实测带品牌与版本前缀（`豆包 2.1 Turbo 专家`），写成 `/^专家/` 会一项都匹配不上。**只切 composer 模式按钮的菜单项，无独立思考开关、无模型选择。**
-- `state()` 读模式按钮文本：`/专家$/` 或 `/^豆包\s+[\d.]/`→think、`/快速$/`→fast、**其余 → null**（「超能模式」是**历史档位**：2026-08-31 真机复核菜单只剩 `豆包 快速` / `豆包 2.1 Turbo专家` 两项，已无超能模式；该分支保留为兜底，若它回归 HUD 不亮、`switchTier` 会一直重试到超时）——超能档下 HUD 不亮、`switchTier` 会一直重试到超时。`^豆包\s+版本号` 这条分支是因为选中专家档后按钮只回显 `豆包 2.1 Turbo`、后缀被吃掉（真机 2026-08-26）。
+- `state()` 读模式按钮文本：`/专家$/` 或 `/^豆包\s+[\d.]/`→think、`/快速$/`→fast、**其余 → null**。「超能模式」是**历史档位**（2026-08-31 真机复核菜单只剩 `豆包 快速` / `豆包 2.1 Turbo专家` 两项），`state()` 里**没有它的判定分支**：它若回归会落进「其余 → null」，表现为 HUD 不亮、`switchTier` 一直重试到超时。`^豆包\s+版本号` 这条分支是因为选中专家档后按钮只回显 `豆包 2.1 Turbo`、后缀被吃掉（真机 2026-08-26）。
 - `_select(re, expected)` 的第二参是**幂等短路的判据**：先 `state() === expected` 就直接返回，不开菜单。改档位正则时两个参数要一起对，只改正则会让短路永久失效（每次群发都白开一次菜单）。`_modeBtn()` 从候选中取离 composer 最近者，避免撞到侧栏标题；`_select` 最多 3 轮，`openMenu` 展开后对 `[role="menuitem"]` 用**原生 `item.click()`**，每轮 `escMenus()`；按钮缺失或 3 轮未选中都抛异常。
 - `answer()` 从 `[data-message-id]` 中过滤掉自身或子节点带 `justify-end` 的用户消息（AI 消息无右对齐），取末条 → `.md-box-root`。`attach` 走 `input[type="file"][accept*="png"]`。
 - 渲染会**在中英文与数字之间插空格**——marker 匹配先去空白再比。
@@ -243,7 +243,7 @@ Shadow DOM 三态控件，状态名 **`handle`（贴边把手，默认）/ `alwa
 
 1. **定层**：真机复现，记下现象与 `code`，先确认坏在哪一层——未注入 / composer / inject / submit / state / answer（用户报障按「四问」问齐）。probe-drift 的可操作信号（`!` 警报）：「检查转红」「composer 消失/尺寸突变」指向 composer/菜单层，「标签串 → ∅」指向 state 层或适配器方法改名；state/标签串的普通变化多是手动切档的使用痕迹（探针已归入 `~` 参考档，别当漂移追）。
 2. **取证**：`node scripts/capture-evidence.js <hostSub> base` 抓基线清单；人工在浏览器里展开目标菜单后换个 tag 再抓一份，两份 diff 即得「展开后才存在」的锚点候选（菜单/发送链路类根因必需）。产物在 `scratchpad/`，**外发给任何模型前先人工过目**（隐私规则见脚本头注释）。
-3. **提案**（可交给 LLM 生成，人审兜底）：按证据改锚点。硬性护栏逐条过——判定阈值留 ≥20% 余量；锚点优先级 data-testid ＞ aria/role ＞ 中英双写文本（见「通用编写原则」）；同 role 列表先校验语义；缺控件 throw 不静默（例外只有上文 4 处）；不碰 `submitted()`/自动重发铁律；**只改锚点，不动错误码协议与编排契约**——协议稳定性是这个仓库最贵的资产。
+3. **提案**（可交给 LLM 生成，人审兜底）：按证据改锚点。硬性护栏逐条过——判定阈值留 ≥20% 余量；锚点优先级 data-testid ＞ aria/role ＞ 中英双写文本（见「通用编写原则」）；同 role 列表先校验语义；缺控件 throw 不静默（例外只有上文 3 处）；不碰 `submitted()`/自动重发铁律；**只改锚点，不动错误码协议与编排契约**——协议稳定性是这个仓库最贵的资产。
 4. **离线回归**：补/改对应 `scripts/test-*.js`（改模型正则按惯例配专项测试），`bash scripts/verify.sh` 全绿。
 5. **人审 diff → 真机回归**：重载扩展 + 刷新站点标签，生产 `__AMS` 复现，九站巡检（`diagnose` 就是现成的 canary；「入口项」与「档位可读」是两个独立信号，只红后者 = 标签集漂移，别去找按钮）；再跑一次 probe-drift 确认标签串与检查项回到预期。
 6. **收尾**：更新本文件对应站点卡 + `CHANGELOG.md` 未发布段；模型正则改了同时检查 `state()` 的判定分支。

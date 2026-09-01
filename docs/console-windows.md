@@ -102,6 +102,8 @@ bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮
 
 **外加 `invalid_request`**：只在辅助综合页可见（`compose-synthesis.js` 独有词条 `con_errInvalidRequest`），由 `validSynthesisRequest` 拒绝非白名单目标时产出，不进 `status.js` 的 `ERR_KEYS`。
 
+**外加 `no_view`**：Desktop 端产（视图已销毁或未打开——站点未勾选时不建视图，见 `docs/desktop-m0.md` 的懒建约定；落点在 `desktop/src/main/view-manager.ts` 的 `sendCommand` 与 `collect`），扩展侧只在结果库回放里可见：它在 `console/archive.js` 的 `ARCH_ERR_KEYS` 里（词条 `con_errNoView`），跨端同步进来的记录会带这个码，但不进 `status.js` 的 `ERR_KEYS`。与 `invalid_request` 同属「单页面可见码」。`scripts/test-err-codes.js` 对账两端归档码。
+
 **另有 3 个只在提示词工作区可见的读网页码**：`page_access_denied`、`page_empty`（`bg/page-context.js` 产出）与 `source_update_failed`，经 `compose-context.js` 的 `ERROR_COPY` 翻译后显示在 `#cmp-status`，三语词条是 `cmp_contextDenied` / `cmp_contextEmpty` / `cmp_sourceUpdateFailed`。**别把它们当内部码**——新增同类码若漏登记，会被 `|| cmp_contextDenied` 兜成「无法读取当前页面」这条错误原因。
 
 - 生产点：`cancelled`/`no_window`/`not_ready`/`checkup_ok`/`no_answer` 出自 `bg/broadcast.js`；`timeout`/`composer_not_found`/`inject_failed`/`submit_unconfirmed`/`error` 出自 `content/core.js`（`bg/broadcast.js` 也产 timeout/submit_unconfirmed/cancelled）；`tier_unconfirmed` 由 core 在「提交成功但档位未确认」时改写 `r.code`；`image_invalid`/`attachment_*` 出自 `content/upload.js` 与 core。
@@ -208,7 +210,7 @@ bg 与 content **只产出 `code`，绝不产出用户可见文案**；bg 的轮
 | `contextMenus` | 两条右键菜单「用 PolyAsk 比较所选内容 / 当前网页」（id `ams-send-selection` / `ams-send-page`） |
 | `activeTab` + `scripting` | 右键菜单触发时读当前页正文，唯一使用点是 `bg/page-context.js` 的 `chrome.scripting.executeScript` |
 
-`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入 9 个文件，顺序 `i18n.js → content/core.js → upload.js → md.js → adapters-intl.js → adapters-intl2.js → adapters-cn.js → adapters-cn2.js → diag.js → pill.js`，`run_at: document_idle`；`diag.js` 必须在全部适配器分卷之后——它按已填充的注册表统一包装 `diagnose`）。
+`host_permissions` 仅 `https://www.googleapis.com/*`（Drive REST `/drive/v3` 与上传端点 `/upload/drive/v3`），`oauth2` scope 仅 `https://www.googleapis.com/auth/drive.appdata`。**不申请任何 AI 站点 host 权限**，站点访问全靠 `content_scripts.matches` 的 9 条（注入顺序 `i18n.js → content/core.js → content/send.js → upload.js → md.js → adapters-intl.js → adapters-intl2.js → adapters-cn.js → adapters-cn2.js → diag.js → pill.js`，`run_at: document_idle`；`send.js` 读 `window.__AMS`，必须排在 `core.js` 之后；`diag.js` 必须在全部适配器分卷之后——它按已填充的注册表统一包装 `diagnose`）。
 
 右键读页细则：菜单只在 `documentUrlPatterns: http://*/*, https://*/*` 下注册，读取前还要 `canRead(tab)` 再校验一次协议；正文上限 30000 字符，超长保留首 24000 + 尾 6000 并打 `truncated` 标记；菜单标题按 `storage.local.amsLang` 三语手写在 `MENU_COPY`（不走 `i18n.js`），`installMenus` 用 `installQueue` 串行化防重复创建。
 
