@@ -50,10 +50,16 @@ export function buildDiagnosticSnapshot(input: DiagnosticInput): DiagnosticSnaps
   const violations: string[] = [];
   const shellCount = Number.isInteger(input.shellId) && input.shellId > 0 ? 1 : 0;
   if (shellCount !== 1) violations.push("shell_count");
-  if (input.sites.length !== SITE_KEYS.length) violations.push("site_count");
+  // 视图是**按勾选懒建**的，所以上报数量不再恒等于九——只要求「非空、不超过全站数」。
+  // 完整性由 smoke 在默认全选下断言（默认九站全建），这里守的是结构不变量。
+  if (!input.sites.length || input.sites.length > SITE_KEYS.length) violations.push("site_count");
 
   const siteKeys = input.sites.map((site) => site.site);
-  if (siteKeys.join("|") !== SITE_KEYS.join("|")) violations.push("site_order");
+  // 顺序必须仍是 SITE_KEYS 的**子序列**（产品顺序不能乱），而不是恒等于全表。
+  const order = siteKeys.map((key) => SITE_KEYS.indexOf(key));
+  if (order.some((index, position) => index < 0 || (position > 0 && index <= order[position - 1]))) {
+    violations.push("site_order");
+  }
   const contentsIds = input.sites.map((site) => site.webContentsId);
   if (contentsIds.some((id) => !Number.isInteger(id) || id <= 0)) violations.push("site_contents_id");
   if (new Set(contentsIds).size !== contentsIds.length) violations.push("duplicate_contents_id");

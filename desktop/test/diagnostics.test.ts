@@ -90,14 +90,41 @@ test("diagnostics accept background views attached outside the active layout pag
   assert.ok(!snapshot.violations.includes("attached_layout"));
 });
 
-test("diagnostic snapshot exposes missing or insecure views", () => {
+test("diagnostic snapshot exposes insecure views", () => {
   const input = diagnosticInput();
   const snapshot = buildDiagnosticSnapshot({
     ...input,
-    sites: input.sites.slice(0, 8).map((site, index) => index === 0 ? { ...site, sandbox: false } : site)
+    sites: input.sites.map((site, index) => index === 0 ? { ...site, sandbox: false } : site)
   });
 
   assert.equal(snapshot.ok, false);
-  assert.ok(snapshot.violations.includes("site_count"));
   assert.ok(snapshot.violations.includes("insecure_site:claude"));
+});
+
+// 视图按勾选懒建，少几个站是合法状态；守的是结构不变量而不是「恰好九个」。
+test("a partial selection is not a violation as long as product order holds", () => {
+  const input = diagnosticInput();
+  const kept = new Set([SITE_KEYS[0], SITE_KEYS[2], SITE_KEYS[5]]);
+  const snapshot = buildDiagnosticSnapshot({
+    ...input,
+    layout: { ...input.layout, placements: placements.filter((placement) => kept.has(placement.key)) },
+    sites: input.sites.filter((site) => kept.has(site.site))
+  });
+
+  assert.deepEqual(snapshot.violations, []);
+  assert.equal(snapshot.ok, true);
+});
+
+test("an empty or out-of-order site list is still a violation", () => {
+  const input = diagnosticInput();
+
+  const empty = buildDiagnosticSnapshot({ ...input, layout: { ...input.layout, placements: [] }, sites: [] });
+  assert.ok(empty.violations.includes("site_count"));
+
+  const scrambled = buildDiagnosticSnapshot({
+    ...input,
+    sites: [input.sites[3], input.sites[1]],
+    layout: { ...input.layout, placements: [] }
+  });
+  assert.ok(scrambled.violations.includes("site_order"), "产品顺序乱了仍必须报警");
 });
