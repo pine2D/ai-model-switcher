@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { SITE_KEYS } from "../src/shared/contracts";
+import { SITE_KEYS, type SiteKey } from "../src/shared/contracts";
 import { buildDiagnosticSnapshot, type DiagnosticInput } from "../src/main/diagnostics";
 
 const visibleKeys = SITE_KEYS.slice(0, 4);
@@ -104,7 +104,7 @@ test("diagnostic snapshot exposes insecure views", () => {
 // 视图按勾选懒建，少几个站是合法状态；守的是结构不变量而不是「恰好九个」。
 test("a partial selection is not a violation as long as product order holds", () => {
   const input = diagnosticInput();
-  const kept = new Set([SITE_KEYS[0], SITE_KEYS[2], SITE_KEYS[5]]);
+  const kept = new Set<SiteKey>([SITE_KEYS[0], SITE_KEYS[2], SITE_KEYS[5]]);
   const snapshot = buildDiagnosticSnapshot({
     ...input,
     layout: { ...input.layout, placements: placements.filter((placement) => kept.has(placement.key)) },
