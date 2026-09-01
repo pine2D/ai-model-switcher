@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.24.0] - 2026-09-01
+
 ### 新增
 
 - Desktop 快捷键速查补齐「上一组/下一组站点」（Ctrl+Shift+PageUp/PageDown）与「上一个/下一个站点」（Ctrl+PageUp/PageDown）四条：它们原先只写在菜单里、没进命令表，因此速查看不到，而速查的说明写的是「集中查看当前可用的应用快捷键」。现在菜单与速查同源，也可在命令面板里搜索执行
@@ -669,7 +671,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.23.2...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/pine2D/polyask/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/pine2D/polyask/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/pine2D/polyask/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/pine2D/polyask/compare/v0.22.0...v0.23.0
