@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.25.0] - 2026-09-01
+
 ### 变更
 
 - 仓库补上 MIT 许可证全文：此前 README 只写了「MIT」两个字，仓库里没有 LICENSE 文件，GitHub 也识别不出许可证
@@ -19,7 +21,6 @@
 
 - Desktop 站点内可以后退了：跟着回答点进站内链接后，此前完全没有退路——唯一的脱身办法是「新会话」，而那会丢掉当前对话。现在格子标题栏在该站真有历史可退时会出现后退按钮，另有 Alt+← / Alt+→ 快捷键、菜单项与命令面板入口；群发或生成进行中禁用，避免把正在写的回答一起丢掉
 - Desktop 回答里的外部引用链接改为交给系统浏览器打开。此前它们是静默无反应：站点视图不允许导航到外部域（格子里永远是这个站），而被拦下后没有任何去处，点了像坏掉一样
-
 
 ## [0.24.1] - 2026-09-01
 
@@ -690,7 +691,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.24.1...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/pine2D/polyask/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/pine2D/polyask/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/pine2D/polyask/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/pine2D/polyask/compare/v0.23.1...v0.23.2
