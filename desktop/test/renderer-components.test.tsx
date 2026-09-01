@@ -23,6 +23,15 @@ import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
 import { archiveFixture } from "./archive.test";
 
+// 模拟 Menu.getApplicationMenu() 读回来的 role 项（真机 Electron 43.4.0 实测形态）
+const MENU_SHORTCUTS = [
+  { group: "视图", label: "Reload", accelerator: "CmdOrCtrl+R" },
+  { group: "视图", label: "Toggle Full Screen", accelerator: "F11" },
+  { group: "编辑", label: "Copy", accelerator: "CommandOrControl+C" },
+  // 与 COMMANDS 里的 Alt+K 同一个组合，必须被去重掉，不能在速查里出现两遍
+  { group: "视图", label: "命令面板", accelerator: "Alt+K" }
+];
+
 const noop = () => undefined;
 
 test("command palette is a keyboard-first full surface", () => {
@@ -30,6 +39,7 @@ test("command palette is a keyboard-first full surface", () => {
     <CommandPalette
       copy={getCopy("en")}
       commands={COMMANDS}
+      menuShortcuts={MENU_SHORTCUTS}
       groups={[]}
       library={{ templates: [], history: [] }}
       draft=""
@@ -59,6 +69,7 @@ test("shortcut reference lists registered accelerators and aliases", () => {
     <CommandPalette
       copy={getCopy("zh-CN")}
       commands={COMMANDS}
+      menuShortcuts={MENU_SHORTCUTS}
       groups={[]}
       library={{ templates: [], history: [] }}
       draft=""
@@ -78,6 +89,14 @@ test("shortcut reference lists registered accelerators and aliases", () => {
   assert.match(html, /Alt\+K/);
   assert.match(html, /F1/);
   assert.match(html, /Alt\+1/);
+  // 菜单里由 Electron 给加速器的 role 项也必须列出——只列 COMMANDS 会让速查名不副实
+  assert.match(html, /Reload/);
+  assert.match(html, /CmdOrCtrl\+R/);
+  assert.match(html, /Toggle Full Screen/);
+  assert.match(html, /F11/);
+  assert.match(html, /Copy/);
+  // Alt+K 在 COMMANDS 与菜单里各有一份，去重后只能出现一次
+  assert.equal(html.split("Alt+K").length - 1, 1);
 });
 
 test("command palette exposes the prompt library without motion", () => {
@@ -85,6 +104,7 @@ test("command palette exposes the prompt library without motion", () => {
     <CommandPalette
       copy={getCopy("zh-CN")}
       commands={COMMANDS}
+      menuShortcuts={MENU_SHORTCUTS}
       groups={[]}
       library={{
         templates: [{ id: "one", name: "审校", text: "Review this", updatedAt: 1, deviceId: "a" }],

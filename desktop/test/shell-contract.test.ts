@@ -67,6 +67,23 @@ test("view attach relies on reordering, never on a full detach-and-reattach", ()
     "reconcileViews() 不得整栈拆挂——会丢焦点，且 addChildView 本就能原地提升层序");
 });
 
+// 上一轮只钉了「模板里不得手写 accelerator」，漏掉了菜单里 role 项自带的那批（Ctrl+R / F11 /
+// Ctrl+C / Ctrl+Q…）——它们不写在模板里，测试扫不到，于是速查仍然缺一大截却全绿。
+// 这条钉死速查必须从**真实菜单**读，而不是再维护第二张表。
+test("the shortcut reference reads the real application menu", () => {
+  const main = readFileSync("src/main/menu-shortcuts.ts", "utf8");
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const palette = readFileSync("src/renderer/command-palette.tsx", "utf8");
+  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+
+  assert.match(main, /Menu\.getApplicationMenu\(\)/);
+  assert.match(ipc, /polyask:menu-shortcuts/);
+  assert.match(preload, /polyask:menu-shortcuts/);
+  assert.match(renderer, /menuShortcuts\(\)/);
+  assert.match(palette, /menuShortcutItems/);
+});
+
 test("every menu accelerator comes from the shared command table", () => {
   const main = readFileSync("src/main/index.ts", "utf8");
   const template = main.slice(main.indexOf("function createMenu"), main.indexOf("Menu.setApplicationMenu"));

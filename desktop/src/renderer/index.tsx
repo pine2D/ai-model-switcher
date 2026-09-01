@@ -7,7 +7,13 @@ import type { CommandActions } from "./command-dispatcher";
 import { formatCopy, getCopy, resolveLocale } from "../shared/copy";
 import type { DisplayPreferences } from "../shared/display";
 import { unsupportedImageSites } from "../shared/images";
-import type { BootstrapState, DesktopSurface, LayoutState, SiteStatus } from "../shared/protocol";
+import type {
+  BootstrapState,
+  DesktopSurface,
+  LayoutState,
+  MenuShortcut,
+  SiteStatus
+} from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
@@ -89,6 +95,7 @@ function App(): React.JSX.Element {
   if (!actionLock.current) actionLock.current = new ExclusiveActionLock();
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
+  const [menuShortcuts, setMenuShortcuts] = useState<readonly MenuShortcut[]>([]);
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [health, setHealth] = useState<Partial<Record<string, SiteHealth>>>({});
   const [healthChecking, setHealthChecking] = useState(false);
@@ -450,6 +457,15 @@ function App(): React.JSX.Element {
     "check-updates": checkForUpdates
   };
   const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
+  // 菜单会随显示偏好重建，每次进速查都重新读一次真实菜单——速查因此不可能与菜单漂开。
+  useEffect(() => {
+    if (surface !== "commands") return;
+    let cancelled = false;
+    void window.polyask.menuShortcuts()
+      .then((items) => { if (!cancelled) setMenuShortcuts(items); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [surface]);
 
   if (bootstrapPhase !== "ready") {
     return (
@@ -473,6 +489,7 @@ function App(): React.JSX.Element {
       <CommandPalette
         copy={copy}
         commands={availableCommands}
+            menuShortcuts={menuShortcuts}
         groups={workspace.groups}
         library={promptLibrary}
         draft={text}

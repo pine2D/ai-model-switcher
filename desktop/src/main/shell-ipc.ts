@@ -6,6 +6,7 @@ import {
   type WebFrameMain
 } from "electron";
 
+import { applicationMenuShortcuts } from "./menu-shortcuts";
 import { SITE_KEYS, type SiteKey } from "../shared/contracts";
 import type { DesktopCopy } from "../shared/copy";
 import type { ArchiveFilters, ArchiveInput, ArchivePatch } from "../shared/archive";
@@ -63,6 +64,7 @@ interface ShellIpcOptions {
 
 const HANDLERS = [
   "polyask:bootstrap",
+  "polyask:menu-shortcuts",
   "polyask:set-display",
   "polyask:broadcast",
   "polyask:collect",
@@ -126,6 +128,9 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   const disposeSyncIpc = registerSyncIpc({ sync, runtime: options.runtime, trusted: trustedShell });
   const disposeSiteHealthIpc = registerSiteHealthIpc({ manager, trusted: trustedShell });
 
+  // 速查面板按需拉取：菜单会随显示偏好重建，按需读永远是当前那一份。
+  ipcMain.handle("polyask:menu-shortcuts", (event) =>
+    trustedShell(event) ? applicationMenuShortcuts() : []);
   ipcMain.handle("polyask:bootstrap", (event) => {
     if (!trustedShell(event)) throw new Error("untrusted_sender");
     return {

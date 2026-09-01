@@ -18,6 +18,7 @@ import type {
   CollectionRequest,
   DesktopSurface,
   LayoutState,
+  MenuShortcut,
   NewSessionSiteResult,
   SiteRunResult,
   SiteStatus
@@ -34,6 +35,7 @@ import type {
 
 export interface PolyAskDesktopApi {
   bootstrap(): Promise<BootstrapState>;
+  menuShortcuts(): Promise<MenuShortcut[]>;
   broadcast(request: BroadcastRequest): Promise<SiteRunResult[]>;
   collectAnswers(request: CollectionRequest): Promise<CollectedAnswer[]>;
   searchArchives(filters: ArchiveFilters): Promise<ArchiveSearchResult>;
@@ -91,6 +93,7 @@ function subscribe<T>(channel: string, listener: (value: T) => void): () => void
 
 const api: PolyAskDesktopApi = Object.freeze({
   bootstrap: () => ipcRenderer.invoke("polyask:bootstrap"),
+  menuShortcuts: () => ipcRenderer.invoke("polyask:menu-shortcuts"),
   broadcast: (request: BroadcastRequest) => ipcRenderer.invoke("polyask:broadcast", request),
   collectAnswers: (request: CollectionRequest) => ipcRenderer.invoke("polyask:collect", request),
   searchArchives: (filters: ArchiveFilters) => ipcRenderer.invoke("polyask:archive-search", filters),

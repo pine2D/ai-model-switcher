@@ -16,6 +16,14 @@ import type { WorkspaceState } from "./workspace";
 export type Tier = "think" | "fast" | null;
 export type DesktopSurface = "sites" | "archive" | "settings" | "commands";
 
+// 应用菜单里一条带加速器的项。速查面板靠它把菜单里 role 项（重新加载/缩放/全屏/复制…）
+// 的快捷键也列全——那些加速器由 Electron 给，不在 COMMANDS 表里。
+export interface MenuShortcut {
+  readonly group: string;
+  readonly label: string;
+  readonly accelerator: string;
+}
+
 export interface BroadcastPayload {
   readonly text: string;
   readonly tier: Tier;

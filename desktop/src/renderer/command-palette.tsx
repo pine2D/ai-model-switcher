@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CommandDescriptor, CommandId } from "../shared/commands";
 import type { DesktopCopy } from "../shared/copy";
+import type { MenuShortcut } from "../shared/protocol";
 import type { PromptLibraryState } from "../shared/prompt-library";
 import type { ActiveWorkspaceGroup } from "../shared/workspace";
 import { CloseIcon } from "./icons";
-import { commandItems, searchCommands, type PaletteCommand, type PaletteGroup } from "./command-search";
+import { commandItems, menuShortcutItems, searchCommands, type PaletteCommand, type PaletteGroup } from "./command-search";
 import { pageTabKeyAction } from "./keyboard";
 import { PromptLibrary } from "./prompt-library";
 
@@ -15,6 +16,7 @@ const PALETTE_MODES: readonly CommandPaletteMode[] = ["commands", "library", "sh
 interface CommandPaletteProps {
   readonly copy: DesktopCopy;
   readonly commands: readonly CommandDescriptor[];
+  readonly menuShortcuts: readonly MenuShortcut[];
   readonly groups: readonly ActiveWorkspaceGroup[];
   readonly library: PromptLibraryState;
   readonly draft: string;
@@ -34,7 +36,8 @@ const GROUP_LABEL_KEYS: Readonly<Record<PaletteGroup, keyof DesktopCopy>> = {
   compose: "commandGroupCompose",
   results: "commandGroupResults",
   app: "commandGroupApp",
-  saved: "commandGroupSaved"
+  saved: "commandGroupSaved",
+  menu: "commandGroupMenu"
 };
 
 function groupLabel(copy: DesktopCopy, group: PaletteGroup): string {
@@ -55,9 +58,13 @@ export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
     groups: props.groups,
     isMac: props.isMac
   }), [props.commands, props.copy, props.groups, props.isMac, query]);
-  const shortcuts = useMemo(() => commandItems(props.commands, props.copy, {
-    isMac: props.isMac
-  }).filter((item) => item.accelerator || item.aliases.length), [props.commands, props.copy, props.isMac]);
+  // 速查 = 本应用命令 + 菜单里由 Electron 给加速器的 role 项（重新加载/缩放/全屏/复制…）。
+  // 后者不在 COMMANDS 表里，只列前者会让速查名不副实——它的说明写的是「集中查看当前可用的应用快捷键」。
+  const shortcuts = useMemo(() => {
+    const listed = commandItems(props.commands, props.copy, { isMac: props.isMac })
+      .filter((item) => item.accelerator || item.aliases.length);
+    return [...listed, ...menuShortcutItems(props.menuShortcuts, listed, props.isMac)];
+  }, [props.commands, props.copy, props.isMac, props.menuShortcuts]);
   const visible = props.mode === "commands" ? results : shortcuts;
 
   useEffect(() => {
