@@ -21,6 +21,9 @@ function runtime(document, extra) {
     },
     openMenu() {}, clickEl() { return true; },
   };
+  // 覆盖必须发生在 vm 执行**之前**：适配器 IIFE 里 `const { openMenu, ... } = S` 会把引用解构走，
+  // 事后改 S.openMenu 对它无效（会让断言变成假通过）。
+  Object.assign(S, (extra && extra.hooks) || {});
   class FakeEvent { constructor(type, options) { this.type = type; Object.assign(this, options); } }
   vm.runInNewContext(source(), Object.assign(
     { window: { __AMS: S }, t: (key) => key, document, console, MouseEvent: FakeEvent }, extra || {}));
@@ -86,7 +89,7 @@ async function glmMenuMustBeClosedByRetrigger() {
 }
 
 // —— 元宝：Models 子菜单（Hy4 preview / Hy3 / DeepSeek）与模式项同为 menuitemradio ——
-function yuanbaoCase(mode) {
+function yuanbaoCase(mode, hooks) {
   const clicked = [];
   const state = { mode: mode || "Expert" };
   // 真机 2026-08-31：模型列表那层菜单带 aria-label="Model list"，模式那层没有 aria-label
@@ -105,7 +108,7 @@ function yuanbaoCase(mode) {
     querySelector: (selector) => (selector.includes("Switch model") ? button : null),
     querySelectorAll: (selector) => (selector === '[role="menuitemradio"]' ? models.concat(modes) : []),
   };
-  const S = runtime(document);
+  const S = runtime(document, hooks ? { hooks } : undefined);
   return { adapter: S.adapters["yuanbao.tencent.com"], S, clicked, state };
 }
 
@@ -115,6 +118,33 @@ async function yuanbaoModeMustNotMatchModelRadios() {
   await c.adapter.think();
   assert.deepEqual(c.clicked, ["ThinkingDeep reasoning for tricky problems"], "只能点模式项，绝不能点模型项");
   assert.equal(c.adapter.state(), "think");
+}
+
+// openMenu 是切换语义：菜单已开时再点就把它关掉。真机 2026-09-01 实测，关闭动画期间
+// menuitemradio 仍在 DOM，于是 waitFor 照样找得到项、click 却点在正在消失的节点上 →
+// 落空 → 抛「目标模式未生效」。修复前这是元宝切档失败的形态。
+async function yuanbaoMustNotToggleAnAlreadyOpenMenu() {
+  let opens = 0;
+  const c = yuanbaoCase("Expert", { openMenu: () => { opens += 1; } });  // 桩里菜单恒可见 = 已经开着
+  await c.adapter.think();
+
+  assert.equal(opens, 0, "菜单已展开时不得再点触发器——那一点会把它关掉");
+  assert.deepEqual(c.clicked, ["ThinkingDeep reasoning for tricky problems"]);
+  assert.equal(c.adapter.state(), "think");
+}
+
+// 合成点击偶发被吞（真机见过一次展不开）。Claude 的 _open 与 Gemini 的 _openModelMenu 都会重开一次，
+// 元宝此前一次不成就抛「目标模式未找到」。
+async function yuanbaoMustRetryOpeningTheModeMenu() {
+  let opens = 0, visible = false;
+  const c = yuanbaoCase("Expert", { openMenu: () => { opens += 1; if (opens >= 2) visible = true; } });
+  const adapter = c.adapter;
+  adapter._modeItems = () => (visible ? [{ textContent: "ThinkingDeep reasoning" }] : []);
+  let thrown = null;
+  try { await adapter._openModes({}); } catch (error) { thrown = error; }
+
+  assert.equal(thrown, null, "第一次没展开必须重开一次，而不是直接抛");
+  assert.equal(opens, 2, "恰好重试一次");
 }
 
 // —— Kimi：escMenus 只收得掉 effort 子菜单，根菜单要回点入口 ——
@@ -143,7 +173,9 @@ async function kimiRootMenuMustBeClosedByRetrigger() {
 let failed = 0;
 (async () => {
   const tests = [glmThinkMustPreferTopTier, glmThinkMustFallBackToDeep, glmStateMustAcceptBothThinkTiers,
-    glmMenuMustBeClosedByRetrigger, yuanbaoModeMustNotMatchModelRadios, kimiRootMenuMustBeClosedByRetrigger];
+    glmMenuMustBeClosedByRetrigger, yuanbaoModeMustNotMatchModelRadios,
+    yuanbaoMustNotToggleAnAlreadyOpenMenu, yuanbaoMustRetryOpeningTheModeMenu,
+    kimiRootMenuMustBeClosedByRetrigger];
   for (const test of tests) {
     try { await test(); }
     catch (error) { failed++; console.error(error.stack || error); }

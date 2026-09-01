@@ -152,17 +152,26 @@
         const t = this._toggle();
         return !!t && /ThinkSelector_selected/.test((t.className || "").toString());
       },
+      _modeItems: function () { return [...document.querySelectorAll('[role="menuitemradio"]')].filter((el) => this._isMode(el)); },
+      // openMenu 是**切换**语义：菜单已开时再点会把它关掉。真机 2026-09-01：关闭动画期间 menuitemradio
+      // 仍在 DOM，waitFor 照样找得到项、click 却点在正在消失的节点上 → 落空 → 抛「目标模式未生效」。
+      // 所以先看是否已展开，且一次不成要重开一次（同 Claude `_open`、Gemini `_openModelMenu`）。
+      _openModes: async function (b) {
+        if (!this._modeItems().length) openMenu(b);
+        let ok = await waitFor(() => this._modeItems().length || null, 1500);
+        if (!ok) { openMenu(b); ok = await waitFor(() => this._modeItems().length || null, 1500); }
+        if (!ok) { escMenus(); throw new Error("元宝: 模式菜单未展开"); }
+      },
       _selectMode: async function (re) {
         const b = this._modeBtn();
         if (!b) throw new Error("元宝: 模式按钮未找到");
         if (re.test(this._mode())) return;
-        openMenu(b);
-        const item = await waitFor(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((el) => {
-          return this._isMode(el) && re.test((el.textContent || "").trim()); // 语义校验在前：模型项一律不可点
-        }), 1500);
+        await this._openModes(b);
+        const item = this._modeItems().find((el) => re.test((el.textContent || "").trim())); // 语义校验在前：模型项一律不可点
         if (!item) { escMenus(); throw new Error("元宝: 目标模式未找到"); }
-        item.click(); await sleep(500); escMenus();
-        if (!re.test(this._mode())) throw new Error("元宝: 目标模式未生效");
+        item.click(); escMenus();
+        // 按钮文本回显有延迟：复读到目标为止再判失败（原来是 500ms 固定等待，贴着实测值没余量）
+        if (!await waitFor(() => re.test(this._mode()) || null, 2000)) throw new Error("元宝: 目标模式未生效");
       },
       _set: async function (on) {
         if (this._modeBtn()) {
