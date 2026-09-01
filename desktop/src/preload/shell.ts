@@ -49,6 +49,8 @@ export interface PolyAskDesktopApi {
   cancel(): void;
   setLayout(mode: "overview" | "focus", focused: SiteKey): void;
   setPage(page: number): void;
+  stepPage(offset: -1 | 1): void;
+  stepSite(offset: -1 | 1): void;
   setDisplayPreferences(value: DisplayPreferences): Promise<DisplayPreferences>;
   setComposerExpanded(value: boolean): void;
   setDrawerOpen(value: boolean): void;
@@ -104,6 +106,8 @@ const api: PolyAskDesktopApi = Object.freeze({
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),
   setPage: (page: number) => ipcRenderer.send("polyask:set-page", page),
+  stepPage: (offset: -1 | 1) => ipcRenderer.send("polyask:step-page", offset),
+  stepSite: (offset: -1 | 1) => ipcRenderer.send("polyask:step-site", offset),
   setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
   setComposerExpanded: (value: boolean) => ipcRenderer.send("polyask:set-composer-expanded", value),
   setDrawerOpen: (value: boolean) => ipcRenderer.send("polyask:set-drawer-open", value),

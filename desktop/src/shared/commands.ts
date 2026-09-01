@@ -7,6 +7,10 @@ export type CommandId =
   | "show-page-1"
   | "show-page-2"
   | "show-page-3"
+  | "next-page"
+  | "previous-page"
+  | "next-site"
+  | "previous-site"
   | "focus-prompt"
   | "set-think"
   | "set-fast"
@@ -49,6 +53,12 @@ export const COMMANDS: readonly CommandDescriptor[] = Object.freeze([
   { id: "show-page-1", labelKey: "showPageOne", group: "navigate", accelerator: "Alt+1" },
   { id: "show-page-2", labelKey: "showPageTwo", group: "navigate", accelerator: "Alt+2" },
   { id: "show-page-3", labelKey: "showPageThree", group: "navigate", accelerator: "Alt+3" },
+  // 这四条原本是 createMenu() 里手写的菜单项，没进本表 → 快捷键速查（只渲染本表）看不到它们，
+  // 而速查的文案承诺的是「集中查看当前可用的应用快捷键」。并进来后菜单也从本表生成，不会再漂。
+  { id: "next-page", labelKey: "nextPageMenu", group: "navigate", accelerator: "CmdOrCtrl+Shift+PageDown" },
+  { id: "previous-page", labelKey: "previousPageMenu", group: "navigate", accelerator: "CmdOrCtrl+Shift+PageUp" },
+  { id: "next-site", labelKey: "nextSiteMenu", group: "navigate", accelerator: "CmdOrCtrl+PageDown" },
+  { id: "previous-site", labelKey: "previousSiteMenu", group: "navigate", accelerator: "CmdOrCtrl+PageUp" },
   { id: "focus-prompt", labelKey: "focusPromptMenu", group: "compose", accelerator: "Alt+Q" },
   { id: "set-think", labelKey: "chooseThinkMode", group: "compose", accelerator: "Alt+T" },
   { id: "set-fast", labelKey: "chooseFastMode", group: "compose", accelerator: "Alt+Y" },

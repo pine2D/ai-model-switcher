@@ -171,6 +171,17 @@ function App(): React.JSX.Element {
     }
     const offStatus = window.polyask.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
+      // 站点自己发起的主帧导航（点登录跳 auth、被 302 到外部页）会把阶段打回 loading。
+      // 此时旧的健康结论已不成立，必须失效——否则面板会长期展示一个过期的「可提问」。
+      // 失效信号已经在这条 status 里，不需要新 IPC 通道。
+      if (status.phase === "loading") {
+        setHealth((current) => {
+          if (!current[status.site]) return current;
+          const next = { ...current };
+          delete next[status.site];
+          return next;
+        });
+      }
       const label = sitesRef.current.find((site) => site.key === status.site)?.label ?? status.site;
       setAnnouncement(`${label}: ${describeStatus(copy, status)}`);
     });
@@ -402,6 +413,15 @@ function App(): React.JSX.Element {
     ...(layout.pageCount >= 1 ? { "show-page-1": () => showPage(0) } : {}),
     ...(layout.pageCount >= 2 ? { "show-page-2": () => showPage(1) } : {}),
     ...(layout.pageCount >= 3 ? { "show-page-3": () => showPage(2) } : {}),
+    // 翻页/换焦点交给主进程的 ViewManager，渲染层不重算（重算必与主进程漂开）
+    ...(layout.pageCount > 1 ? {
+      "next-page": () => { changeSurface("sites"); window.polyask.stepPage(1); },
+      "previous-page": () => { changeSurface("sites"); window.polyask.stepPage(-1); }
+    } : {}),
+    ...(selected.size > 1 ? {
+      "next-site": () => { changeSurface("sites"); window.polyask.stepSite(1); },
+      "previous-site": () => { changeSurface("sites"); window.polyask.stepSite(-1); }
+    } : {}),
     "focus-prompt": () => {
       changeSurface("sites");
       if (drawerOpen) changeDrawerOpen(false);

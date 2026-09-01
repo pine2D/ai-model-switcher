@@ -39,13 +39,54 @@ test("application menu offers a keyboard route back to the prompt", () => {
   assert.match(preload, /onCommand/);
   assert.match(renderer, /onCommand/);
   assert.match(commands, /Alt\+Q/);
-  assert.match(main, /CmdOrCtrl\+Shift\+PageDown/);
-  assert.match(main, /CmdOrCtrl\+Shift\+PageUp/);
+  // 翻页/换焦点的加速器登记在 COMMANDS 表里（菜单与快捷键速查同源），不再在菜单模板里手写
+  assert.match(commands, /CmdOrCtrl\+Shift\+PageDown/);
+  assert.match(commands, /CmdOrCtrl\+Shift\+PageUp/);
+  assert.match(commands, /CmdOrCtrl\+PageDown/);
+  assert.match(commands, /CmdOrCtrl\+PageUp/);
   assert.match(main, /pageRelative/);
+  assert.match(main, /focusRelative/);
   assert.match(commands, /Alt\+1/);
   assert.match(commands, /Alt\+2/);
   assert.match(commands, /Alt\+3/);
   assert.match(main, /pageDirect\(page\)/);
+});
+
+// 快捷键速查只渲染 COMMANDS 表，而菜单曾另外手写过四条加速器 —— 速查因此漏掉它们，
+// 却仍写着「集中查看当前可用的应用快捷键」。这条钉死「菜单不得再手写加速器」。
+// 层序靠「重挂即提升」，不靠全拆重挂——后者实测会让被聚焦站点的渲染进程丢焦点（blur）。
+// 这条钉死 attach() 不得退回 detach-then-attach。
+test("view attach relies on reordering, never on a full detach-and-reattach", () => {
+  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const attach = manager.slice(manager.indexOf("private attach("), manager.indexOf("private detach("));
+  const reconcile = manager.slice(manager.indexOf("private reconcileViews("), manager.indexOf("private attach("));
+
+  assert.match(attach, /addChildView/);
+  assert.ok(!/removeChildView|this\.detach\(/.test(attach), "attach() 里不得出现 detach");
+  assert.ok(!/\[\.\.\.this\.attached\]\) this\.detach/.test(reconcile),
+    "reconcileViews() 不得整栈拆挂——会丢焦点，且 addChildView 本就能原地提升层序");
+});
+
+test("every menu accelerator comes from the shared command table", () => {
+  const main = readFileSync("src/main/index.ts", "utf8");
+  const template = main.slice(main.indexOf("function createMenu"), main.indexOf("Menu.setApplicationMenu"));
+  const handWritten = [...template.matchAll(/accelerator:\s*"([^"]+)"/g)].map((match) => match[1]);
+
+  assert.deepEqual(handWritten, [],
+    `菜单模板里不得手写 accelerator（发现 ${handWritten.join(", ")}）——` +
+    "登记到 src/shared/commands.ts 的 COMMANDS，菜单与快捷键速查才会同源");
+});
+
+test("every navigation command a menu exposes is reachable from the renderer", () => {
+  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const main = readFileSync("src/main/index.ts", "utf8");
+
+  // 命令面板与快捷键速查都按「渲染层是否给了动作」过滤（index.tsx 的 availableCommands），
+  // 所以纯主进程处理的命令必须同时有渲染层入口，否则用户在速查里根本看不到它。
+  for (const id of ["next-page", "previous-page", "next-site", "previous-site"]) {
+    assert.ok(renderer.includes(`"${id}"`), `${id} 缺少渲染层动作，快捷键速查会漏掉它`);
+    assert.ok(main.includes(`"${id}"`), `${id} 缺少主进程分发`);
+  }
 });
 
 test("CI tests and packages desktop on Linux, Windows and macOS", () => {

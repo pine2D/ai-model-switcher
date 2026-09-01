@@ -144,12 +144,25 @@ function sendToShell(channel: string, payload: ShellPayload): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
+const RELATIVE_COMMANDS: Readonly<Record<string, (manager: ViewManager) => void>> = {
+  "next-page": (manager) => manager.pageRelative(1),
+  "previous-page": (manager) => manager.pageRelative(-1),
+  "next-site": (manager) => manager.focusRelative(1),
+  "previous-site": (manager) => manager.focusRelative(-1)
+};
+
 function dispatchAppCommand(id: CommandId): void {
   const page = (["show-page-1", "show-page-2", "show-page-3"] as const).indexOf(
     id as "show-page-1" | "show-page-2" | "show-page-3"
   );
   if (page >= 0) {
     viewManager?.pageDirect(page);
+    return;
+  }
+  // 翻页/换焦点只有主进程的 ViewManager 知道当前页与聚焦顺序，渲染层重算会漂。
+  const relative = RELATIVE_COMMANDS[id];
+  if (relative) {
+    if (viewManager) relative(viewManager);
     return;
   }
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -240,27 +253,6 @@ function createMenu(): void {
             accelerator: commandAccelerator(command.id, process.platform),
             click: () => dispatchAppCommand(command.id)
           })),
-        { type: "separator" },
-        {
-          label: copy.nextPageMenu,
-          accelerator: "CmdOrCtrl+Shift+PageDown",
-          click: () => viewManager?.pageRelative(1)
-        },
-        {
-          label: copy.previousPageMenu,
-          accelerator: "CmdOrCtrl+Shift+PageUp",
-          click: () => viewManager?.pageRelative(-1)
-        },
-        {
-          label: copy.nextSiteMenu,
-          accelerator: "CmdOrCtrl+PageDown",
-          click: () => viewManager?.focusRelative(1)
-        },
-        {
-          label: copy.previousSiteMenu,
-          accelerator: "CmdOrCtrl+PageUp",
-          click: () => viewManager?.focusRelative(-1)
-        },
         { type: "separator" }, { role: "togglefullscreen" }
       ]
     },

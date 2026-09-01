@@ -95,6 +95,8 @@ const LISTENERS = [
   "polyask:set-surface",
   "polyask:set-layout",
   "polyask:set-page",
+  "polyask:step-page",
+  "polyask:step-site",
   "polyask:set-completion-notifications",
   "polyask:site-response"
 ] as const;
@@ -306,6 +308,18 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     if (!trustedShell(event)) return;
     const page = parsePageIndex(value);
     if (page !== null) manager.setPage(page);
+  });
+  // 相对翻页/换焦点只认 ViewManager 的当前页与聚焦顺序——渲染层自己算会与主进程漂开。
+  const step = (value: unknown): -1 | 1 | null => (value === 1 ? 1 : value === -1 ? -1 : null);
+  ipcMain.on("polyask:step-page", (event, value: unknown) => {
+    if (!trustedShell(event)) return;
+    const offset = step(value);
+    if (offset) manager.pageRelative(offset);
+  });
+  ipcMain.on("polyask:step-site", (event, value: unknown) => {
+    if (!trustedShell(event)) return;
+    const offset = step(value);
+    if (offset) manager.focusRelative(offset);
   });
   ipcMain.on("polyask:set-completion-notifications", (event, value: unknown) => {
     if (!trustedShell(event) || typeof value !== "boolean") return;
