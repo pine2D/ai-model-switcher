@@ -8,6 +8,7 @@ import * as archiveSurface from "../src/renderer/archive-surface";
 import { ArchiveWorkspace } from "../src/renderer/archive-workspace";
 import { BootstrapStateView } from "../src/renderer/bootstrap-state";
 import { CommandBar } from "../src/renderer/command-bar";
+import { ConfirmDialog } from "../src/renderer/confirm-dialog";
 import { CommandPalette } from "../src/renderer/command-palette";
 import { ImagePicker } from "../src/renderer/image-picker";
 import { PageTabs } from "../src/renderer/page-tabs";
@@ -17,7 +18,7 @@ import { imageSelectionBlockedMessage } from "../src/renderer/use-image-selectio
 import { WorkspaceDrawer } from "../src/renderer/workspace-drawer";
 import { WorkspaceActions } from "../src/renderer/workspace-actions";
 import { CompletionNotifier } from "../src/main/completion-notifier";
-import { getCopy } from "../src/shared/copy";
+import { formatCopy, getCopy } from "../src/shared/copy";
 import { COMMANDS } from "../src/shared/commands";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
@@ -62,6 +63,30 @@ test("command palette is a keyboard-first full surface", () => {
   assert.match(html, /role="listbox"/);
   assert.match(html, /aria-keyshortcuts="Escape"/);
   assert.doesNotMatch(html, /command-overlay/);
+});
+
+test("the confirm dialog renders both choices and defaults away from the destructive one", () => {
+  const copy = getCopy("zh-CN");
+  const html = renderToStaticMarkup(
+    <ConfirmDialog
+      copy={copy}
+      title={copy.newSessionConfirmTitle}
+      message={formatCopy(copy.newSessionConfirmMessage, { count: 9 })}
+      confirmLabel={copy.newSessionConfirmAction}
+      cancelLabel={copy.newSessionKeepCurrent}
+      onConfirm={noop}
+      onCancel={noop}
+    />
+  );
+
+  assert.match(html, /role="dialog"/);
+  assert.match(html, /aria-modal="true"/);
+  assert.match(html, /要新建会话吗？/);
+  assert.match(html, /这会离开 9 个已选站点中的当前对话/);
+  assert.match(html, /新建会话/);
+  assert.match(html, /保留当前对话/);
+  // 破坏性的那个才带 primary；默认焦点在取消上（焦点是运行时行为，此处只钉结构）
+  assert.match(html, /class="primary"[^>]*>新建会话/);
 });
 
 test("shortcut reference lists registered accelerators and aliases", () => {

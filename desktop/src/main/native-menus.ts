@@ -1,7 +1,7 @@
-import { dialog, Menu, type BrowserWindow } from "electron";
+import { Menu, type BrowserWindow } from "electron";
 
 import { commandById, type CommandId } from "../shared/commands";
-import { formatCopy, type DesktopCopy } from "../shared/copy";
+import type { DesktopCopy } from "../shared/copy";
 import type { ActiveWorkspaceGroup } from "../shared/workspace";
 
 function popupChoice<Id extends string>(
@@ -46,21 +46,4 @@ export function showCommandMenu(
     const command = commandById(id)!;
     return { id, label: copy[command.labelKey] };
   }));
-}
-
-export async function confirmNewSession(
-  window: BrowserWindow,
-  count: number,
-  copy: DesktopCopy
-): Promise<boolean> {
-  const result = await dialog.showMessageBox(window, {
-    type: "question",
-    title: copy.newSessionConfirmTitle,
-    message: formatCopy(copy.newSessionConfirmMessage, { count }),
-    buttons: [copy.newSessionConfirmAction, copy.newSessionKeepCurrent],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true
-  });
-  return result.response === 0;
 }

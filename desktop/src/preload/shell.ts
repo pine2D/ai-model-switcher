@@ -67,7 +67,6 @@ export interface PolyAskDesktopApi {
   newSession(sites: readonly SiteKey[]): Promise<NewSessionSiteResult[]>;
   showGroupMenu(): Promise<string | null>;
   showCommandMenu(commands: readonly CommandId[]): Promise<CommandId | null>;
-  confirmNewSession(count: number): Promise<boolean>;
   setCompletionNotifications(enabled: boolean): void;
   savePromptTemplate(input: { readonly name: string; readonly text: string }): Promise<PromptLibraryState>;
   deletePromptTemplate(id: string): Promise<PromptLibraryState>;
@@ -128,7 +127,6 @@ const api: PolyAskDesktopApi = Object.freeze({
   newSession: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:new-session", sites),
   showGroupMenu: () => ipcRenderer.invoke("polyask:show-group-menu"),
   showCommandMenu: (commands: readonly CommandId[]) => ipcRenderer.invoke("polyask:show-command-menu", commands),
-  confirmNewSession: (count: number) => ipcRenderer.invoke("polyask:confirm-new-session", count),
   setCompletionNotifications: (enabled: boolean) =>
     ipcRenderer.send("polyask:set-completion-notifications", enabled),
   savePromptTemplate: (input: Pick<PromptTemplate, "name" | "text">) =>

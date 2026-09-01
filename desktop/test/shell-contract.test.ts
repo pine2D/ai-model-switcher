@@ -570,19 +570,42 @@ test("desktop UI state restores before window creation and remains local to the 
   assert.doesNotMatch(store, /StateRepository|outbox|sync/);
 });
 
-test("workspace menus and new-session confirmation stay in trusted native UI", () => {
+test("workspace popup menus stay in trusted native UI", () => {
   const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
   const native = readFileSync("src/main/native-menus.ts", "utf8");
   const preload = readFileSync("src/preload/shell.ts", "utf8");
-  for (const channel of [
-    "polyask:show-group-menu",
-    "polyask:show-command-menu",
-    "polyask:confirm-new-session"
-  ]) assert.match(ipc, new RegExp(channel));
+
+  // 分组/命令菜单是定位到指针的弹出菜单，仍走原生。
+  for (const channel of ["polyask:show-group-menu", "polyask:show-command-menu"]) {
+    assert.match(ipc, new RegExp(channel));
+  }
   assert.match(ipc, /trustedShell\(event\)/);
   assert.match(native, /Menu\.buildFromTemplate/);
-  assert.match(native, /dialog\.showMessageBox/);
   assert.match(preload, /showGroupMenu/);
   assert.match(preload, /showCommandMenu/);
-  assert.match(preload, /confirmNewSession/);
+});
+
+// 新建会话的确认改在应用内画：原生 dialog.showMessageBox 用的是各平台系统外观，与本应用
+// 其余部分格格不入。这不是安全回退——外壳本身就是受信任来源（isTrustedShellUrl 守着导航），
+// 站点视图是独立 WebContentsView 画不到外壳上；外壳若被攻陷，它本来就可以干脆不调用确认。
+test("the new-session confirmation is drawn in-app, with no native dialog left behind", () => {
+  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const native = readFileSync("src/main/native-menus.ts", "utf8");
+  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const dialog = readFileSync("src/renderer/confirm-dialog.tsx", "utf8");
+  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+
+  // 旧通道必须整条拆掉，留着就还有第二条路径，两边会漂
+  assert.ok(!/confirm-new-session|confirmNewSession/.test(ipc + native + preload),
+    "原生确认通道必须完全移除，不能只是不再调用");
+  assert.ok(!/dialog\.showMessageBox/.test(native), "native-menus 不该再有系统弹框");
+
+  assert.match(dialog, /role="dialog"/);
+  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /cancelRef\.current\?\.focus\(\)/,
+    "默认焦点必须落在取消上——这个动作会离开当前对话，误触代价不对称");
+  assert.match(dialog, /event\.key === "Escape"/);
+  assert.match(dialog, /event\.key !== "Tab"/, "焦点要圈在弹层内，Tab 跑出去就回不来");
+  assert.match(renderer, /ConfirmDialog/);
+  assert.match(renderer, /newSessionConfirmAction/);
 });

@@ -329,6 +329,25 @@ kbd { opacity: .7; font: 10px system-ui; }
 .health-checks li[data-ok="false"] small { color: var(--danger); }
 /* 档位读不出不是故障（各站 state() 是刻意的偏函数），用提示色而非危险色，见 shared/site-health.ts */
 .health-checks li[data-ok="advisory"] small { color: var(--warning); }
+/* 应用内确认层，取代系统原生弹框（外观与本应用其余部分统一）。压在站点视图之上，
+   所以 scrim 必须挡住指针事件，否则误点会打到底下的站点页面。 */
+.confirm-scrim {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  padding: 24px; background: #11182766;
+}
+.confirm-dialog {
+  width: min(440px, 100%); padding: 14px 16px 12px; display: grid; gap: 10px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--panel);
+  box-shadow: 0 18px 50px #11182733;
+}
+.confirm-dialog header { display: flex; align-items: center; gap: 8px; }
+.confirm-dialog h2 { margin: 0; flex: 1; font-size: 14px; }
+.confirm-dialog p { margin: 0; color: var(--muted); line-height: 1.55; }
+.confirm-close { min-height: 24px; padding: 0 4px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
+.confirm-close:hover { color: var(--accent); background: var(--accent-soft); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.confirm-actions button.primary { border-color: var(--accent); color: #fff; background: var(--accent); }
+.confirm-actions button.primary:hover { filter: brightness(.92); }
 .health-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
 .health-actions button { display: inline-flex; align-items: center; gap: 3px; }
 .health-blocked { color: var(--warning) !important; }
