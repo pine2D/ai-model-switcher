@@ -327,6 +327,8 @@ kbd { opacity: .7; font: 10px system-ui; }
 .health-checks span { overflow-wrap: anywhere; }
 .health-checks small { color: var(--success); }
 .health-checks li[data-ok="false"] small { color: var(--danger); }
+/* 档位读不出不是故障（各站 state() 是刻意的偏函数），用提示色而非危险色，见 shared/site-health.ts */
+.health-checks li[data-ok="advisory"] small { color: var(--warning); }
 .health-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
 .health-actions button { display: inline-flex; align-items: center; gap: 3px; }
 .health-blocked { color: var(--warning) !important; }

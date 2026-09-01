@@ -30,13 +30,13 @@ try {
   assert.ok(snapshot.sites.every((site) => site.sameSession));
   assert.ok(snapshot.sites.every((site) => site.sandbox && site.contextIsolation && !site.nodeIntegration));
   const attached = snapshot.sites.filter((site) => site.attached);
-  assert.equal(attached.length, snapshot.layout.placements.length);
-  assert.ok(attached.length > 0 && attached.length <= 4);
+  // 所有已勾选站点（默认九站）都必须挂在视图树里且有正尺寸：未挂载的视图页面视口是 0×0，
+  // findComposer 恒 null，群发对它必然 composer_not_found。当前页最多 4 格，是 attached 的子集。
+  assert.equal(attached.length, 9);
+  assert.ok(snapshot.layout.placements.length > 0 && snapshot.layout.placements.length <= 4);
   assert.ok(attached.every((site) => site.bounds.width > 0 && site.bounds.height > 0));
-  assert.deepEqual(
-    new Set(attached.map((site) => site.site)),
-    new Set(snapshot.layout.placements.map((placement) => placement.key))
-  );
+  const attachedKeys = new Set(attached.map((site) => site.site));
+  assert.ok(snapshot.layout.placements.every((placement) => attachedKeys.has(placement.key)));
   console.log(`smoke passed: shell=${snapshot.shellCount}, sites=${snapshot.sites.length}, attached=${attached.length}`);
 } catch (error) {
   if (runtime?.logs()) console.error(runtime.logs());

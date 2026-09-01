@@ -52,7 +52,7 @@ import { SITES } from "./sites";
 import { effectiveStatus, markStatusRead, statusWithUnread } from "./status";
 import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
-import { reconcileVisibleSiteKeys } from "./view-visibility";
+import { reconcileVisibleSiteKeys, stackOrder } from "./view-visibility";
 
 // Consecutive probes that read no state (renderer busy, adapter without a
 // generation hook, view momentarily off-site) before monitoring gives up. A
@@ -134,6 +134,7 @@ export class ViewManager {
       callback(SITE_PERMISSION_ALLOWLIST.has(permission)));
 
     for (const site of SITES) this.createView(site);
+    this.reconcileViews();
     this.layout();
     window.on("resize", () => this.layout());
     window.webContents.on("zoom-changed", () => setTimeout(() => this.layout(), 0));
@@ -426,7 +427,7 @@ export class ViewManager {
       const recent = runStatus && recentPhases.includes(runStatus.phase as SiteHealthRunPhase)
         ? { phase: runStatus.phase as SiteHealthRunPhase, ...(runStatus.code ? { code: runStatus.code } : {}) }
         : undefined;
-      return { ...health, page, ...(recent ? { recent } : {}) };
+      return { ...health, page, checkedAt: Date.now(), ...(recent ? { recent } : {}) };
     };
     if (!definition || !view || view.webContents.isDestroyed()) {
       return finish(undefined, "block");
@@ -515,6 +516,7 @@ export class ViewManager {
     this.views.delete(site.key);
     if (!view.webContents.isDestroyed()) view.webContents.close();
     this.createView(site, url);
+    this.reconcileViews();
     this.layout();
   }
 
@@ -532,7 +534,9 @@ export class ViewManager {
       }
     });
     this.views.set(site.key, view);
-    if (this.surface === "sites" && this.visibleSites().includes(site.key)) this.attach(site.key);
+    // 已勾选即挂载（不再只挂当前页）：replaceView 后重建的后台视图若不回到视图树，
+    // 下一轮群发又会打进 0×0 视口。层序由调用方随后的 reconcileViews 归位。
+    if (this.surface === "sites" && this.selected.includes(site.key)) this.attach(site.key);
     this.updatePageStatus({ site: site.key, phase: "loading" });
     void view.webContents.loadURL(url);
   }
@@ -560,9 +564,19 @@ export class ViewManager {
     this.renderedMode = next.mode;
     this.placements = next.placements;
     const metrics = next.metrics;
+    // this.placements 只含当前页——渲染层的 tile 表头靠它，绝不能混进后台视图。
+    // 但后台视图也必须落格：视图树里尺寸为 0 的视图，页面 innerWidth/innerHeight 就是 0。
+    // 用与当前页第一格**完全相同**的矩形（而不是窗口外偏移——移出边界是否触发遮挡剔除未实测），
+    // 配合 reconcileViews 的层序，它们被第一格完全盖住，不漏出也不抢事件。
+    const cover = next.placements[0];
+    const background = cover
+      ? this.selected
+        .filter((site) => !current.keys.includes(site))
+        .map((key) => ({ key, bounds: cover.bounds }))
+      : [];
     applyWorkspaceLayout({
       views: this.views,
-      placements: this.placements,
+      placements: [...background, ...this.placements],
       metrics,
       zoom,
       display: this.display,
@@ -612,16 +626,24 @@ export class ViewManager {
     return resolveSitePage(this.selected, this.page).keys;
   }
 
+  // 挂载的是**全部已勾选站点**（不只当前页）：未挂进视图树的 WebContentsView 视口恒 0×0，
+  // findComposer 恒 null，群发对后台页站点必然 composer_not_found（理由与实测见 view-visibility.ts）。
+  // 顺序由 stackOrder 决定，后加的盖在上面，所以当前页永远压住后台页。
   private reconcileViews(): void {
     if (this.surface !== "sites" || this.window.isDestroyed()) return;
-    const changes = reconcileVisibleSiteKeys([...this.attached], this.visibleSites());
+    const changes = reconcileVisibleSiteKeys([...this.attached], this.selected);
     for (const site of changes.detach) this.detach(site);
-    for (const site of changes.attach) this.attach(site);
+    // 按 stackOrder 依次 attach：后台页在前（底层），当前页在后（顶层）。
+    for (const site of stackOrder(this.selected, this.visibleSites())) this.attach(site);
   }
 
   private attach(site: SiteKey): void {
     const view = this.views.get(site);
-    if (!view || this.attached.has(site)) return;
+    if (!view) return;
+    // 对**已在视图树里**的子视图，addChildView 是「原地提升到最顶层」而不是重复插入
+    // （Electron 43.4.0 实测：幂等、children 不增长）——当前页正是靠重挂来盖住后台页，
+    // 所以这里不做 has() 短路。**绝不要改成先 detach 再 attach**：全拆重挂会让被聚焦站点的
+    // 渲染进程真的丢焦点并触发 blur（实测），而重挂本身不会。
     this.window.contentView.addChildView(view);
     this.attached.add(site);
   }

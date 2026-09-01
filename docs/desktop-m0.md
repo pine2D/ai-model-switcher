@@ -94,7 +94,7 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 - Grid 是等权比较视图：当前页的已选站点按固定产品顺序动态排布，适合同时观察进度、浏览答案和执行轻量操作。
 - Focus 是主次阅读视图：当前主站承担完整阅读、滚动、追问和弹窗处理；当前页的其余站点仍为实时、可交互的 `WebContentsView`，不得降级成截图或纯状态卡。
-- 单页超过 4 个完整网站会显著损害可读性，因此 5–9 个已选站点按 3+2、3+3、4+3、4+4、3+3+3 均衡分页，避免出现只有一个站点的末页；后台页保留会话与运行状态，但不占用原生视图树和屏幕空间。
+- 单页超过 4 个完整网站会显著损害可读性，因此 5–9 个已选站点按 3+2、3+3、4+3、4+4、3+3+3 均衡分页，避免出现只有一个站点的末页；**所有已勾选站点始终挂在原生视图树里并保持正尺寸**——非当前页的视图与当前页第一格用完全相同的矩形、压在其之下，因此不占屏幕空间也不抢鼠标事件。**不能只挂当前页**：未挂进视图树的 `WebContentsView` 页面视口恒 0×0（只 `setBounds` 不 `addChildView` 同样是 0，Electron 43.4.0 实测），`content/core.js` 的 `findComposer` 因 `r.top < innerHeight` 恒假而返回 null，群发对后台页站点必然 `composer_not_found`、一路重投烧到截止线。
 
 ### 布局几何
 
@@ -189,7 +189,7 @@ M0 是可保留的技术基线。当前分支已在该基线上迁移扩展核�
 
 同日在打包后的 Linux x64 产物上完成密度截图回归。150% 宿主缩放下，X11 窗口表面完整显示 3×3 Grid 和宽屏 4×3 Focus；将客户区调整到约 1280×720 CSS px 后，3×4 Focus 的 9 个站点框架均为正尺寸、互不重叠且没有越界。截图只证明 Linux/WSLg 行为，不代替 Windows 或 macOS 原生验收。
 
-打包产物的自动 smoke 会校验 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session，并**回读每个站点视图实际生效的 webPreferences**（`sandbox`、`contextIsolation`、`nodeIntegration`、`webSecurity`）——任一项不达标即记 `insecure_site`；回读走 Electron 未在类型声明里公开的 `getLastWebPreferences`，读不到时按不安全处理（宁可红，不可假绿）。当前页最多挂载 4 个正尺寸视图，后台页会话保持存活但不占用视图树。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版、程序/数据分离的便携 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
+打包产物的自动 smoke 会校验 1 个 Shell、9 个唯一 `webContents`、同一持久化 Session，并**回读每个站点视图实际生效的 webPreferences**（`sandbox`、`contextIsolation`、`nodeIntegration`、`webSecurity`）——任一项不达标即记 `insecure_site`；回读走 Electron 未在类型声明里公开的 `getLastWebPreferences`，读不到时按不安全处理（宁可红，不可假绿）。所有已勾选站点（默认九站）都挂载且有正尺寸，当前页最多 4 格是它的子集；后台视图被当前页完全遮住。3 分钟短时 soak 完成 4 次进程采样，未发生 renderer crash 或 unresponsive；冷启动到九站完全加载的工作集增长属于启动口径，正式 60 分钟报告将另行判断热启动后的稳定性。主进程已使用 Electron 43 内置 `node:sqlite` 建立 schema 1 数据层，WAL、外键、参数化仓储、事务 outbox 和 tombstone 均有重开测试。Desktop TypeScript/React 与运行器测试全部通过，`npm run typecheck`、`npm run package`、`npm run smoke`、`npm audit --omit=dev` 和扩展全量 `scripts/verify.sh` 均通过。CI 已配置 Linux、Windows、macOS 三平台测试、类型检查和应用目录构建，Linux 另执行打包产物 smoke；Release workflow 配置了 Windows x64 安装版、程序/数据分离的便携 ZIP、Linux x64、macOS x64/arm64 原生 maker，并为每个主包生成 SHA-256。远端矩阵结果不替代真机人工验收。
 
 2026-08-25 已创建独立 Desktop OAuth Client ID，并通过 Repository Variable 进入 Release 构建。2026-08-27 Windows 真机确认授权码交换返回 `invalid_request / client_secret`：旧包只携带 Client ID，未提交该 Desktop 客户端生成的 Client Secret。当前构建链改为成对注入并审计 Client ID 与 Client Secret，授权码交换和刷新请求都会提交完整凭据；修正版仍需 Windows 真机完成 Drive 联网闭环。
 

@@ -69,9 +69,11 @@ export function buildDiagnosticSnapshot(input: DiagnosticInput): DiagnosticSnaps
   }
   const attached = input.sites.filter((site) => site.attached).map((site) => site.site);
   const placed = input.layout.placements.map((placement) => placement.key);
-  if (placed.length !== attached.length || placed.length > 4) violations.push("layout_count");
-  if (new Set([...attached, ...placed]).size !== attached.length ||
-      !attached.every((site) => placed.includes(site))) {
+  // 挂载数 ≥ 落格数：所有已勾选站点都挂在视图树里（否则视口 0×0，见 view-visibility.ts），
+  // 而 layout.placements 只描述当前页最多 4 格。旧断言要求两者集合相等，与该不变量正相反。
+  if (placed.length > 4 || attached.length > SITE_KEYS.length) violations.push("layout_count");
+  if (new Set(attached).size !== attached.length ||
+      !placed.every((site) => attached.includes(site))) {
     violations.push("attached_layout");
   }
   for (const placement of input.layout.placements) {

@@ -7,6 +7,7 @@ import {
   type DiagnosticSiteInput
 } from "./diagnostics";
 import { PostAuthReloadTracker } from "./auth-navigation";
+import { PageLifecycle } from "./page-lifecycle";
 import { navigationDisposition } from "./navigation";
 import { SiteNavigationPolicy } from "./navigation-guard";
 
@@ -77,8 +78,14 @@ export function createSiteView(
   });
   const contents = view.webContents;
   const authRecovery = new PostAuthReloadTracker(site.key === "gemini");
-  contents.on("did-start-loading", callbacks.onLoading);
+  // 页面阶段由 PageLifecycle 定夺（两条坑的说明见 page-lifecycle.ts）：子帧不改阶段，
+  // 加载失败不被紧随的 did-finish-load 洗回就绪。
+  const lifecycle = new PageLifecycle();
+  contents.on("did-start-navigation", (details) => {
+    if (lifecycle.startNavigation(details.isMainFrame, details.isSameDocument)) callbacks.onLoading();
+  });
   contents.on("did-finish-load", () => {
+    if (!lifecycle.finishLoad()) return;
     if (authRecovery.shouldReload(navigationDisposition(site, contents.getURL()))) {
       contents.reload();
       return;
@@ -86,7 +93,7 @@ export function createSiteView(
     callbacks.onReady();
   });
   contents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
-    if (code !== -3 && isMainFrame) callbacks.onFailure(code);
+    if (lifecycle.failLoad(code, isMainFrame)) callbacks.onFailure(code);
   });
   contents.on("render-process-gone", (_event, details) => callbacks.onCrash(details.reason));
 

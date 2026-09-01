@@ -22,8 +22,10 @@ function diagnosticInput(): DiagnosticInput {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      attached: index < visibleKeys.length,
-      bounds: placements[index]?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }
+      // 全部已勾选站点都挂在视图树里（未挂载 = 视口 0×0 = 群发打空，见 view-visibility.ts）；
+      // 非当前页的用与第一格完全相同的矩形压在其下。
+      attached: true,
+      bounds: placements[index]?.bounds ?? placements[0].bounds
     }))
   };
 }
@@ -38,21 +40,54 @@ test("diagnostic snapshot proves one shell and nine secure site views", () => {
   assert.ok(snapshot.sites.every((site) => site.partition === "persist:polyask-sites"));
   assert.ok(snapshot.sites.every((site) => site.sameSession));
   assert.ok(snapshot.sites.every((site) => site.sandbox && site.contextIsolation && !site.nodeIntegration));
-  assert.deepEqual(snapshot.sites.filter((site) => site.attached).map((site) => site.site), visibleKeys);
-  assert.ok(snapshot.sites.filter((site) => site.attached).every((site) => site.bounds.width > 0 && site.bounds.height > 0));
+  assert.deepEqual(snapshot.sites.filter((site) => site.attached).map((site) => site.site), [...SITE_KEYS]);
+  assert.ok(snapshot.sites.every((site) => site.bounds.width > 0 && site.bounds.height > 0));
   assert.deepEqual(snapshot.violations, []);
 });
 
-test("diagnostics reject attached views that do not match the active layout page", () => {
+test("diagnostics reject an attached view left without positive bounds", () => {
   const input = diagnosticInput();
   const snapshot = buildDiagnosticSnapshot({
     ...input,
-    sites: input.sites.map((site) => site.site === "chatglm" ? { ...site, attached: true } : site)
+    sites: input.sites.map((site) => site.site === "chatglm"
+      ? { ...site, bounds: { x: 0, y: 0, width: 0, height: 0 } }
+      : site)
+  });
+
+  assert.equal(snapshot.ok, false);
+  assert.ok(snapshot.violations.includes("site_bounds:chatglm"));
+});
+
+test("diagnostics reject a layout placement whose view is not attached", () => {
+  const input = diagnosticInput();
+  const snapshot = buildDiagnosticSnapshot({
+    ...input,
+    sites: input.sites.map((site) => site.site === visibleKeys[0] ? { ...site, attached: false } : site)
   });
 
   assert.equal(snapshot.ok, false);
   assert.ok(snapshot.violations.includes("attached_layout"));
-  assert.ok(snapshot.violations.includes("site_bounds:chatglm"));
+});
+
+test("diagnostics reject more layout placements than one page can hold", () => {
+  const input = diagnosticInput();
+  const extra = { key: SITE_KEYS[5], bounds: placements[0].bounds };
+  const snapshot = buildDiagnosticSnapshot({
+    ...input,
+    layout: { ...input.layout, placements: [...placements, extra] }
+  });
+
+  assert.equal(snapshot.ok, false);
+  assert.ok(snapshot.violations.includes("layout_count"));
+});
+
+test("diagnostics accept background views attached outside the active layout page", () => {
+  const snapshot = buildDiagnosticSnapshot(diagnosticInput());
+
+  const background = snapshot.sites.filter((site) => !visibleKeys.includes(site.site as never));
+  assert.equal(background.length, SITE_KEYS.length - visibleKeys.length);
+  assert.ok(background.every((site) => site.attached && site.bounds.width > 0));
+  assert.ok(!snapshot.violations.includes("attached_layout"));
 });
 
 test("diagnostic snapshot exposes missing or insecure views", () => {

@@ -63,12 +63,13 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
           <div><dt>{props.copy.healthPageStatus}</dt><dd>{pageLabel(props.copy, current, status)}</dd></div>
           <div><dt>{props.copy.healthAvailability}</dt><dd data-health-state={current.state}>{stateLabel(props.copy, current.state)}</dd></div>
           <div><dt>{props.copy.healthLatestSend}</dt><dd>{recentLabel(props.copy, current)}</dd></div>
+          <div><dt>{props.copy.healthCheckedAt}</dt><dd>{current.checkedAt ? new Date(current.checkedAt).toLocaleTimeString() : props.copy.healthNeverChecked}</dd></div>
         </dl>
         <h3>{props.copy.healthAdapterChecks}</h3>
         {current.checks.length ? (
           <ul className="health-checks">
             {current.checks.map((check, index) => (
-              <li data-ok={check.ok} key={`${check.name}-${index}`}><span>{check.name}</span><small>{check.ok ? props.copy.healthCheckPassed : props.copy.healthCheckFailed}</small></li>
+              <li data-ok={check.ok ? "true" : check.kind === "tier" ? "advisory" : "false"} key={`${check.name}-${index}`}><span>{check.name}</span><small>{check.ok ? props.copy.healthCheckPassed : check.kind === "tier" ? props.copy.healthCheckAdvisory : props.copy.healthCheckFailed}</small></li>
             ))}
           </ul>
         ) : <p>{props.copy.healthNoChecks}</p>}
