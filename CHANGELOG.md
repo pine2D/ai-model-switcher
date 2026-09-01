@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [0.24.1] - 2026-09-01
+
 ### 修复
 
 - 快捷键速查补全菜单里其余快捷键：重新加载、强制重新加载、实际大小、放大、缩小、全屏、撤销、重做、剪切、复制、粘贴、全选、最小化、关闭、退出。这些项的快捷键由 Electron 提供、不写在命令表里，上一版只补了四条手写的，速查仍然缺一大截。现在速查直接读真实菜单，两者不可能再漂开
@@ -675,7 +677,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.24.0...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/pine2D/polyask/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/pine2D/polyask/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/pine2D/polyask/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/pine2D/polyask/compare/v0.23.0...v0.23.1
