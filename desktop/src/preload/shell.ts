@@ -20,6 +20,7 @@ import type {
   LayoutState,
   MenuShortcut,
   NewSessionSiteResult,
+  SiteHistoryState,
   SiteRunResult,
   SiteStatus
 } from "../shared/protocol";
@@ -53,6 +54,8 @@ export interface PolyAskDesktopApi {
   setPage(page: number): void;
   stepPage(offset: -1 | 1): void;
   stepSite(offset: -1 | 1): void;
+  stepHistory(offset: -1 | 1, site?: SiteKey): void;
+  siteHistoryState(): Promise<Record<string, SiteHistoryState>>;
   setDisplayPreferences(value: DisplayPreferences): Promise<DisplayPreferences>;
   setComposerExpanded(value: boolean): void;
   setDrawerOpen(value: boolean): void;
@@ -111,6 +114,8 @@ const api: PolyAskDesktopApi = Object.freeze({
   setPage: (page: number) => ipcRenderer.send("polyask:set-page", page),
   stepPage: (offset: -1 | 1) => ipcRenderer.send("polyask:step-page", offset),
   stepSite: (offset: -1 | 1) => ipcRenderer.send("polyask:step-site", offset),
+  stepHistory: (offset: -1 | 1, site?: SiteKey) => ipcRenderer.send("polyask:step-history", { offset, site }),
+  siteHistoryState: () => ipcRenderer.invoke("polyask:site-history-state"),
   setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
   setComposerExpanded: (value: boolean) => ipcRenderer.send("polyask:set-composer-expanded", value),
   setDrawerOpen: (value: boolean) => ipcRenderer.send("polyask:set-drawer-open", value),

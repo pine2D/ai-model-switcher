@@ -521,6 +521,8 @@ test("site reload is disabled while a send is active", () => {
       onToggle={noop}
       onFocus={noop}
       onReload={noop}
+      history={{}}
+      onBack={noop}
     />
   );
   assert.match(html, /<button type="button" disabled=""[^>]*aria-label="Reload Claude"/);
@@ -542,6 +544,8 @@ test("site frames render only the active selected page with accessible actions",
       onToggle={noop}
       onFocus={noop}
       onReload={noop}
+      history={{}}
+      onBack={noop}
     />
   );
 
@@ -576,6 +580,8 @@ test("site frames visibly distinguish stable failure codes and retain full title
       onToggle={noop}
       onFocus={noop}
       onReload={noop}
+      history={{}}
+      onBack={noop}
     />
   );
 
@@ -659,6 +665,8 @@ test("site frames expose answer-generation terminal states without verbose chrom
       onToggle={noop}
       onFocus={noop}
       onReload={noop}
+      history={{}}
+      onBack={noop}
     />
   );
   assert.match(html, /class="tile-frame phase-generating"/);

@@ -65,6 +65,7 @@ interface ShellIpcOptions {
 const HANDLERS = [
   "polyask:bootstrap",
   "polyask:menu-shortcuts",
+  "polyask:site-history-state",
   "polyask:set-display",
   "polyask:broadcast",
   "polyask:collect",
@@ -99,6 +100,7 @@ const LISTENERS = [
   "polyask:set-page",
   "polyask:step-page",
   "polyask:step-site",
+  "polyask:step-history",
   "polyask:set-completion-notifications",
   "polyask:site-response"
 ] as const;
@@ -326,6 +328,18 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     const offset = step(value);
     if (offset) manager.focusRelative(offset);
   });
+  // 站内后退/前进：作用于当前聚焦的站点视图，能不能退由 ViewManager 按真实导航历史判定。
+  ipcMain.on("polyask:step-history", (event, value: unknown) => {
+    if (!trustedShell(event)) return;
+    const candidate = value as { site?: unknown; offset?: unknown } | null;
+    const offset = step(candidate?.offset);
+    const site = typeof candidate?.site === "string" && SITE_KEYS.includes(candidate.site as SiteKey)
+      ? candidate.site as SiteKey
+      : manager.getLayout().focused;
+    if (offset) manager.navigateHistory(site, offset);
+  });
+  ipcMain.handle("polyask:site-history-state", (event) =>
+    trustedShell(event) ? manager.historyState() : {});
   ipcMain.on("polyask:set-completion-notifications", (event, value: unknown) => {
     if (!trustedShell(event) || typeof value !== "boolean") return;
     options.setCompletionNotifications(value);

@@ -12,6 +12,7 @@ import type {
   DesktopSurface,
   LayoutState,
   MenuShortcut,
+  SiteHistoryState,
   SiteStatus
 } from "../shared/protocol";
 import { describeStatus } from "../shared/status-copy";
@@ -96,6 +97,7 @@ function App(): React.JSX.Element {
   const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loading");
   const [sites, setSites] = useState<readonly SiteDefinition[]>([]);
   const [menuShortcuts, setMenuShortcuts] = useState<readonly MenuShortcut[]>([]);
+  const [siteHistory, setSiteHistory] = useState<Record<string, SiteHistoryState>>({});
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
   const [health, setHealth] = useState<Partial<Record<string, SiteHealth>>>({});
   const [healthChecking, setHealthChecking] = useState(false);
@@ -429,6 +431,9 @@ function App(): React.JSX.Element {
       "next-site": () => { changeSurface("sites"); window.polyask.stepSite(1); },
       "previous-site": () => { changeSurface("sites"); window.polyask.stepSite(-1); }
     } : {}),
+    // 站内后退/前进作用于当前聚焦的站点；能不能退由主进程按真实导航历史判定。
+    ...(siteHistory[layout.focused]?.back ? { "site-back": () => { changeSurface("sites"); window.polyask.stepHistory(-1); } } : {}),
+    ...(siteHistory[layout.focused]?.forward ? { "site-forward": () => { changeSurface("sites"); window.polyask.stepHistory(1); } } : {}),
     "focus-prompt": () => {
       changeSurface("sites");
       if (drawerOpen) changeDrawerOpen(false);
@@ -457,6 +462,15 @@ function App(): React.JSX.Element {
     "check-updates": checkForUpdates
   };
   const availableCommands = COMMANDS.filter((command) => !!commandActions.current[command.id]);
+  // 站内后退/前进的可用性来自主进程的真实导航历史。聚焦站点变了、或该站页面阶段变了
+  // （= 刚导航过），都要重算——否则命令面板里这两条的可用状态会停在上一次。
+  useEffect(() => {
+    let cancelled = false;
+    void window.polyask.siteHistoryState()
+      .then((state) => { if (!cancelled) setSiteHistory(state); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [layout.focused, statuses, surface]);
   // 菜单会随显示偏好重建，每次进速查都重新读一次真实菜单——速查因此不可能与菜单漂开。
   useEffect(() => {
     if (surface !== "commands") return;
@@ -644,6 +658,8 @@ function App(): React.JSX.Element {
         onToggle={workspaceFlow.toggleSite}
         onFocus={(site) => setMode("focus", site)}
         onReload={(site) => { void window.polyask.reloadSite(site); }}
+        history={siteHistory}
+        onBack={(site) => window.polyask.stepHistory(-1, site)}
       />
     </main>
   );

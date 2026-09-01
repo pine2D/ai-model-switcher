@@ -11,6 +11,8 @@ export type CommandId =
   | "previous-page"
   | "next-site"
   | "previous-site"
+  | "site-back"
+  | "site-forward"
   | "focus-prompt"
   | "set-think"
   | "set-fast"
@@ -59,6 +61,10 @@ export const COMMANDS: readonly CommandDescriptor[] = Object.freeze([
   { id: "previous-page", labelKey: "previousPageMenu", group: "navigate", accelerator: "CmdOrCtrl+Shift+PageUp" },
   { id: "next-site", labelKey: "nextSiteMenu", group: "navigate", accelerator: "CmdOrCtrl+PageDown" },
   { id: "previous-site", labelKey: "previousSiteMenu", group: "navigate", accelerator: "CmdOrCtrl+PageUp" },
+  // 站内导航（点了回答里的站内链接、站点自己的跳转器）之后此前完全没有退路，唯一脱身办法是
+  // 「新会话」——那会丢掉当前对话。Alt+方向键避开浏览器/站点自己的 Alt+Left。
+  { id: "site-back", labelKey: "siteBackMenu", group: "navigate", accelerator: "Alt+Left" },
+  { id: "site-forward", labelKey: "siteForwardMenu", group: "navigate", accelerator: "Alt+Right" },
   { id: "focus-prompt", labelKey: "focusPromptMenu", group: "compose", accelerator: "Alt+Q" },
   { id: "set-think", labelKey: "chooseThinkMode", group: "compose", accelerator: "Alt+T" },
   { id: "set-fast", labelKey: "chooseFastMode", group: "compose", accelerator: "Alt+Y" },

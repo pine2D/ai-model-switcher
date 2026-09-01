@@ -9,6 +9,7 @@ import {
   Menu,
   Notification,
   screen,
+  shell as electronShell,
   type MenuItemConstructorOptions
 } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
@@ -45,7 +46,7 @@ import {
   isPortableDataInitialized,
   resolveRuntimeProfile
 } from "./portable-profile";
-import { isTrustedShellUrl } from "./security";
+import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
 import { registerShellIpc } from "./shell-ipc";
 import { SITES } from "./sites";
@@ -144,6 +145,11 @@ function sendToShell(channel: string, payload: ShellPayload): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
 
+const HISTORY_COMMANDS: Readonly<Record<string, -1 | 1>> = {
+  "site-back": -1,
+  "site-forward": 1
+};
+
 const RELATIVE_COMMANDS: Readonly<Record<string, (manager: ViewManager) => void>> = {
   "next-page": (manager) => manager.pageRelative(1),
   "previous-page": (manager) => manager.pageRelative(-1),
@@ -157,6 +163,12 @@ function dispatchAppCommand(id: CommandId): void {
   );
   if (page >= 0) {
     viewManager?.pageDirect(page);
+    return;
+  }
+  // 后退/前进作用于**当前聚焦的**站点视图：站内导航之后此前完全没有退路。
+  const offset = HISTORY_COMMANDS[id];
+  if (offset) {
+    viewManager?.navigateHistory(viewManager.getLayout().focused, offset);
     return;
   }
   // 翻页/换焦点只有主进程的 ViewManager 知道当前页与聚焦顺序，渲染层重算会漂。
@@ -338,7 +350,13 @@ async function createWindow(): Promise<void> {
     {
       initialUiState,
       selectedSites: workspaceState.selectedSites,
-      onUiStateChange: (state) => uiStateStore.schedule(state)
+      onUiStateChange: (state) => uiStateStore.schedule(state),
+      // 站点视图里点到的外部链接交给用户自己的浏览器。视图本身绝不导航过去——格子里永远是这个站。
+      // 复用 safeExternalUrl 的校验（只放行 http/https、拒带凭据的 URL）。
+      openExternal: (url) => {
+        const safe = safeExternalUrl(url);
+        if (safe) void electronShell.openExternal(safe);
+      }
     }
   );
   managerForWorkspace = manager;

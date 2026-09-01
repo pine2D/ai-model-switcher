@@ -16,6 +16,10 @@ interface SiteViewCallbacks {
   readonly onReady: () => void;
   readonly onFailure: (code: number) => void;
   readonly onCrash: (reason: string) => void;
+  // 站点视图里点到的外部链接（回答里的引用来源、页脚的隐私条款…）。视图本身绝不导航过去，
+  // 交给用户自己的浏览器打开——这既保住「格子里永远是这个站」的不变量，也让引用链接可用。
+  // 不接这条回调的话它们是**静默无反应**：will-navigate 被拦、window.open 被 deny，都没有任何提示。
+  readonly onExternal: (url: string) => void;
 }
 
 interface WebPreferencesReadback {
@@ -104,7 +108,13 @@ export function createSiteView(
   }>) => {
     const decision = policy.handleNavigation(event.url, event.isMainFrame, isRedirect);
     authRecovery.observe(decision.disposition, event.isMainFrame);
-    if (!decision.allow) event.preventDefault();
+    if (decision.allow) return;
+    event.preventDefault();
+    // 拦下之后要给用户一个去处，否则点了毫无反应。只有「用户主动点出去」的那类才转交外部浏览器：
+    // external + 主帧 + 非重定向。服务端 302 与 block 类不转（前者是登录链中间态，后者本就该死掉）。
+    if (decision.disposition === "external" && event.isMainFrame && !isRedirect) {
+      callbacks.onExternal(event.url);
+    }
   };
   // will-navigate 是渲染端意图（恒主帧，程序化 loadURL/reload 不触发）；will-redirect 是
   // 服务端 302（任意帧）。两者对 external 的放行规则不同，故分别标记来源。
@@ -124,6 +134,8 @@ export function createSiteView(
     // "main frame" from the opener would be worth nothing here.
     authRecovery.observe(decision.disposition, rewrite);
     if (rewrite) void contents.loadURL(url);
+    // 回答里的引用链接绝大多数是 target="_blank"，走的正是这条。不转交就是静默无反应。
+    else if (decision.disposition === "external") callbacks.onExternal(url);
     return { action: "deny" };
   });
   return view;

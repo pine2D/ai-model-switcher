@@ -13,12 +13,13 @@ import {
 } from "../shared/display";
 import { parseGenerationState } from "../shared/protocol";
 import type {
-  LayoutState,
   CollectSiteCommand,
-  DiagnoseSiteCommand,
   DesktopSurface,
+  DiagnoseSiteCommand,
   GenerationSiteCommand,
+  LayoutState,
   SiteCollectionResult,
+  SiteHistoryState,
   SiteResponseEnvelope,
   SiteResult,
   SiteStatus,
@@ -72,6 +73,8 @@ interface ViewManagerOptions {
   readonly initialUiState?: DesktopUiState;
   readonly selectedSites?: readonly SiteKey[];
   readonly onUiStateChange?: (state: DesktopUiState) => void;
+  // 站点视图里点到的外部链接交给用户自己的浏览器；不接就是静默无反应（见 site-view.ts）。
+  readonly openExternal?: (url: string) => void;
 }
 
 export class ViewManager {
@@ -269,6 +272,38 @@ export class ViewManager {
   pageDirect(page: number): void {
     if (!Number.isInteger(page) || page < 0 || page >= this.pageCount) return;
     this.setPage(page);
+  }
+
+  // 站内导航（点了回答里的站内链接、站点自己的跳转器）之后没有退路，此前唯一的脱身办法是
+  // 「新会话」——那会丢掉当前对话。这里给出真正的后退/前进。
+  navigateHistory(site: SiteKey, offset: -1 | 1): boolean {
+    const view = this.views.get(site);
+    if (!view || view.webContents.isDestroyed()) return false;
+    // 群发/生成进行中不许动历史，理由同 reload：会把正在写的回答连同页面一起丢掉。
+    if (!siteReloadAllowed(this.currentStatus(site).phase)) return false;
+    const history = view.webContents.navigationHistory;
+    if (offset === -1 ? !history.canGoBack() : !history.canGoForward()) return false;
+    this.runStatus.delete(site);
+    this.updatePageStatus({ site, phase: "loading" });
+    if (offset === -1) history.goBack();
+    else history.goForward();
+    return true;
+  }
+
+  canNavigateHistory(site: SiteKey): SiteHistoryState {
+    const view = this.views.get(site);
+    if (!view || view.webContents.isDestroyed()) return { back: false, forward: false };
+    if (!siteReloadAllowed(this.currentStatus(site).phase)) return { back: false, forward: false };
+    const history = view.webContents.navigationHistory;
+    return { back: history.canGoBack(), forward: history.canGoForward() };
+  }
+
+  // 一次给出全部已勾选站点的可用性：格子头部的后退按钮与 Alt+Left 共用同一份状态，
+  // 避免两处各查一次而显示不一致。
+  historyState(): Record<string, SiteHistoryState> {
+    const state: Record<string, SiteHistoryState> = {};
+    for (const site of this.selected) state[site] = this.canNavigateHistory(site);
+    return state;
   }
 
   reload(site: SiteKey, ignoreCache = false): boolean {
@@ -531,7 +566,8 @@ export class ViewManager {
       onCrash: (reason) => {
         this.updatePageStatus({ site: site.key, phase: "crashed", code: "renderer_crashed" });
         this.onRuntimeEvent({ type: "render-process-gone", site: site.key, code: reason });
-      }
+      },
+      onExternal: (target) => this.options.openExternal?.(target)
     });
     this.views.set(site.key, view);
     // 已勾选即挂载（不再只挂当前页）：replaceView 后重建的后台视图若不回到视图树，
