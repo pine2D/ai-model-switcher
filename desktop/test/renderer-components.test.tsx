@@ -865,7 +865,7 @@ test("status announcements use the site label, and command-palette page jumps an
   const app = readSource("src/renderer/index.tsx").replace(/\r\n/g, "\n");
   assert.match(app, /sitesRef\.current\.find\(\(site\) => site\.key === status\.site\)\?\.label \?\? status\.site/);
   const subscribeEffect = app.slice(app.indexOf("useEffect(() => {\n    if (!bootstrapStarted"), app.indexOf("}, [copy]);") + "}, [copy]);".length);
-  assert.match(subscribeEffect, /const offStatus = window\.polyask\.onStatus/);
+  assert.match(subscribeEffect, /const offStatus = shell\.onStatus/);
   assert.match(subscribeEffect, /\}, \[copy\]\);$/);
   const showPage = app.slice(app.indexOf("const showPage = "), app.indexOf("const nextUnfinished ="));
   assert.match(showPage, /requestedPage\.current = \{ page, inputMethod: "keyboard" \};[\s\S]*setAnnouncement\(/);

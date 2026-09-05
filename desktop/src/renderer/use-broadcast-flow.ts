@@ -15,6 +15,7 @@ import {
   runWithBroadcastLock
 } from "./broadcast-flow-state";
 import type { RunState } from "./command-bar";
+import { shell } from "./shell-api";
 
 export function useBroadcastFlow(
   announce: () => void,
@@ -50,7 +51,7 @@ export function useBroadcastFlow(
           sites: [...payload.sites],
           images: [...payload.images]
         };
-        const completed = completeRun(request, await window.polyask.broadcast(request));
+        const completed = completeRun(request, await shell.broadcast(request));
         if (!state.commit(operation, completed)) return null;
         setRun(state.run);
         remember(completed);
@@ -69,7 +70,7 @@ export function useBroadcastFlow(
     return runWithBroadcastLock(state, false, async (operation) => {
       syncState();
       try {
-        const merged = mergeRunResults(current, await window.polyask.broadcast(request));
+        const merged = mergeRunResults(current, await shell.broadcast(request));
         if (!state.commit(operation, merged)) return null;
         setRun(state.run);
         remember(merged);
@@ -82,7 +83,7 @@ export function useBroadcastFlow(
   };
 
   const cancel = (): void => {
-    cancelBroadcast(state, setRunState, window.polyask.cancel);
+    cancelBroadcast(state, setRunState, shell.cancel);
   };
   const invalidate = (): void => {
     state.invalidate();

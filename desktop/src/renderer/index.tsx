@@ -58,6 +58,7 @@ import { useBroadcastFlow } from "./use-broadcast-flow";
 import { useImageSelection } from "./use-image-selection";
 import { useSynthesisFlow } from "./use-synthesis-flow";
 import { useWorkspaceFlow } from "./use-workspace-flow";
+import { shell } from "./shell-api";
 import "./styles.css";
 import "./settings.css";
 import "./accessibility.css";
@@ -130,7 +131,7 @@ function App(): React.JSX.Element {
   const { workspace, selected } = workspaceFlow;
   const changePanelState = (value: WorkspacePanelState): void => {
     setPanelState(value);
-    window.polyask.setDrawerOpen(value !== null);
+    shell.setDrawerOpen(value !== null);
   };
   const openPanel = (tab: WorkspacePanelTab, inputMethod: "pointer" | "keyboard"): void => {
     changeSurface("sites");
@@ -173,18 +174,18 @@ function App(): React.JSX.Element {
   };
   const bootstrap = async (): Promise<void> => {
     setBootstrapPhase("loading");
-    setBootstrapPhase(await loadBootstrap(window.polyask.bootstrap, acceptBootstrap));
+    setBootstrapPhase(await loadBootstrap(shell.bootstrap, acceptBootstrap));
   };
 
   useEffect(() => {
     if (!bootstrapStarted.current) {
       bootstrapStarted.current = true;
       void bootstrap();
-      void window.polyask.setDisplayPreferences(INITIAL_DISPLAY)
+      void shell.setDisplayPreferences(INITIAL_DISPLAY)
         .then(acceptDisplayPreferences)
         .catch(() => setAnnouncement(copy.displayPreferencesFailed));
     }
-    const offStatus = window.polyask.onStatus((status) => {
+    const offStatus = shell.onStatus((status) => {
       setStatuses((current) => ({ ...current, [status.site]: status }));
       // 站点自己发起的主帧导航（点登录跳 auth、被 302 到外部页）会把阶段打回 loading。
       // 此时旧的健康结论已不成立，必须失效——否则面板会长期展示一个过期的「可提问」。
@@ -200,7 +201,7 @@ function App(): React.JSX.Element {
       const label = sitesRef.current.find((site) => site.key === status.site)?.label ?? status.site;
       setAnnouncement(`${label}: ${describeStatus(copy, status)}`);
     });
-    const offLayout = window.polyask.onLayout((next) => {
+    const offLayout = shell.onLayout((next) => {
       if (next.page !== layoutPage.current) {
         const request = requestedPage.current?.page === next.page ? requestedPage.current : null;
         setPageInputMethod(request?.inputMethod ?? "keyboard");
@@ -212,11 +213,11 @@ function App(): React.JSX.Element {
       }
       setLayout(next);
     });
-    const offDisplay = window.polyask.onDisplayPreferences(acceptDisplayPreferences);
-    const offCommand = window.polyask.onCommand((id) => executeCommand(id, commandActions.current));
-    const offWorkspace = window.polyask.onWorkspaceState(workspaceFlow.accept);
-    const offPromptLibrary = window.polyask.onPromptLibrary(setPromptLibrary);
-    const offSync = window.polyask.onSyncStatus(setSyncStatus);
+    const offDisplay = shell.onDisplayPreferences(acceptDisplayPreferences);
+    const offCommand = shell.onCommand((id) => executeCommand(id, commandActions.current));
+    const offWorkspace = shell.onWorkspaceState(workspaceFlow.accept);
+    const offPromptLibrary = shell.onPromptLibrary(setPromptLibrary);
+    const offSync = shell.onSyncStatus(setSyncStatus);
     return () => {
       offStatus();
       offLayout();
@@ -229,11 +230,11 @@ function App(): React.JSX.Element {
   }, [copy]);
 
   const composerExpanded = promptExpanded || imageTrayOpen;
-  useEffect(() => window.polyask.setComposerExpanded(composerExpanded), [composerExpanded]);
+  useEffect(() => shell.setComposerExpanded(composerExpanded), [composerExpanded]);
   useEffect(() => { saveDraft(window.localStorage, text); }, [text]);
   useEffect(() => {
     saveCompletionNotifications(window.localStorage, completionNotifications);
-    window.polyask.setCompletionNotifications(completionNotifications);
+    shell.setCompletionNotifications(completionNotifications);
   }, [completionNotifications]);
 
   const scopeLabel = useMemo(
@@ -245,7 +246,7 @@ function App(): React.JSX.Element {
     const request = ++healthRequest.current;
     setHealthChecking(true);
     try {
-      const results = await window.polyask.checkSiteHealth(keys);
+      const results = await shell.checkSiteHealth(keys);
       if (request !== healthRequest.current) return;
       setHealth((current) => ({
         ...current,
@@ -301,7 +302,7 @@ function App(): React.JSX.Element {
   };
 
   const setMode = (mode: "overview" | "focus", focused = layout.focused): void => {
-    window.polyask.setLayout(mode, focused);
+    shell.setLayout(mode, focused);
   };
 
   const changeSurface = (value: DesktopSurface): void => {
@@ -311,7 +312,7 @@ function App(): React.JSX.Element {
       if (drawerOpen) changeDrawerOpen(false);
     }
     setSurface(value);
-    window.polyask.setSurface(value);
+    shell.setSurface(value);
   };
   const runAuxiliary = async (action: () => Promise<void>): Promise<void> => {
     if (runState !== "idle") return;
@@ -327,7 +328,7 @@ function App(): React.JSX.Element {
   const collectAndCopy = async (): Promise<void> => runAuxiliary(async () => {
     try {
       const record = await archiveCapture.capture();
-      const markdown = await window.polyask.archiveMarkdown(record.id, navigator.language);
+      const markdown = await shell.archiveMarkdown(record.id, navigator.language);
       await navigator.clipboard.writeText(markdown);
       setAnnouncement(copy.archiveCollected);
     } catch {
@@ -351,7 +352,7 @@ function App(): React.JSX.Element {
       broadcast.invalidate();
       archiveCapture.invalidate();
       try {
-        const results = await window.polyask.newSession(selectedSites);
+        const results = await shell.newSession(selectedSites);
         const failed = results.filter((result) => !result.ok).length;
         setAnnouncement(failed
           ? formatCopy(copy.newSessionPartial, { ok: results.length - failed, failed })
@@ -363,7 +364,7 @@ function App(): React.JSX.Element {
   };
   const showGroupMenu = async (): Promise<void> => {
     try {
-      const id = await window.polyask.showGroupMenu();
+      const id = await shell.showGroupMenu();
       const group = workspace.groups.find((candidate) => candidate.id === id);
       if (group) workspaceFlow.changeSelection(group.sites);
     } catch {
@@ -378,7 +379,7 @@ function App(): React.JSX.Element {
     ];
     const commands = moreIds.filter((id) => !!commandActions.current[id]);
     try {
-      const command = await window.polyask.showCommandMenu(commands);
+      const command = await shell.showCommandMenu(commands);
       if (command) executeCommand(command, commandActions.current);
     } catch {
       setAnnouncement(copy.workspaceActionFailed);
@@ -394,7 +395,7 @@ function App(): React.JSX.Element {
     requestedPage.current = { page, inputMethod: "keyboard" };
     setPageInputMethod("keyboard");
     setAnnouncement(formatCopy(copy.sitePageChanged, { page: page + 1, total: layout.pageCount }));
-    window.polyask.setPage(page);
+    shell.setPage(page);
   };
   const nextUnfinished = nextSiteForStatus(
     workspace.selectedSites, layout.focused, statuses, "unfinished"
@@ -407,7 +408,7 @@ function App(): React.JSX.Element {
     if (drawerOpen) changeDrawerOpen(false);
     setMode("focus", site);
   };
-  const openLatestReleasePage = (): Promise<void> => window.polyask.openExternal(LATEST_RELEASE_URL);
+  const openLatestReleasePage = (): Promise<void> => shell.openExternal(LATEST_RELEASE_URL);
   const checkForUpdates = (): void => {
     changeSurface("sites");
     void openLatestReleasePage()
@@ -428,16 +429,16 @@ function App(): React.JSX.Element {
     ...(layout.pageCount >= 3 ? { "show-page-3": () => showPage(2) } : {}),
     // 翻页/换焦点交给主进程的 ViewManager，渲染层不重算（重算必与主进程漂开）
     ...(layout.pageCount > 1 ? {
-      "next-page": () => { changeSurface("sites"); window.polyask.stepPage(1); },
-      "previous-page": () => { changeSurface("sites"); window.polyask.stepPage(-1); }
+      "next-page": () => { changeSurface("sites"); shell.stepPage(1); },
+      "previous-page": () => { changeSurface("sites"); shell.stepPage(-1); }
     } : {}),
     ...(selected.size > 1 ? {
-      "next-site": () => { changeSurface("sites"); window.polyask.stepSite(1); },
-      "previous-site": () => { changeSurface("sites"); window.polyask.stepSite(-1); }
+      "next-site": () => { changeSurface("sites"); shell.stepSite(1); },
+      "previous-site": () => { changeSurface("sites"); shell.stepSite(-1); }
     } : {}),
     // 站内后退/前进作用于当前聚焦的站点；能不能退由主进程按真实导航历史判定。
-    ...(siteHistory[layout.focused]?.back ? { "site-back": () => { changeSurface("sites"); window.polyask.stepHistory(-1); } } : {}),
-    ...(siteHistory[layout.focused]?.forward ? { "site-forward": () => { changeSurface("sites"); window.polyask.stepHistory(1); } } : {}),
+    ...(siteHistory[layout.focused]?.back ? { "site-back": () => { changeSurface("sites"); shell.stepHistory(-1); } } : {}),
+    ...(siteHistory[layout.focused]?.forward ? { "site-forward": () => { changeSurface("sites"); shell.stepHistory(1); } } : {}),
     "focus-prompt": () => {
       changeSurface("sites");
       if (drawerOpen) changeDrawerOpen(false);
@@ -470,7 +471,7 @@ function App(): React.JSX.Element {
   // （= 刚导航过），都要重算——否则命令面板里这两条的可用状态会停在上一次。
   useEffect(() => {
     let cancelled = false;
-    void window.polyask.siteHistoryState()
+    void shell.siteHistoryState()
       .then((state) => { if (!cancelled) setSiteHistory(state); })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -479,7 +480,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     if (surface !== "commands") return;
     let cancelled = false;
-    void window.polyask.menuShortcuts()
+    void shell.menuShortcuts()
       .then((items) => { if (!cancelled) setMenuShortcuts(items); })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -543,12 +544,12 @@ function App(): React.JSX.Element {
           queueMicrotask(() => promptRef.current?.focus());
         }}
         onSaveTemplate={(input) => {
-          void window.polyask.savePromptTemplate(input)
+          void shell.savePromptTemplate(input)
             .then(setPromptLibrary)
             .catch(() => setAnnouncement(copy.promptLibrarySaveFailed));
         }}
         onDeleteTemplate={(id) => {
-          void window.polyask.deletePromptTemplate(id)
+          void shell.deletePromptTemplate(id)
             .then(setPromptLibrary)
             .catch(() => setAnnouncement(copy.promptLibraryDeleteFailed));
         }}
@@ -584,7 +585,7 @@ function App(): React.JSX.Element {
               requestedPage.current = { page, inputMethod };
               setPageInputMethod(inputMethod);
               setAnnouncement(formatCopy(copy.sitePageChanged, { page: page + 1, total: layout.pageCount }));
-              window.polyask.setPage(page);
+              shell.setPage(page);
             }}
           />
         ) : null}
@@ -641,7 +642,7 @@ function App(): React.JSX.Element {
             setMode("focus", site);
           }}
           onReloadSite={(site) => {
-            void window.polyask.reloadSite(site).then((ok) => {
+            void shell.reloadSite(site).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
               setAnnouncement(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
@@ -650,7 +651,7 @@ function App(): React.JSX.Element {
             }).catch(() => setAnnouncement(copy.workspaceActionFailed));
           }}
           onHardReloadSite={(site) => {
-            void window.polyask.reloadSite(site, true).then((ok) => {
+            void shell.reloadSite(site, true).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
               setAnnouncement(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
@@ -659,7 +660,7 @@ function App(): React.JSX.Element {
             }).catch(() => setAnnouncement(copy.workspaceActionFailed));
           }}
           onClearSiteData={(site) => {
-            void window.polyask.clearSiteData(site).then((ok) => {
+            void shell.clearSiteData(site).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
               setAnnouncement(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
@@ -677,9 +678,9 @@ function App(): React.JSX.Element {
         selected={selected}
         onToggle={workspaceFlow.toggleSite}
         onFocus={(site) => setMode("focus", site)}
-        onReload={(site) => { void window.polyask.reloadSite(site); }}
+        onReload={(site) => { void shell.reloadSite(site); }}
         history={siteHistory}
-        onBack={(site) => window.polyask.stepHistory(-1, site)}
+        onBack={(site) => shell.stepHistory(-1, site)}
       />
       {pendingNewSession && (
         <ConfirmDialog

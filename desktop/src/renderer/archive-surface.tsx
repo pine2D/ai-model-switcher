@@ -9,6 +9,7 @@ import type { PendingSynthesis, SynthesisCandidate, SynthesisSendRequest } from 
 import { ArchiveWorkspace } from "./archive-workspace";
 import { SerialActions, type ActionFailure } from "./serial-actions";
 import { SynthesisWorkspace } from "./synthesis-workspace";
+import { shell } from "./shell-api";
 
 interface ArchiveSurfaceProps {
   readonly copy: DesktopCopy;
@@ -137,7 +138,7 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
       requestEpoch.current,
       () => currentFilters.current,
       {
-        search: (filters) => window.polyask.searchArchives(filters),
+        search: (filters) => shell.searchArchives(filters),
         setLoading,
         apply: (result, preferredId) => {
           setItems(result.items);
@@ -187,11 +188,11 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
   };
   const markdown = async (): Promise<string> => {
     if (!selected) throw new Error("no_archive");
-    return window.polyask.archiveMarkdown(selected.id, props.locale);
+    return shell.archiveMarkdown(selected.id, props.locale);
   };
   const patch = (value: ArchivePatch) => { void run(async () => {
     if (!selected) return;
-    const record = await window.polyask.updateArchive(selected.id, value);
+    const record = await shell.updateArchive(selected.id, value);
     await load(record.id);
   }, props.copy.archiveSaveFailed); };
 
@@ -228,14 +229,14 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
         setStatus(props.copy.archiveExported);
       }, props.copy.archiveSaveFailed); }}
       onDelete={(id) => { void run(async () => {
-        await window.polyask.deleteArchive(id);
+        await shell.deleteArchive(id);
         await load();
       }, props.copy.archiveSaveFailed); }}
       onPatch={patch}
-      onOpenSource={(url) => { void run(() => window.polyask.openExternal(url), props.copy.archiveLoadFailed); }}
+      onOpenSource={(url) => { void run(() => shell.openExternal(url), props.copy.archiveLoadFailed); }}
       pendingSynthesis={props.pendingSynthesis}
       synthesisCandidate={props.synthesisCandidate}
-      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.synthesisSites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => describeSynthesisSendCode(props.copy, errorCode(error))); }} /> : undefined}
+      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.synthesisSites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) shell.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => describeSynthesisSendCode(props.copy, errorCode(error))); }} /> : undefined}
       onSynthesize={() => { if (selected) setSynthesisId(selected.id); }}
       onCollectSynthesis={() => { void run(props.onCollectSynthesis, props.copy.synthesisCollectFailed); }}
       onSaveSynthesis={(replaceExisting) => { void run(async () => {

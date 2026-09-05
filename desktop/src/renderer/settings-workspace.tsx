@@ -13,6 +13,7 @@ import type { RuntimeInfo } from "../shared/runtime";
 import { CloseIcon } from "./icons";
 import { SyncDiagnosticsPanel } from "./sync-diagnostics-panel";
 import { describeSync } from "./sync-status";
+import { shell } from "./shell-api";
 
 interface SettingsWorkspaceProps {
   readonly copy: DesktopCopy;
@@ -98,7 +99,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
     if (announceFailure) pendingFocus.current = true;
     setDiagnosticsBusy(true);
     try {
-      const next = await window.polyask.syncDiagnostics();
+      const next = await shell.syncDiagnostics();
       setDiagnostics(next);
       if (firstFailedSyncStage(next)) setDiagnosticsOpen(true);
     } catch {
@@ -167,11 +168,11 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
           {props.status.readOnly ? <p className="settings-notice warning">{props.copy.syncReadOnly}</p> : null}
           <div className="settings-actions">
             {!props.status.connected || props.status.state === "auth" ? (
-              <button type="button" className="primary" disabled={busy || !props.status.oauthConfigured} onClick={() => void run(() => window.polyask.connectSync())}>{props.copy.syncConnect}</button>
-            ) : <button type="button" className="primary" disabled={busy} onClick={() => void run(() => window.polyask.syncNow())}>{props.copy.syncNow}</button>}
-            {props.status.connected ? <button type="button" disabled={busy} onClick={() => void run(() => window.polyask.disconnectSync())}>{props.copy.syncDisconnect}</button> : null}
+              <button type="button" className="primary" disabled={busy || !props.status.oauthConfigured} onClick={() => void run(() => shell.connectSync())}>{props.copy.syncConnect}</button>
+            ) : <button type="button" className="primary" disabled={busy} onClick={() => void run(() => shell.syncNow())}>{props.copy.syncNow}</button>}
+            {props.status.connected ? <button type="button" disabled={busy} onClick={() => void run(() => shell.disconnectSync())}>{props.copy.syncDisconnect}</button> : null}
             {!props.status.connected && props.status.hasStoredToken ? (
-              <button type="button" title={props.copy.syncRevokeHint} disabled={busy} onClick={() => void run(() => window.polyask.disconnectSync())}>{props.copy.syncRevoke}</button>
+              <button type="button" title={props.copy.syncRevokeHint} disabled={busy} onClick={() => void run(() => shell.disconnectSync())}>{props.copy.syncRevoke}</button>
             ) : null}
           </div>
           <SyncDiagnosticsPanel
@@ -183,7 +184,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             onOpenChange={setDiagnosticsOpen}
             onCopy={() => { void copyDiagnostics(); }}
             onRefresh={() => { void refreshDiagnostics(); }}
-            onSync={() => { void run(() => window.polyask.syncNow()); }}
+            onSync={() => { void run(() => shell.syncNow()); }}
           />
           <p className="sync-privacy">{props.copy.syncPrivacy}</p>
         </section>
@@ -200,7 +201,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             onClick={() => {
               setClearingCloud(true);
               void run(async () => {
-                const next = await window.polyask.clearRemoteSync(confirmation);
+                const next = await shell.clearRemoteSync(confirmation);
                 setConfirmation("");
                 return next;
               }).finally(() => setClearingCloud(false));

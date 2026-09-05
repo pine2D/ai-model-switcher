@@ -3,6 +3,7 @@ import { useRef } from "react";
 import type { ArchiveInput, ArchiveRecord } from "../shared/archive";
 import type { SiteDefinition, SiteKey } from "../shared/contracts";
 import { runCoversSites, type BroadcastRun } from "./broadcast-run";
+import { shell } from "./shell-api";
 
 interface ArchiveCaptureInput {
   readonly sites: readonly SiteDefinition[];
@@ -30,7 +31,7 @@ export function useArchiveCapture(input: ArchiveCaptureInput): {
       : null;
     const text = matchingRun?.request.text || input.prompt.trim();
     if (!text) throw new Error("no_prompt");
-    const answers = await window.polyask.collectAnswers({
+    const answers = await shell.collectAnswers({
       sites: selectedKeys,
       runId: matchingRun?.request.runId ?? null
     });
@@ -47,7 +48,7 @@ export function useArchiveCapture(input: ArchiveCaptureInput): {
         ...(answer.code ? { code: answer.code } : {})
       }))
     };
-    return window.polyask.addArchive(entry);
+    return shell.addArchive(entry);
   };
   return { remember, invalidate, capture };
 }

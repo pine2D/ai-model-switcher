@@ -6,6 +6,7 @@ import type {
   SynthesisCandidate,
   SynthesisSendRequest
 } from "../shared/synthesis";
+import { shell } from "./shell-api";
 
 export function useSynthesisFlow(): {
   readonly pending: PendingSynthesis | null;
@@ -22,7 +23,7 @@ export function useSynthesisFlow(): {
     if (!value) setCandidate(null);
   };
   const send = async (request: SynthesisSendRequest): Promise<PendingSynthesis> => {
-    const response = await window.polyask.sendSynthesis(request);
+    const response = await shell.sendSynthesis(request);
     if (!response.result.ok || !response.pending) throw new Error(response.result.code || "synthesis_send_failed");
     setPending(response.pending);
     setCandidate(null);
@@ -30,11 +31,11 @@ export function useSynthesisFlow(): {
   };
   const collect = async (): Promise<string> => {
     if (!pending) throw new Error("synthesis_not_pending");
-    setCandidate(await window.polyask.collectSynthesis());
+    setCandidate(await shell.collectSynthesis());
     return pending.archiveId;
   };
   const save = async (replaceExisting: boolean): Promise<ArchiveRecord> => {
-    const record = await window.polyask.saveSynthesis(replaceExisting);
+    const record = await shell.saveSynthesis(replaceExisting);
     setPending(null);
     setCandidate(null);
     return record;
