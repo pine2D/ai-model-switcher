@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-// 图片限额（4 张 / PNG+JPEG / 10 MiB）在两端共九处落地：三份代码常量、两处 accept、
-// 三语文案两套、README 两句。任何一处漏改都不会让别的测试变红——扩展与 Desktop 各自
-// 校验自己那份常量，各自的测试也只断言自己那份。这里做唯一一次全落点对账。
+// 图片限额（4 张 / PNG+JPEG / 10 MiB）的全部落点：两份代码常量（content/upload.js、shared/images.ts）、
+// 一处 accept、copy.ts 三语、README 两句、docs 叙述。任何一处漏改都不会让别的测试变红——
+// 站点运行时与 Desktop 各自校验自己那份常量。这里做唯一一次全落点对账。
 //
 // 断言风格：先按锚点把片段抠出来，抠不到就 assert.fail（宁红勿假绿）——锚点漂了必须有人
 // 来看一眼，静默跳过等于这份测试白写。别把它塞进 test-multi-image.js（278 行，且那份用的是
@@ -36,7 +36,7 @@ function has(source, file, label, needle) {
     `${file} 的「${label}」应包含 ${JSON.stringify(needle)}${HINT}`);
 }
 
-// ── 1. 扩展 content/upload.js：权威校验层 ──────────────────────────────
+// ── 1. 站点运行时 content/upload.js：注入侧校验层 ──────────────────────
 {
   const file = "content/upload.js";
   const src = read(file);
@@ -44,16 +44,6 @@ function has(source, file, label, needle) {
   has(src, file, "MAX_BYTES", `MAX_BYTES = ${BYTES_EXPR}`);
   const types = capture(src, file, "TYPES", /TYPES\s*=\s*new Set\(\[([^\]]*)\]\)/)[1];
   for (const type of TYPES) has(types, file, "TYPES", `"${type}"`);
-}
-
-// ── 2. 扩展 console/images.js：选图时刻的前置校验 ─────────────────────
-{
-  const file = "console/images.js";
-  const src = read(file);
-  assert.equal(capture(src, file, "MAX_IMAGE_COUNT", /MAX_IMAGE_COUNT\s*=\s*(\d+)/)[1], String(COUNT));
-  has(src, file, "MAX_IMAGE_BYTES", `MAX_IMAGE_BYTES = ${BYTES_EXPR}`);
-  const types = capture(src, file, "IMAGE_TYPES", /IMAGE_TYPES\s*=\s*new Set\(\[([^\]]*)\]\)/)[1];
-  for (const type of TYPES) has(types, file, "IMAGE_TYPES", `"${type}"`);
 }
 
 // ── 3. Desktop src/shared/images.ts：桌面端权威校验层 ─────────────────
@@ -66,28 +56,10 @@ function has(source, file, label, needle) {
   for (const type of TYPES) has(types, file, "IMAGE_TYPES", `"${type}"`);
 }
 
-// ── 4. 两处 accept：文件选择框先过滤一道，与 TYPES 必须同源 ───────────
-for (const file of ["console/console.html", "desktop/src/renderer/image-picker.tsx"]) {
+// ── 4. accept：文件选择框先过滤一道，与 TYPES 必须同源 ─────────────────
+for (const file of ["desktop/src/renderer/image-picker.tsx"]) {
   const src = read(file);
   capture(src, file, `accept="${ACCEPT}"`, new RegExp(`accept=(?:"|\\{")${ACCEPT}(?:"|"\\})`));
-}
-
-// ── 5. i18n.js 三语：扩展侧用户可见的限额文案 ─────────────────────────
-{
-  const file = "i18n.js";
-  const src = read(file);
-  // 每条词条一行，抠出该行再逐语言查数字，避免跨条目误匹配。
-  const line = (key) => capture(src, file, key, new RegExp(`^\\s*${key}:.*$`, "m"))[0];
-  const add = line("con_imageAdd");
-  for (const needle of ["up to 4 PNG/JPEG, 10 MiB total", "最多 4 张 PNG/JPEG，总计 10 MiB", "最多 4 張 PNG/JPEG，合計 10 MiB"])
-    has(add, file, "con_imageAdd", needle);
-  const count = line("con_imageCount");
-  for (const needle of ["up to 4 images", "最多选择 4 张图片", "最多選擇 4 張圖片"])
-    has(count, file, "con_imageCount", needle);
-  const size = line("con_imageSize");
-  for (const needle of ["10 MiB or less", "10 MiB", "10 MiB"]) has(size, file, "con_imageSize", needle);
-  const type = line("con_imageType");
-  for (const needle of ["PNG/JPEG", "PNG/JPEG", "PNG/JPEG"]) has(type, file, "con_imageType", needle);
 }
 
 // ── 6. desktop/src/shared/copy.ts 三语：桌面端用户可见的限额文案 ───────

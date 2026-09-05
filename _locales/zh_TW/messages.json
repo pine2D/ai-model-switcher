@@ -1,7 +1,0 @@
-{
-  "extName": { "message": "PolyAsk · AI 眾答" },
-  "extDescription": { "message": "將同一個問題群發到多個 AI 網站，在並排視窗中比較回答，並可逐站切換深度思考和快速模式。" },
-  "cmdOpenConsole": { "message": "開啟或聚焦群發主控台" },
-  "cmdThink": { "message": "切換到深度思考" },
-  "cmdFast": { "message": "切換到快速模型" }
-}

@@ -5,7 +5,7 @@ import { SITE_CODES } from "../src/shared/protocol";
 import { readSource } from "./fixtures";
 
 // 站点码的双向覆盖：源码里产出的每个码都要有用户可见文案，文案表里的每个码也要真有产出方。
-// 扩展侧 scripts/test-err-codes.js 曾靠 console/status.js 守这条线，扩展退役后这里是唯一承接者。
+// 扩展时代由 scripts/test-err-codes.js 守这条线（见 tag archive/extension-v0.25.1），扩展删除后这里是唯一承接者。
 
 // 产出方：preload 注入的 content 运行时（按 site.ts 的 require 列表取，搬家不用改这里）+ preload 自身 + 主进程四个产码文件。
 function producerFiles(): string[] {

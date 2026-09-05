@@ -1,7 +1,0 @@
-{
-  "extName": { "message": "PolyAsk · AI 众答" },
-  "extDescription": { "message": "将一个问题群发到多个 AI 站点，在并排窗口中对比回答，并可逐站切换深度思考和快速模式。" },
-  "cmdOpenConsole": { "message": "打开或聚焦群发控制台" },
-  "cmdThink": { "message": "切换到深度思考" },
-  "cmdFast": { "message": "切换到快速模型" }
-}

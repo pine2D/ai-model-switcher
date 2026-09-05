@@ -146,7 +146,7 @@ export class SyncPull {
   }
 
   // 未来 schema 只读锁：记住每个触发只读的文件及其 schema。文件被删（差集清空）即解锁；本机 SYNC_SCHEMA
-  // 升级追平（记下的 schema 不再大于它）也解锁，不需要全量重扫。照抄扩展侧 bg/sync-model.js futureFiles 的语义。
+  // 升级追平（记下的 schema 不再大于它）也解锁，不需要全量重扫。语义照抄自扩展时代的实现（tag archive/extension-v0.25.1 的 bg/sync-model.js futureFiles）。
   private storedFutureFiles(): FutureFiles {
     const config = this.repository.config();
     const future: FutureFiles = new Map();

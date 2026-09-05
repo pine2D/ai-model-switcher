@@ -2,7 +2,7 @@
 // Desktop 侧的两份真源锚点，供 scripts/test-*.js 共用（别各自写正则，抽错了会一起假绿）：
 //   preloadRequires()  desktop/src/preload/site.ts 的 require 列表 = 站点运行时注入清单与顺序
 //   desktopSites()     desktop/src/main/sites.ts 的 { key, host, label } 九站定义
-// 扩展退役后 manifest.json / console/sites.js 不再是真源，这两处才是。
+// 扩展已删除（tag archive/extension-v0.25.1），注入清单与站点表的真源只有这两处。
 const fs = require("node:fs");
 const path = require("node:path");
 

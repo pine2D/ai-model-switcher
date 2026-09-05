@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 用法：bash scripts/prepare-release.sh <auto|patch|minor|major|X.Y.Z> [--dry-run]
 
-把 CHANGELOG.md 的「未发布」晋升为新版本，并同步 Desktop package/lock、底部比较链接（扩展退役前 manifest.json 作为跟随项一并回写）。
+把 CHANGELOG.md 的「未发布」晋升为新版本，并同步 Desktop package/lock 与底部比较链接。
 只改文件，不 commit、不打 tag；auto 按上次版本后的 Conventional Commits 取最高级别。
 EOF
 }
@@ -29,24 +29,21 @@ ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 command -v python3 >/dev/null || { echo "需要 python3" >&2; exit 1; }
 
-python3 - "manifest.json" "CHANGELOG.md" "desktop/package.json" "desktop/package-lock.json" "$SPEC" "$(date +%F)" "$DRY_RUN" <<'PY'
+python3 - "CHANGELOG.md" "desktop/package.json" "desktop/package-lock.json" "$SPEC" "$(date +%F)" "$DRY_RUN" <<'PY'
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-manifest_path, changelog_path, desktop_path, desktop_lock_path, spec, today, dry = sys.argv[1:]
+changelog_path, desktop_path, desktop_lock_path, spec, today, dry = sys.argv[1:]
 dry = dry == "1"
-manifest_file = Path(manifest_path)
 changelog_file = Path(changelog_path)
 desktop_file = Path(desktop_path)
 desktop_lock_file = Path(desktop_lock_path)
-manifest_text = manifest_file.read_text(encoding="utf-8")
-manifest = json.loads(manifest_text)
 desktop = json.loads(desktop_file.read_text(encoding="utf-8"))
 desktop_lock = json.loads(desktop_lock_file.read_text(encoding="utf-8"))
-# 版本真源是 desktop/package.json；manifest.json 与 desktop/package-lock.json 是跟随项（manifest 在扩展退役时摘掉）。
+# 版本真源是 desktop/package.json；desktop/package-lock.json 是跟随项。
 current = desktop.get("version", "")
 
 def parse(value, label):
@@ -55,8 +52,6 @@ def parse(value, label):
     return tuple(map(int, value.split(".")))
 
 current_parts = parse(current, "desktop/package.json 版本")
-if manifest.get("version") != current:
-    raise SystemExit(f"错误：manifest.json 版本 {manifest.get('version')} 与 desktop/package.json {current} 不一致")
 if desktop_lock.get("version") != current or desktop_lock.get("packages", {}).get("", {}).get("version") != current:
     raise SystemExit("错误：desktop/package-lock.json 根版本与 desktop/package.json 不一致")
 
@@ -132,25 +127,16 @@ updated_changelog = link.sub(
     updated_changelog,
     count=1,
 )
-updated_manifest, count = re.subn(
-    rf'(\"version\"\s*:\s*\"){re.escape(current)}(\")',
-    rf'\g<1>{target}\2',
-    manifest_text,
-    count=1,
-)
-if count != 1:
-    raise SystemExit("错误：manifest.json 的 version 字段不唯一")
 
 print(f"准备：v{current} → v{target}（{spec}）")
 if dry:
     print("dry-run：文件未修改")
 else:
-    manifest_file.write_text(updated_manifest, encoding="utf-8")
     changelog_file.write_text(updated_changelog, encoding="utf-8")
     desktop["version"] = target
     desktop_lock["version"] = target
     desktop_lock["packages"][""]["version"] = target
     desktop_file.write_text(json.dumps(desktop, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     desktop_lock_file.write_text(json.dumps(desktop_lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("已更新 Desktop、CHANGELOG.md 与跟随项 manifest.json；请审阅后提交。")
+    print("已更新 Desktop 与 CHANGELOG.md；请审阅后提交。")
 PY

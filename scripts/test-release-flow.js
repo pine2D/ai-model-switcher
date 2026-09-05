@@ -1,7 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
 
-const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
 const desktopPackage = JSON.parse(fs.readFileSync("desktop/package.json", "utf8"));
 const workflow = fs.readFileSync(".github/workflows/release.yml", "utf8");
 const ciWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
@@ -9,8 +8,6 @@ const portableArchive = fs.readFileSync("desktop/scripts/archive-portable.ps1", 
 const prepareRelease = fs.readFileSync("scripts/prepare-release.sh", "utf8");
 const releaseScript = fs.readFileSync("scripts/release.sh", "utf8");
 
-// TODO(Step 9)：manifest.json 随扩展一起删，这条跟随项断言与上面的 manifest 读取届时一并摘掉。
-assert.strictEqual(manifest.version, desktopPackage.version, "扩展退役前 manifest.json 必须跟随 desktop/package.json 的发布版本");
 assert.strictEqual(desktopPackage.scripts.make, "electron-forge make", "Desktop 必须提供 make 命令");
 assert.ok(desktopPackage.scripts["collect-release"], "Desktop 必须提供发布产物归档命令");
 assert.ok(desktopPackage.scripts["prepare-portable"], "Desktop 必须提供 portable 目录准备命令");

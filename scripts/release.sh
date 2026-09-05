@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 用法：bash scripts/release.sh [--build-only|--publish]
 
-  --build-only  本地/CI 共用：校验源码、打包 Chrome ZIP、提取 Release notes、生成 SHA-256（默认）
+  --build-only  本地/CI 共用：校验源码、提取 Release notes（默认）
   --publish     额外校验干净 main、origin/main 与 exact-HEAD CI，推 tag 后由 CI 构建全部 Desktop 包
 EOF
 }
@@ -21,15 +21,12 @@ esac
 
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
-# 版本真源是 desktop/package.json；manifest.json 只是扩展退役前的跟随项（见下方 ZIP 内一致性校验）。
+# 版本真源是 desktop/package.json。
 VERSION=$(node -p 'require("./desktop/package.json").version')
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "desktop/package.json 版本不是 X.Y.Z：$VERSION" >&2; exit 1; }
 TAG="v$VERSION"
-ZIP_NAME="polyask-${TAG}.zip"
 DIST_DIR="${POLYASK_DIST_DIR:-dist}"
-ZIP="$DIST_DIR/$ZIP_NAME"
 NOTES="$DIST_DIR/release-notes.md"
-CHECKSUM="$DIST_DIR/${ZIP_NAME}.sha256"
 HEAD_SHA=$(git rev-parse HEAD)
 
 if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "${GITHUB_REF_NAME:-}" != "$TAG" ]; then
@@ -70,7 +67,6 @@ preflight_publish() {
 [ "$MODE" = "build" ] || preflight_publish
 
 bash scripts/verify.sh
-bash scripts/package.sh
 mkdir -p "$DIST_DIR"
 awk -v ver="$VERSION" '/^## \[/{flag = index($0, "[" ver "]") > 0; next} /^\[[^]]+\]: /{flag=0} flag' \
   CHANGELOG.md > "$NOTES"
@@ -93,13 +89,9 @@ if [ "$MODE" = "publish" ]; then
   }
 fi
 # F191_UNRELEASED_GUARD_END
-packaged_version=$(unzip -p "$ZIP" manifest.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).version))')
-[ "$packaged_version" = "$VERSION" ] || { echo "ZIP 内 manifest 版本 $packaged_version 与 desktop/package.json 的 $VERSION 不一致（扩展退役前 manifest 是跟随项）" >&2; exit 1; }
-(cd "$DIST_DIR" && sha256sum "$ZIP_NAME" > "${ZIP_NAME}.sha256")
 
-echo "✓ $TAG 构建通过：$ZIP"
+echo "✓ $TAG 校验通过"
 echo "✓ Release notes：$NOTES"
-echo "✓ SHA-256：$CHECKSUM"
 
 if [ "$MODE" = "publish" ]; then
   if [ "$HEAD_SHA" != "$(git rev-parse HEAD)" ] || [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
@@ -114,5 +106,5 @@ if [ "$MODE" = "publish" ]; then
     echo "tag 推送失败；本地 $TAG 保留，请查明后重试 git push origin $TAG" >&2
     exit 1
   fi
-  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布 Chrome ZIP、五个 Desktop 预览包、校验和与 CHANGELOG 说明。"
+  echo "✓ 已推送 $TAG；GitHub Release workflow 将发布五个 Desktop 预览包、校验和与 CHANGELOG 说明。"
 fi
