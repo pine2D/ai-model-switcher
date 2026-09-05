@@ -175,6 +175,8 @@ function throwCallerAbort(signal: AbortSignal | null | undefined): void {
   throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
 }
 
+const RATE_LIMIT_REASONS = new Set(["userratelimitexceeded", "ratelimitexceeded", "quotaexceeded", "dailylimitexceeded"]);
+
 async function responseFailure(
   response: Response,
   callerSignal: AbortSignal | null | undefined,
@@ -195,6 +197,9 @@ async function responseFailure(
     const body = JSON.parse(text) as { error?: { errors?: { reason?: string }[]; message?: string } };
     reason = body.error?.errors?.[0]?.reason ?? body.error?.message;
   } catch { /* Non-JSON error bodies are valid. */ }
-  const code = response.status === 401 ? "unauthorized" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : response.status === 410 ? "page_token_expired" : response.status === 429 ? "rate_limited" : response.status >= 500 ? "server_error" : "request_failed";
+  // 403 按 reason 再分流：限流类是可退避重试的 rate_limited；storageQuotaExceeded（存储配额耗尽）不在其列，
+  // 继续落 forbidden——否则会对着打不满的配额无限退避空转。照抄扩展侧 bg/drive.js 已真机验证过的清单。
+  const rateLimited = response.status === 403 && RATE_LIMIT_REASONS.has(String(reason ?? "").toLowerCase());
+  const code = response.status === 401 ? "unauthorized" : rateLimited ? "rate_limited" : response.status === 403 ? "forbidden" : response.status === 404 ? "not_found" : response.status === 410 ? "page_token_expired" : response.status === 429 ? "rate_limited" : response.status >= 500 ? "server_error" : "request_failed";
   return failure(code, response.status, reason, retryAfter(response.headers.get("Retry-After")));
 }

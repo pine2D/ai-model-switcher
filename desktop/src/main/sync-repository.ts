@@ -43,6 +43,9 @@ export interface SyncConfig {
   readonly clearRunning?: boolean;
   readonly clearProgress?: number;
   readonly tokenStored?: boolean;
+  /** 触发只读锁的远端文件及其 schema；任一 schema > SYNC_SCHEMA 即锁定，本机追平后自动解锁。 */
+  readonly futureFiles?: Readonly<Record<string, number>>;
+  /** 旧版只存 fileId 列表、不知道 schema；读到时按 SYNC_SCHEMA+1 兜底，写回时改存 futureFiles。 */
   readonly futureFileIds?: readonly string[];
 }
 

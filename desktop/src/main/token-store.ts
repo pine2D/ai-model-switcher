@@ -44,6 +44,9 @@ export class TokenStore {
       return this.memoryToken;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      // Linux 钥匙环未解锁时 decrypt 抛的是「暂时读不到」，不是「令牌坏了」：复查 available()，读不到就原样返回，
+      // 绝不能把磁盘上唯一的 refresh token 删掉——否则用户解锁钥匙环后还得重走一遍 Google 授权且不知道为什么。
+      if (!await safeEncryptionAvailability(this.crypto.available)) return null;
       await this.clear();
       return null;
     }

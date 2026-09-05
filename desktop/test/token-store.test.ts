@@ -68,6 +68,27 @@ test("a decrypt failure that is not ENOENT degrades to null and clears the corru
   }
 });
 
+test("a decrypt failure while safe storage has become unavailable keeps the stored token", async () => {
+  // Linux 钥匙环未解锁：decrypt 抛错、available() 复查为 false ——「现在读不到」不是「坏了」，不能删掉唯一的 refresh token。
+  const directory = await mkdtemp(join(tmpdir(), "polyask-token-"));
+  const path = join(directory, "oauth-token.bin");
+  await writeFile(path, "locked", { mode: 0o600 });
+  let availability = 0;
+  const store = new TokenStore(path, {
+    backend: () => "gnome_libsecret",
+    available: async () => { availability += 1; return availability === 1; },
+    encrypt: async () => { throw new Error("must_not_encrypt"); },
+    decrypt: async () => { throw new Error("keyring locked"); }
+  });
+  try {
+    assert.equal(await store.load(), null);
+    assert.equal((await readFile(path)).toString(), "locked", "令牌文件必须原样保留");
+    assert.equal(availability, 2, "catch 分支必须复查一次 available()");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("an unknown safe storage backend is not treated as secure persistence", async () => {
   const store = new TokenStore("/unused/token", {
     backend: () => "unknown",

@@ -191,16 +191,24 @@ export class SyncEngine {
       const ready = this.options.repository.ready(this.now());
       if (!ready.length) return waiting;
       ready.sort((left, right) => ({ state: 0, history: 1, archive: 2 }[left.kind] - ({ state: 0, history: 1, archive: 2 }[right.kind])));
-      for (const operation of ready) {
-        try { await this.upload(operation, signal); }
-        catch (error) {
+      // state 正文是本机整份 fragment、与出箱条数无关：一轮只上传一次，然后把本轮全部 state 项逐条 complete。
+      // 出箱行本身不折叠（database.test.ts 明写 outbox 按 key 各留一行），折叠只发生在这里。
+      const stateOperations = ready.filter((operation) => operation.kind === "state");
+      const batches = [...(stateOperations.length ? [stateOperations] : []), ...ready.filter((operation) => operation.kind !== "state").map((operation) => [operation])];
+      for (const batch of batches) {
+        try {
+          await this.upload(batch[0], signal);
+          for (const folded of batch.slice(1)) this.options.repository.complete(folded.key, folded.revision);
+        } catch (error) {
           const code = (error as { code?: string }).code;
           if (code !== "rate_limited" && code !== "server_error") throw error;
-          const attempt = operation.attempt + 1;
           // Retry-After may only push the retry further out, never pull it forward.
           const hint = (error as { retryAfter?: number }).retryAfter;
-          const wait = Math.max(retryDelay(attempt), typeof hint === "number" && hint > 0 ? hint : 0);
-          this.options.repository.enqueue({ ...operation, attempt, nextAt: this.now() + wait });
+          for (const operation of batch) {
+            const attempt = operation.attempt + 1;
+            const wait = Math.max(retryDelay(attempt), typeof hint === "number" && hint > 0 ? hint : 0);
+            this.options.repository.enqueue({ ...operation, attempt, nextAt: this.now() + wait });
+          }
           waiting = true;
         }
       }

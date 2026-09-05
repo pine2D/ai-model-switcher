@@ -14,6 +14,8 @@ export interface SyncPullDrive {
 }
 
 type StateMap = Record<string, StateFragment>;
+/** fileId → 该文件声明的 schema。 */
+type FutureFiles = Map<string, number>;
 
 export class SyncPull {
   /** Corrupt files seen in this round only; the stored count is a snapshot, not a tally. */
@@ -42,7 +44,7 @@ export class SyncPull {
   private async fullScan(signal: AbortSignal): Promise<void> {
     const startToken = await this.drive.getStartToken(signal);
     const states: StateMap = {};
-    const future = new Set<string>();
+    const future: FutureFiles = new Map();
     const seen = new Set<string>();
     for (const file of await this.drive.listFiles(signal)) {
       seen.add(file.id);
@@ -59,7 +61,7 @@ export class SyncPull {
 
   private async incremental(token: string, signal: AbortSignal): Promise<void> {
     const states = this.repository.remoteStates();
-    const future = new Set<string>(this.repository.config().futureFileIds ?? []);
+    const future = this.storedFutureFiles();
     const changes = await this.drive.listChanges(token, signal);
     for (const change of changes.changes) await this.readChange(change, states, future, null, signal);
     this.applyStates(states, future);
@@ -69,7 +71,7 @@ export class SyncPull {
   private async readChange(
     change: DriveChange,
     states: StateMap,
-    future: Set<string>,
+    future: FutureFiles,
     seen: Set<string> | null,
     signal: AbortSignal
   ): Promise<void> {
@@ -90,14 +92,14 @@ export class SyncPull {
   private async readFile(
     file: DriveFile,
     states: StateMap,
-    future: Set<string>,
+    future: FutureFiles,
     seenAt: number,
     signal: AbortSignal
   ): Promise<void> {
     const props = file.appProperties ?? {};
     if (props.app !== "polyask") return;
     if (Number(props.schema) > SYNC_SCHEMA) {
-      future.add(file.id);
+      future.set(file.id, Number(props.schema));
       this.repository.deleteDriveFile(file.id);
       return;
     }
@@ -122,7 +124,7 @@ export class SyncPull {
       throw error;
     }
     if (body && typeof body === "object" && Number((body as { schema?: unknown }).schema) > SYNC_SCHEMA) {
-      future.add(file.id);
+      future.set(file.id, Number((body as { schema?: unknown }).schema));
       this.repository.deleteDriveFile(file.id);
       return;
     }
@@ -143,13 +145,24 @@ export class SyncPull {
     this.repository.putDriveFile(file, key, seenAt);
   }
 
-  private applyStates(states: StateMap, future: Set<string>): void {
+  // 未来 schema 只读锁：记住每个触发只读的文件及其 schema。文件被删（差集清空）即解锁；本机 SYNC_SCHEMA
+  // 升级追平（记下的 schema 不再大于它）也解锁，不需要全量重扫。照抄扩展侧 bg/sync-model.js futureFiles 的语义。
+  private storedFutureFiles(): FutureFiles {
+    const config = this.repository.config();
+    const future: FutureFiles = new Map();
+    for (const [fileId, schema] of Object.entries(config.futureFiles ?? {})) future.set(fileId, Number(schema) || SYNC_SCHEMA + 1);
+    for (const fileId of config.futureFileIds ?? []) if (!future.has(fileId)) future.set(fileId, SYNC_SCHEMA + 1);
+    return future;
+  }
+
+  private applyStates(states: StateMap, future: FutureFiles): void {
     const merged = this.repository.applyStateFragments(states);
-    const readOnly = future.size > 0 || merged.readOnly;
+    const readOnly = [...future.values()].some((schema) => schema > SYNC_SCHEMA) || merged.readOnly;
     this.repository.saveConfig({
       readOnly,
       errorCount: this.roundCorrupt + merged.corrupt,
-      futureFileIds: [...future]
+      futureFiles: Object.fromEntries(future),
+      futureFileIds: undefined
     });
     if (merged.changed) this.onWorkspaceChanged?.();
   }
