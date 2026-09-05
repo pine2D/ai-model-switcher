@@ -386,7 +386,8 @@ async function createWindow(): Promise<void> {
         request,
         (site, command, signal) => manager.sendCommand(site, command, signal),
         44_000,
-        (result) => manager.markStatus(statusForResult(result.site, result))
+        (result) => manager.markStatus(statusForResult(result.site, result)),
+        { confirm: (site, command, signal) => manager.confirmSubmitted(site, command, signal) }
       );
     },
     collect: (sites, runId) => collection.collect(sites, runId),

@@ -8,9 +8,10 @@ import type {
   SiteDiagnosticResponse,
   SiteGenerationResponse,
   SiteResponseEnvelope,
-  SiteResult
+  SiteResult,
+  SiteSubmittedResponse
 } from "../shared/protocol";
-import { parseGenerationState } from "../shared/protocol";
+import { normalizeSubmitted, parseGenerationState } from "../shared/protocol";
 import { normalizeDiagnosticChecks } from "../shared/site-health";
 
 type SendResponse = (response: unknown) => void;
@@ -114,10 +115,13 @@ function readGeneration(): SiteGenerationResponse {
 
 function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
   if (command.cmd === "generation") return Promise.resolve(readGeneration());
+  // wasSubmitted 的每一个失败出口都是「不支持」：超时、无适配器、异常、形状不对，一律不能被读成「确认未提交」。
+  const probing = command.cmd === "wasSubmitted";
+  const unsupported: SiteSubmittedResponse = { supported: false, ok: false };
   const listener = listeners[0];
-  if (!listener) return Promise.resolve({ ok: false, code: "adapter_unavailable" });
+  if (!listener) return Promise.resolve(probing ? unsupported : { ok: false, code: "adapter_unavailable" });
   const remaining = Math.max(0, command.deadline - Date.now());
-  if (remaining === 0) return Promise.resolve({ ok: false, code: "timeout" });
+  if (remaining === 0) return Promise.resolve(probing ? unsupported : { ok: false, code: "timeout" });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -127,12 +131,13 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
       clearTimeout(timer);
       resolve(command.cmd === "collect"
         ? normalizeCollection(value)
-        : command.cmd === "diagnose" ? normalizeDiagnostic(value) : normalizeResult(value));
+        : command.cmd === "diagnose" ? normalizeDiagnostic(value)
+          : probing ? normalizeSubmitted(value) : normalizeResult(value));
     };
     const timer = setTimeout(
       () => finish(command.cmd === "submitPrompt"
         ? { ok: false, code: "submit_unconfirmed" }
-        : { code: "not_ready" }),
+        : probing ? unsupported : { code: "not_ready" }),
       remaining
     );
     try {
@@ -140,9 +145,9 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
         ? { source: "AMS", cmd: "collectAnswer" }
         : command.cmd === "diagnose" ? { source: "AMS", cmd: "diagnose" } : command;
       const asyncResponse = listener(message, {}, finish) === true;
-      if (!asyncResponse && !settled) finish({ ok: false, code: "invalid_response" });
+      if (!asyncResponse && !settled) finish(probing ? unsupported : { ok: false, code: "invalid_response" });
     } catch {
-      finish({ ok: false, code: "error" });
+      finish(probing ? unsupported : { ok: false, code: "error" });
     }
   });
 }

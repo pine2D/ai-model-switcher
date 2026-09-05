@@ -71,7 +71,31 @@ export interface GenerationSiteCommand {
   readonly deadline: number;
 }
 
-export type SiteCommand = SubmitSiteCommand | CollectSiteCommand | DiagnoseSiteCommand | GenerationSiteCommand;
+// 只读确认：问站点「这段文字是不是已经作为末条用户消息发出去了」。只有实现了 adapter.submitted() 的站
+// （目前仅 Kimi）会答 supported:true；其余站答 supported:false，主进程对它们绝不自动重发。
+export interface WasSubmittedSiteCommand {
+  readonly source: "AMS";
+  readonly cmd: "wasSubmitted";
+  readonly text: string;
+  readonly deadline: number;
+}
+
+export type SiteCommand = SubmitSiteCommand | CollectSiteCommand | DiagnoseSiteCommand | GenerationSiteCommand | WasSubmittedSiteCommand;
+
+export interface SiteSubmittedResponse {
+  readonly supported: boolean;
+  readonly ok: boolean;
+}
+
+// fail-closed：任何非预期形状（非对象 / 缺 supported / ok 不是 boolean）都当作「站点不支持只读确认」，
+// 绝不能落到「支持且未提交」——那是唯一会触发自动重发的组合。也不能走 normalizeResult：它只保留 {ok, code}，
+// supported 会被静默丢掉，「没实现 submitted()」与「实现了且确认未提交」会塌成同一个 {ok:false}。
+export function normalizeSubmitted(value: unknown): SiteSubmittedResponse {
+  if (!value || typeof value !== "object") return { supported: false, ok: false };
+  const candidate = value as Record<string, unknown>;
+  if (candidate.supported !== true || typeof candidate.ok !== "boolean") return { supported: false, ok: false };
+  return { supported: true, ok: candidate.ok };
+}
 
 export interface SiteResult {
   readonly ok: boolean;
@@ -107,7 +131,7 @@ export interface CollectedAnswer {
   readonly code?: string;
 }
 
-export type SiteCommandResponse = SiteResult | SiteCollectionResult | SiteDiagnosticResponse | SiteGenerationResponse;
+export type SiteCommandResponse = SiteResult | SiteCollectionResult | SiteDiagnosticResponse | SiteGenerationResponse | SiteSubmittedResponse;
 
 export interface CollectionRequest {
   readonly sites: readonly SiteKey[];

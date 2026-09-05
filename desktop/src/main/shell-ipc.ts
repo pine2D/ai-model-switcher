@@ -184,7 +184,8 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
       (result) => {
         manager.markStatus(statusForResult(result.site, result));
         if (result.ok) manager.watchGeneration(request.runId, result.site);
-      }
+      },
+      { confirm: (site, command, signal) => manager.confirmSubmitted(site, command, signal) }
     );
     return results;
   });

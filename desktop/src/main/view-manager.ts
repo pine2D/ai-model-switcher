@@ -11,7 +11,7 @@ import {
   DEFAULT_DISPLAY_PREFERENCES,
   type DisplayPreferences
 } from "../shared/display";
-import { parseGenerationState } from "../shared/protocol";
+import { normalizeSubmitted, parseGenerationState } from "../shared/protocol";
 import type {
   CollectSiteCommand,
   DesktopSurface,
@@ -23,7 +23,9 @@ import type {
   SiteResponseEnvelope,
   SiteResult,
   SiteStatus,
-  SubmitSiteCommand
+  SiteSubmittedResponse,
+  SubmitSiteCommand,
+  WasSubmittedSiteCommand
 } from "../shared/protocol";
 import {
   buildSiteHealth,
@@ -433,6 +435,15 @@ export class ViewManager {
         this.replaceView(definition, view, view.webContents.getURL() || definition.url);
       }
     }).then((result) => "ok" in result ? result : { ok: false, code: "invalid_response" });
+  }
+
+  // 只读确认，配合 BroadcastCoordinator 的 submit_unconfirmed 恢复；所有失败出口都是 unsupported（fail-closed）。
+  confirmSubmitted(site: SiteKey, command: WasSubmittedSiteCommand, signal: AbortSignal): Promise<SiteSubmittedResponse> {
+    const unsupported: SiteSubmittedResponse = { supported: false, ok: false };
+    const view = this.views.get(site);
+    if (!view || view.webContents.isDestroyed()) return Promise.resolve(unsupported);
+    return this.commands.send(view.webContents, command, { signal, timeoutResult: unsupported })
+      .then((result) => normalizeSubmitted(result));
   }
 
   collect(site: SiteKey, deadline: number): Promise<SiteCollectionResult> {
