@@ -15,11 +15,12 @@ import type {
   SiteHistoryState,
   SiteStatus
 } from "../shared/protocol";
-import { describeStatus } from "../shared/status-copy";
+import { describeStatus, describeSynthesisSendCode, errorCode } from "../shared/status-copy";
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
 import type { SiteHealth } from "../shared/site-health";
 import type { PromptLibraryState } from "../shared/prompt-library";
+import type { SynthesisSendRequest } from "../shared/synthesis";
 import { ArchiveSurface } from "./archive-surface";
 import { loadBootstrap, type BootstrapPhase } from "./bootstrap-model";
 import { BootstrapStateView } from "./bootstrap-state";
@@ -495,8 +496,24 @@ function App(): React.JSX.Element {
     );
   }
 
+  // 辅助综合是唯一不经命令面板就往站点发送的路径。站点视图在归档面上处于 detach 态
+  // （未挂进视图树的 WebContentsView 视口恒 0×0，findComposer 恒 null，走满 44s 才报 timeout），
+  // 所以必须先切回 sites 再发；切走后归档面板已卸载，失败只能靠 announcement 通报。
+  const sendSynthesisFromArchive = async (request: SynthesisSendRequest): Promise<void> => {
+    broadcast.invalidate();
+    archiveCapture.invalidate();
+    changeSurface("sites");
+    try {
+      await synthesis.send(request);
+      setAnnouncement(copy.synthesisSent);
+    } catch (error) {
+      setAnnouncement(describeSynthesisSendCode(copy, errorCode(error)));
+      throw error;
+    }
+  };
+
   if (surface === "archive") {
-    return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={async (request) => { broadcast.invalidate(); archiveCapture.invalidate(); await synthesis.send(request); setAnnouncement(copy.synthesisSent); changeSurface("sites"); }} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
+    return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={sendSynthesisFromArchive} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
     return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onCheckUpdates={openLatestReleasePage} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;

@@ -26,7 +26,7 @@ function fixture() {
   return { database, archives, record, setNow: (value: number) => { now = value; } };
 }
 
-test("synthesis opens one new session, sends once, then reveals the focused native site", async () => {
+test("synthesis reveals the focused native site before opening a new session and sending once", async () => {
   const { database, archives, record } = fixture();
   const events: string[] = [];
   const requests: BroadcastPayload[] = [];
@@ -56,7 +56,7 @@ test("synthesis opens one new session, sends once, then reveals the focused nati
 
     assert.equal(response.result.ok, true);
     assert.equal(response.pending?.archiveId, record.id);
-    assert.deepEqual(events, ["navigate:gemini", "send", "history:true", "focus:gemini"]);
+    assert.deepEqual(events, ["focus:gemini", "navigate:gemini", "send", "history:true"]);
     assert.deepEqual(requests[0].sites, ["gemini"]);
     assert.deepEqual(requests[0].images, []);
     assert.match(requests[0].text, /Resolve disagreements/);

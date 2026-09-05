@@ -53,3 +53,21 @@ export function describeCollectionCode(copy: DesktopCopy, code?: string): string
     default: return copy.failed;
   }
 }
+
+export function describeSynthesisSendCode(copy: DesktopCopy, code?: string): string {
+  switch (code) {
+    case "submit_unconfirmed": return copy.submitUnconfirmed;
+    case "tier_unconfirmed": return copy.tierUnconfirmed;
+    case "composer_not_found": return copy.composerNotFound;
+    case "not_ready": return copy.siteNotReady;
+    case "timeout": return copy.timedOut;
+    case "cancelled": return copy.cancelledStatus;
+    case "inject_failed": return copy.injectFailed;
+    case "target_not_selected": return copy.synthesisTargetNotSelected;
+    default: return copy.synthesisSendFailed;
+  }
+}
+
+export function errorCode(error: unknown): string {
+  return error instanceof Error ? error.message : "";
+}

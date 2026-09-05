@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { COPY, getCopy, resolveLocale } from "../src/shared/copy";
-import { describeCollectionCode, describeStatus, visibleStatus } from "../src/shared/status-copy";
+import { describeCollectionCode, describeStatus, describeSynthesisSendCode, errorCode, visibleStatus } from "../src/shared/status-copy";
 import { describeSync } from "../src/renderer/sync-status";
 
 test("desktop shell keeps complete English, Simplified Chinese and Traditional Chinese copy", () => {
@@ -419,6 +419,8 @@ test("archive collection placeholders use localized stable codes", () => {
   assert.equal(describeCollectionCode(copy, "no_answer"), "暂无回答");
   assert.equal(describeCollectionCode(copy, "not_ready"), "站点尚未就绪");
   assert.equal(describeCollectionCode(copy, "private_reason"), "失败");
+  assert.equal(describeSynthesisSendCode(copy, errorCode(new Error("timeout"))), copy.timedOut);
+  assert.equal(describeSynthesisSendCode(copy, errorCode("not an error")), copy.synthesisSendFailed);
 });
 
 test("images-busy-while-broadcasting and answer-truncated copy are localized in all three locales", () => {

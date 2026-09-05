@@ -75,6 +75,8 @@ export class SynthesisService {
     const controller = new AbortController();
     this.activeController = controller;
     try {
+      // 先把目标站挂回视图树再导航/发送：detach 态视口 0×0，站内 findComposer 恒 null。
+      this.options.showTarget(site.key);
       const navigationCode = await this.navigate(site.key, site.url, controller.signal);
       if (navigationCode) return { result: { site: site.key, ok: false, code: navigationCode }, pending: null };
       const [result] = await this.options.send({ text, tier: request.tier, sites: [site.key], images: [] });
@@ -92,7 +94,6 @@ export class SynthesisService {
         sentAt: this.now()
       };
       this.candidate = null;
-      this.options.showTarget(site.key);
       return { result: outcome, pending: this.pending };
     } finally {
       if (this.activeController === controller) this.activeController = null;

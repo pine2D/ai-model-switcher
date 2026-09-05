@@ -4,6 +4,7 @@ import type { ArchivePatch, ArchiveRecord } from "../shared/archive";
 import type { SiteDefinition } from "../shared/contracts";
 import type { DesktopCopy } from "../shared/copy";
 import type { Tier } from "../shared/protocol";
+import { describeSynthesisSendCode, errorCode } from "../shared/status-copy";
 import type { PendingSynthesis, SynthesisCandidate, SynthesisSendRequest } from "../shared/synthesis";
 import { ArchiveWorkspace } from "./archive-workspace";
 import { SerialActions, type ActionFailure } from "./serial-actions";
@@ -234,7 +235,7 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
       onOpenSource={(url) => { void run(() => window.polyask.openExternal(url), props.copy.archiveLoadFailed); }}
       pendingSynthesis={props.pendingSynthesis}
       synthesisCandidate={props.synthesisCandidate}
-      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.synthesisSites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => synthesisSendError(props.copy, error)); }} /> : undefined}
+      detailOverride={synthesisId && selected?.id === synthesisId ? <SynthesisWorkspace copy={props.copy} record={selected} sites={props.synthesisSites} defaultTier={props.defaultTier} busy={busy} onCancel={() => { if (busy) window.polyask.cancel(); else setSynthesisId(null); }} onSend={(request) => { void run(() => props.onSendSynthesis(request), (error) => describeSynthesisSendCode(props.copy, errorCode(error))); }} /> : undefined}
       onSynthesize={() => { if (selected) setSynthesisId(selected.id); }}
       onCollectSynthesis={() => { void run(props.onCollectSynthesis, props.copy.synthesisCollectFailed); }}
       onSaveSynthesis={(replaceExisting) => { void run(async () => {
@@ -244,17 +245,4 @@ export function ArchiveSurface(props: ArchiveSurfaceProps): React.JSX.Element {
       }, props.copy.archiveSaveFailed); }}
     />
   );
-}
-
-function synthesisSendError(copy: DesktopCopy, error: unknown): string {
-  const code = error instanceof Error ? error.message : "";
-  if (code === "submit_unconfirmed") return copy.submitUnconfirmed;
-  if (code === "tier_unconfirmed") return copy.tierUnconfirmed;
-  if (code === "composer_not_found") return copy.composerNotFound;
-  if (code === "not_ready") return copy.siteNotReady;
-  if (code === "timeout") return copy.timedOut;
-  if (code === "cancelled") return copy.cancelledStatus;
-  if (code === "inject_failed") return copy.injectFailed;
-  if (code === "target_not_selected") return copy.synthesisTargetNotSelected;
-  return copy.synthesisSendFailed;
 }
