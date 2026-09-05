@@ -1,4 +1,4 @@
-// content/upload.js — 图片载荷校验、File 重建、文件输入/拖放与附件就绪确认。
+// desktop/src/site-runtime/upload.js — 图片载荷校验、File 重建、文件输入/拖放与附件就绪确认。
 (function () {
   "use strict";
   const S = window.__AMS;

@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const ROOT = path.join(__dirname, "..");
+const ROOT = path.join(__dirname, "../src/site-runtime");
 
 class FakeEvent { constructor(type, options) { this.type = type; Object.assign(this, options); } }
 class FakeFile { constructor(parts, name, options) { this.bytes = Buffer.from(parts[0]); this.name = name; this.type = options.type; } }
@@ -34,7 +34,7 @@ async function unrelatedDomMustNotConfirmUpload() {
     getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", backgroundImage: "none" }),
     Date: { now: () => now },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "content/upload.js"), "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "upload.js"), "utf8"), context);
   const ok = await S.dropFiles({ dispatchEvent: (event) => { if (event.type === "drop") shown = true; } },
     [{ name: "probe.png" }], { getBoundingClientRect: () => rect }, now + 700);
   assert.equal(ok, false, "无关 aria/title 节点不能被当作附件预览");
@@ -65,7 +65,7 @@ function loadCore() {
     setTimeout: (fn, ms) => { now += ms || 0; timerHook(); queueMicrotask(fn); return 1; }, clearTimeout() {},
     Date: { now: () => now },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "content/core.js"), "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "core.js"), "utf8"), context);
   return {
     S: context.window.__AMS, current: () => composer,
     replace: (next) => { composer = next; }, onTimer: (fn) => { timerHook = fn; },
@@ -115,7 +115,7 @@ async function geminiMustFailFastAsUnsupported() {
     window: { __AMS: S }, t: (key) => key, console,
     document: { querySelector: () => null, querySelectorAll: () => [] },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "content/adapters-intl.js"), "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "adapters-intl.js"), "utf8"), context);
   assert.equal(S.adapters["gemini.google.com"].attach, undefined);
 }
 
@@ -146,7 +146,7 @@ async function deepSeekMustWaitForSendButton() {
       querySelectorAll: (selector) => selector.includes("ds-button--primary") ? [button] : [],
     },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "content/adapters-cn.js"), "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "adapters-cn.js"), "utf8"), context);
   const result = await S.adapters["deepseek.com"].submit(null, 21000);
   assert.notEqual(result, false);
   assert.equal(clicks, 1);

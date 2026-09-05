@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-// content/adapters-intl2.js（ChatGPT）的离线回归。2026-08-31 改版把档位从「Effort 子菜单里的
+// site-runtime/adapters-intl2.js（ChatGPT）的离线回归。2026-08-31 改版把档位从「Effort 子菜单里的
 // menuitemradio 列表」换成「Power 项上的一根 5 格滑块」，键盘驱动；这里把出事那天的 DOM 做成假对象。
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+const source = (file) => fs.readFileSync(path.join(__dirname, "../src/site-runtime", file), "utf8");
 
 // 真机 2026-08-31 的档名与位次（0..4）。0–3 档的档名只出现在 describedby 的朗读文本里，
 // 不在任何可选中的节点上——这正是「不许拿标签判档、只认 X of N」的由来。
@@ -65,7 +65,7 @@ function chatGptCase(options) {
   };
   const S = fakeRuntime(document, clicked, () => { state.open = true; });
   class FakeKeyboardEvent { constructor(type, init) { this.type = type; Object.assign(this, init); } }
-  vm.runInNewContext(source("content/adapters-intl2.js"),
+  vm.runInNewContext(source("adapters-intl2.js"),
     { window: { __AMS: S }, t: (key) => key, document, console, KeyboardEvent: FakeKeyboardEvent });
   return { adapter: S.adapters["chatgpt.com"], S, clicked, keys, state, models, pill };
 }
@@ -149,7 +149,7 @@ function newTurnMustBeCollected() {
   const context = { window: { __AMS: S }, t: (key) => key, console,
     document: { querySelector: () => null,
       querySelectorAll: (s) => s === '[data-turn="assistant"]' ? turns : [] } };
-  vm.runInNewContext(source("content/adapters-intl2.js"), context);
+  vm.runInNewContext(source("adapters-intl2.js"), context);
   assert.equal(S.adapters["chatgpt.com"].answer(), markdown, "ChatGPT 新版 data-turn 回答必须可被汇总复制");
 }
 

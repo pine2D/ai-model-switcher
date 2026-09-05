@@ -40,7 +40,7 @@ const PRODUCED_WITHOUT_COPY: Record<string, string> = {};
 // 文案表里有、源码扫描却找不到字面量的码（写明理由）。
 const COPY_WITHOUT_PRODUCER: Record<string, string> = {
   no_window: "扩展端产的码；跨端同步的结果库条目可能带它（F218），Desktop 只需认得",
-  attachment_action_required: "适配器 attach() 契约码，由 content/upload.js 透传字符串返回值；当前没有适配器产出，契约保留（docs/adapters.md）"
+  attachment_action_required: "适配器 attach() 契约码，由 site-runtime/upload.js 透传字符串返回值；当前没有适配器产出，契约保留（docs/adapters.md）"
 };
 
 test("every site code produced by the runtime has explicit user-facing copy", () => {

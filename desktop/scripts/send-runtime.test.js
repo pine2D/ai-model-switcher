@@ -1,4 +1,4 @@
-// scripts/test-send-runtime.js — content/send.js（通用发送键定位）的离线回归。
+// desktop/scripts/send-runtime.test.js — site-runtime/send.js（通用发送键定位）的离线回归。
 // 从 test-intl-runtime.js 拆出：那份已贴着 300 行上限。
 "use strict";
 const assert = require("node:assert/strict");
@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const root = path.join(__dirname, "..");
+const root = path.join(__dirname, "../src/site-runtime");
 const source = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 // send.js 的三条不变量。桩只喂 sendBtn 需要的东西：候选按钮 + 输入框 + getComputedStyle。
@@ -17,7 +17,7 @@ function sendBtnCase(buttons, composerRect, ancestor) {
     document: { querySelectorAll: () => buttons },
     getComputedStyle: (node) => node.style || { overflowX: "visible", overflowY: "visible" },
   };
-  vm.runInNewContext(source("content/send.js"), context);
+  vm.runInNewContext(source("send.js"), context);
   return context.window.__AMS.sendBtn(composer);
 }
 function fakeButton(name, rect, extra) {
@@ -93,7 +93,7 @@ function sendBtnMustDegradeWhenComputedStyleThrows() {
     document: { querySelectorAll: () => [send] },
     getComputedStyle: () => { throw new Error("cross-origin"); },
   };
-  vm.runInNewContext(source("content/send.js"), context);
+  vm.runInNewContext(source("send.js"), context);
   assert.equal(context.window.__AMS.sendBtn(composer), send, "getComputedStyle 失败时必须退化而不是放弃");
 }
 
@@ -106,9 +106,9 @@ function sendBtnMustRejectCandidatesOutsideTheBand() {
 
 // 选择子字面量对账：三个子选择子少一个，九站里就有站的按钮路径静默退化成纯 Enter。
 function sendSelectorMustKeepAllThreeForms() {
-  const text = source("content/send.js");
+  const text = source("send.js");
   for (const needle of ['data-testid*="send" i', 'aria-label*="send" i', 'aria-label*="发送"']) {
-    assert.ok(text.includes(needle), `content/send.js 的发送键选择子缺少「${needle}」`);
+    assert.ok(text.includes(needle), `site-runtime/send.js 的发送键选择子缺少「${needle}」`);
   }
 }
 

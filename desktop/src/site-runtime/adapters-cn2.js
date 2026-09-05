@@ -1,4 +1,4 @@
-// content/adapters-cn2.js — 国内站点适配器·续（Kimi/元宝/智谱清言）。
+// desktop/src/site-runtime/adapters-cn2.js — 国内站点适配器·续（Kimi/元宝/智谱清言）。
 // adapters-cn.js 触及 300 行上限后按站拆分；契约与注意事项同 adapters-cn.js / CLAUDE.md。
 (function () {
   "use strict";

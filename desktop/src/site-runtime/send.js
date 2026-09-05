@@ -1,5 +1,5 @@
-// content/send.js — 通用发送键定位（几何锚点 + 语义过滤）。core.js 的 submitPromptNow 调用它。
-// 必须排在 content/core.js 之后（要读 window.__AMS），与适配器分卷先后无关。
+// desktop/src/site-runtime/send.js — 通用发送键定位（几何锚点 + 语义过滤）。core.js 的 submitPromptNow 调用它。
+// 必须排在 desktop/src/site-runtime/core.js 之后（要读 window.__AMS），与适配器分卷先后无关。
 // 两个真机坑决定了这里的写法，改之前先读：
 // ① **纵向锚点不能取编辑节点本身**：Claude 的 ProseMirror 随行数无限长高并溢出它的裁剪容器，
 //    而发送键贴的是裁剪容器的下沿。用编辑节点的 top 作锚，|send.top - composer.top| 随行数线性增长

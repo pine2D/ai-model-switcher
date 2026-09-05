@@ -1,6 +1,6 @@
-// i18n.js — 站点运行时（content/*.js）的三语词条。同步字典；语言由 Desktop 外壳在 preload 里通过
+// desktop/src/site-runtime/i18n.js — 站点运行时（同目录 *.js）的三语词条。同步字典；语言由 Desktop 外壳在 preload 里通过
 // __AMS_I18N__.setLang(resolveLocale(navigator.language)) 单向注入，本文件不再自己解析 locale、不读任何存储。
-// 词条只保留 content/*.js 里真有 t("…") 调用的键（含 core.js runMode 三元取的 cs_switchedThink/cs_switchedFast）；
+// 词条只保留同目录 *.js 里真有 t("…") 调用的键（含 core.js runMode 三元取的 cs_switchedThink/cs_switchedFast）；
 // 派生规则与「死词条必须红」的反向断言见 scripts/test-desktop-shared-runtime.js。
 const MSG = {
   cs_diagError:      { en: "Diagnostic error",                                  zh_CN: "诊断异常",                        zh_TW: "診斷錯誤" },

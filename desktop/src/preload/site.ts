@@ -40,17 +40,17 @@ Object.defineProperty(globalThis, "chrome", {
   writable: false
 });
 
-require("../../../i18n.js");
-require("../../../content/core.js");
-require("../../../content/send.js");
-require("../../../content/upload.js");
-require("../../../content/md.js");
-require("../../../content/adapters-intl.js");
-require("../../../content/adapters-intl2.js");
-require("../../../content/adapters-cn.js");
-require("../../../content/adapters-cn2.js");
-require("../../../content/generation.js");
-require("../../../content/diag.js");
+require("../site-runtime/i18n.js");
+require("../site-runtime/core.js");
+require("../site-runtime/send.js");
+require("../site-runtime/upload.js");
+require("../site-runtime/md.js");
+require("../site-runtime/adapters-intl.js");
+require("../site-runtime/adapters-intl2.js");
+require("../site-runtime/adapters-cn.js");
+require("../site-runtime/adapters-cn2.js");
+require("../site-runtime/generation.js");
+require("../site-runtime/diag.js");
 
 (globalThis as typeof globalThis & { __AMS_I18N__?: { setLang?: (lang: string) => void } })
   .__AMS_I18N__?.setLang?.(resolveLocale(navigator.language || "en"));

@@ -45,7 +45,7 @@ const SOURCES = [
   { key: "openai", name: "OpenAI / ChatGPT", url: "https://openai.com/news/rss.xml", kind: "rss",
     filter: /gpt|chatgpt|model|\bo[0-9]\b|release|introducing/i,
     highSignal: /\b(gpt[-\s]?[0-9][\w.\-]*|o[0-9]+(?:-\w+)?|new model|model release|now available in chatgpt|rolling out.*model)\b/i,
-    adapter: "content/adapters-intl2.js" },
+    adapter: "desktop/src/site-runtime/adapters-intl2.js" },
   // claude 源 2026-08 纠偏：原 platform.claude.com 是开发者 Console/API/SDK changelog，窗口内 5 条
   // issue 全是 API 基建噪音、零命中消费端变化；换成 support.claude.com 的消费端 release notes（Intercom
   // 文章页，服务端渲染，实测可直接 GET）。日期是「月份大标题（H2）+ 日期小标题（H3）」两级结构，
@@ -54,25 +54,25 @@ const SOURCES = [
   { key: "claude", name: "Anthropic / Claude（消费端）", url: "https://support.claude.com/en/articles/12138966-release-notes", kind: "datedSections",
     filter: /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},\s*20\d\d$/i,
     groupHeaderRe: /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+20\d\d$/i,
-    adapter: "content/adapters-intl.js" },
+    adapter: "desktop/src/site-runtime/adapters-intl.js" },
   { key: "gemini", name: "Google / Gemini", url: "https://gemini.google/release-notes/", kind: "datedSections",
-    filter: /^20\d\d[.\-\/]\d{1,2}[.\-\/]\d{1,2}$/, adapter: "content/adapters-intl.js" },
+    filter: /^20\d\d[.\-\/]\d{1,2}[.\-\/]\d{1,2}$/, adapter: "desktop/src/site-runtime/adapters-intl.js" },
   // gemini 官方 release notes（上面那条）2026-08 被实证漏记 3.7 Flash 换档这类选择器级变化——真正
   // 发模型公告的是 blog.google 的 Gemini Models 专栏，且该栏目自带 /rss/（各 blog.google 栏目通用
   // 惯例，实测可直接 GET）。key 用 "gemini-blog" 而非复用 "gemini"，两源独立去重、互不影响。
   { key: "gemini-blog", name: "Google / Gemini 官方博客", url: "https://blog.google/innovation-and-ai/models-and-research/gemini-models/rss/", kind: "rss",
-    filter: /gemini|flash|pro|model/i, highSignal: /\bintroducing\b/i, adapter: "content/adapters-intl.js" },
+    filter: /gemini|flash|pro|model/i, highSignal: /\bintroducing\b/i, adapter: "desktop/src/site-runtime/adapters-intl.js" },
   { key: "deepseek", name: "DeepSeek", url: "https://api-docs.deepseek.com/updates/", kind: "datedSections",
-    filter: /20\d\d-\d{1,2}-\d{1,2}/, adapter: "content/adapters-cn.js" },
+    filter: /20\d\d-\d{1,2}-\d{1,2}/, adapter: "desktop/src/site-runtime/adapters-cn.js" },
   { key: "zhipu", name: "智谱 / chatglm", url: "https://docs.bigmodel.cn/cn/update/new-releases", kind: "zhipu",
-    filter: /^20\d\d-\d{1,2}-\d{1,2}/, adapter: "content/adapters-cn2.js" },
+    filter: /^20\d\d-\d{1,2}-\d{1,2}/, adapter: "desktop/src/site-runtime/adapters-cn2.js" },
   // kimi.com 本身没有面向 C 端网页的官方 changelog（2026-08 复核维持原判），但帮助中心这篇「模型与
   // 模式怎么选」是当前 UI 状态的一手快照（服务端渲染，实测可直接 GET）：K2.6/K3/K3 集群三档模型、
   // 各档思考强度选项都直接写在正文表格里。kind:"snapshot"（见 release-feed.js parseSnapshot）把正文
   // 摘要当唯一 entry，摘要变了就等于页面变了，比等 changelog 更贴合 PolyAsk 真正关心的「选择器现在
   // 长什么样」而不是「发布了什么」。anchor 锚定表头关键词，跳过开头重复的面包屑/标题。
   { key: "kimi", name: "Kimi 帮助中心·模型与模式怎么选", url: "https://www.kimi.com/zh-cn/help/others/model-mode-selection", kind: "snapshot",
-    filter: /./, anchor: /模型\s*思考强度|三档模型/, adapter: "content/adapters-cn2.js" },
+    filter: /./, anchor: /模型\s*思考强度|三档模型/, adapter: "desktop/src/site-runtime/adapters-cn2.js" },
   // 阿里云百炼「模型上线表」是跨厂商 API 上线信号（Qwen/GLM/Kimi 等经百炼平台上线的型号，不是任何
   // 单一网页产品的 changelog），表格服务端渲染、按日期倒序，实测可直接 GET。用 NEVER_HIGH_SIGNAL 让
   // 整源强制标 /low：API 侧上线不代表对应网页选择器已同步，lowSignalNote 把这句话钉进 issue 正文，
@@ -81,7 +81,7 @@ const SOURCES = [
   { key: "bailian", name: "阿里云百炼·模型上线表（跨厂商）", url: "https://help.aliyun.com/en/model-studio/newly-released-models", kind: "bailian",
     filter: /^20\d\d-\d{1,2}-\d{1,2}$/, highSignal: NEVER_HIGH_SIGNAL,
     lowSignalNote: "低信号条目：阿里云百炼是跨厂商 API 上线表（Qwen/GLM/Kimi 等厂商模型经百炼平台上线），只代表 API 侧已可调用，不代表对应网页产品（qianwen.com / chatglm.cn / kimi.com 等）的模型选择器已同步这个模型——需要按条目里的厂商真机核对具体站点才能确认 UI 是否变化。",
-    adapter: "按行内 Model type 对应厂商站点定，例如 Qwen 系→content/adapters-cn.js，GLM/Kimi 系→content/adapters-cn2.js" },
+    adapter: "按行内 Model type 对应厂商站点定，例如 Qwen 系→desktop/src/site-runtime/adapters-cn.js，GLM/Kimi 系→desktop/src/site-runtime/adapters-cn2.js" },
 ];
 
 async function fetchText(url, retry = 1) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// content/adapters-cn2.js 的档位回归（智谱 / 元宝 / Kimi）。2026-08-31 真机改版：
+// site-runtime/adapters-cn2.js 的档位回归（智谱 / 元宝 / Kimi）。2026-08-31 真机改版：
 // 智谱弹层多出「模型段 + 极致档」、元宝多出 Models 子菜单、Kimi 的 escMenus 收不掉根菜单。
 // scripts/test-site-send-runtime.js 只管这一卷的发送/附件语义，档位放这里，两边不重叠。
 const assert = require("node:assert/strict");
@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = () => fs.readFileSync(path.join(__dirname, "..", "content/adapters-cn2.js"), "utf8");
+const source = () => fs.readFileSync(path.join(__dirname, "../src/site-runtime/adapters-cn2.js"), "utf8");
 
 function runtime(document, extra) {
   const S = {

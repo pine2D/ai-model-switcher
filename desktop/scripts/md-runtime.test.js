@@ -5,11 +5,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const ROOT = path.join(__dirname, "..");
+const ROOT = path.join(__dirname, "../src/site-runtime");
 
 function read(file) { return fs.readFileSync(path.join(ROOT, file), "utf8"); }
 
-// ---- 极简 DOM 桩：只覆盖 content/md.js 遍历用到的 API，仓库无 jsdom/linkedom ----
+// ---- 极简 DOM 桩：只覆盖 site-runtime/md.js 遍历用到的 API，仓库无 jsdom/linkedom ----
 class TextNode {
   constructor(value) { this.nodeType = 3; this.nodeValue = value; this.parentNode = null; }
   get textContent() { return this.nodeValue; }
@@ -53,7 +53,7 @@ function md(root) {
     window: { __AMS: {} }, document, getComputedStyle, NodeFilter: { SHOW_TEXT: 4 },
     location: { href: "https://chatgpt.com/c/1" }, URL, console,
   });
-  vm.runInContext(read("content/md.js"), context);
+  vm.runInContext(read("md.js"), context);
   return context.window.__AMS.toMarkdown(root);
 }
 
@@ -101,7 +101,7 @@ function encodesParensInLinkTarget() {
   assert.equal(md(root), "来源 [src](https://s.ex/q?s=f%28x%29&p=1%29)");
 }
 
-// F083 回归：content/upload.js 的错误 alert 指纹必须独立于 token()（后者对普通提示 DIV 塌缩成
+// F083 回归：site-runtime/upload.js 的错误 alert 指纹必须独立于 token()（后者对普通提示 DIV 塌缩成
 // 同一个 ""），否则上传后新出现的、文案不同的错误会被误判成"已见过"而漏检，一路等到 deadline。
 async function distinctUploadErrorsFailFastNotAtDeadline() {
   let now = 0, revealed = false;
@@ -123,7 +123,7 @@ async function distinctUploadErrorsFailFastNotAtDeadline() {
     atob: (value) => Buffer.from(value, "base64").toString("binary"),
   });
   context.window.__AMS.sleep = async (ms) => { now += Math.max(1, ms || 1); };
-  vm.runInContext(read("content/upload.js"), context);
+  vm.runInContext(read("upload.js"), context);
   const S = context.window.__AMS;
   const composer = { getBoundingClientRect: () => ({ left: 100, right: 500, top: 500, bottom: 540, width: 400, height: 40 }) };
   const input = { files: [], dispatchEvent: () => { revealed = true; } };

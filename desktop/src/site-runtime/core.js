@@ -1,5 +1,5 @@
-// content/core.js — 核心：helpers + 注册表 + runMode + 快捷键消息入口。
-// 适配器由 content/adapters.js 注册到 window.__AMS.adapters（manifest js 顺序保证其后加载）。
+// desktop/src/site-runtime/core.js — 核心：helpers + 注册表 + runMode + 快捷键消息入口。
+// 适配器由 desktop/src/site-runtime/adapters-*.js 注册到 window.__AMS.adapters（preload 的 require 顺序保证其后加载）。
 (function () {
   "use strict";
 
@@ -134,7 +134,7 @@
       } catch (e) { return { ok: false, code: "error", reason: String((e && e.message) || e) }; }
     }
     // 通用提交优先原生发送按钮，无可用按钮再发 Enter；所有路径都用 confirmSubmitted 防假成功。
-    // 发送键定位在 content/send.js（纵向锚点取裁剪祖先、横向择近、跳过不可用项，两个真机坑记在那里）；
+    // 发送键定位在 desktop/src/site-runtime/send.js（纵向锚点取裁剪祖先、横向择近、跳过不可用项，两个真机坑记在那里）；
     // 该文件缺席时退化成纯 Enter 兜底。expired() 是尾段闸门：尾段最坏在绝对截止线后 6s 才走完，而那时
     // 后台早已结算成 submit_unconfirmed——「告知未确认之后消息又真的发出去」最坏。只挡动作，不缩短确认
     // 窗口（缩窗口不阻止迟到发送，只会把「贴线点了、确认到了」的成功例误转成失败）。

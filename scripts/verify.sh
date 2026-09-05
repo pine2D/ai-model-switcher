@@ -100,23 +100,7 @@ node scripts/test-oauth-secret-hygiene.js
 
 echo "[test] 站点登记与跨端契约"
 node scripts/test-site-selection.js
-
-echo "[test] 站点模型适配"
-node scripts/test-desktop-shared-runtime.js
-node scripts/test-intl-runtime.js
-node scripts/test-send-runtime.js
-node scripts/test-intl2-runtime.js
-node scripts/test-claude-model.js
-node scripts/test-qwen-adapter.js
-node scripts/test-site-send-runtime.js
-node scripts/test-cn-tier-runtime.js
-node scripts/test-diag-runtime.js
-node scripts/test-generation-runtime.js
-
-echo "[test] 图片载荷与 Markdown"
 node scripts/test-image-limits.js
-node scripts/test-image-runtime.js
-node scripts/test-md-runtime.js
 
 git diff --check
 echo "[verify] 全部通过"

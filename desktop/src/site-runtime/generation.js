@@ -1,4 +1,4 @@
-// content/generation.js — Desktop 只读回答状态探测；保守误漏，不以旧回答冒充本轮完成。
+// desktop/src/site-runtime/generation.js — Desktop 只读回答状态探测；保守误漏，不以旧回答冒充本轮完成。
 (function () {
   "use strict";
 

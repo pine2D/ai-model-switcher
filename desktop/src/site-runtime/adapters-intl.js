@@ -1,4 +1,4 @@
-// content/adapters-intl.js — 国际站点适配器（Claude/Gemini；ChatGPT 在 adapters-intl2.js）
+// desktop/src/site-runtime/adapters-intl.js — 国际站点适配器（Claude/Gemini；ChatGPT 在 adapters-intl2.js）
 // 触及 300 行上限后按站分卷，契约与注意事项同 CLAUDE.md / docs/adapters.md。
 // think = 最强思考(最强模型/最高思考档/思考开)；fast = 均衡快速(快模型/思考关)。
 // 切换前对有状态控件先读状态、仅在需要时点击(幂等)；单站失败由 runMode 兜底为 toast。

@@ -16,7 +16,7 @@ const S = {
   sleep: async () => {},
   escMenus() {},
 };
-const source = fs.readFileSync(path.join(__dirname, "../content/adapters-intl.js"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "../src/site-runtime/adapters-intl.js"), "utf8");
 const context = {
   window: { __AMS: S },
   document: {

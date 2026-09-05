@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = () => fs.readFileSync("content/generation.js", "utf8");
+const source = () => fs.readFileSync(require("node:path").join(__dirname, "../src/site-runtime/generation.js"), "utf8");
 const rect = (top = 500) => ({ width: 40, height: 40, top, bottom: top + 40, left: 600, right: 640 });
 
 // Each control carries the selector fragments it answers to, so a stop button
@@ -54,7 +54,7 @@ test("generation probe reports only a visible nearby stop control as generating"
   // 均已真机核实）；stop-button 是 ChatGPT 的形状，Claude 上零命中。只剩 aria-label 兜底时，
   // 界面一切成非英文就会把「生成中」误判成已完成。
   const selectors = require("node:fs").readFileSync(
-    require("node:path").join(__dirname, "..", "content/generation.js"), "utf8");
+    require("node:path").join(__dirname, "../src/site-runtime/generation.js"), "utf8");
   const claudeLine = selectors.split("\n").find((line) => line.includes('"claude.ai":'));
   assert.ok(claudeLine && claudeLine.includes('[data-testid="chat-input-stop"]'),
     "claude.ai 的停止键选择子必须含 chat-input-stop");

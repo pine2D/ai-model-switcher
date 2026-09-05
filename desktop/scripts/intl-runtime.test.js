@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+const source = (file) => fs.readFileSync(path.join(__dirname, "../src/site-runtime", file), "utf8");
 
 function twentyPixelComposerMustBeFound() {
   const composer = { // 19.98 而非 20：页面缩放会让标称 20px 的单行编辑器算出小数高度
@@ -26,7 +26,7 @@ function twentyPixelComposerMustBeFound() {
     Event: FakeEvent, InputEvent: FakeEvent, KeyboardEvent: FakeEvent, MouseEvent: FakeEvent, CustomEvent: FakeEvent,
     matchMedia: () => ({ matches: true }), setTimeout, clearTimeout, Date,
   };
-  vm.runInNewContext(source("content/core.js"), context);
+  vm.runInNewContext(source("core.js"), context);
   assert.equal(context.window.__AMS.findComposer(), composer,
     "Claude 新版 20px 单行编辑器必须被识别");
 }
@@ -50,7 +50,7 @@ function claudeModelInMoreMenuMustBeSelected() {
     },
   };
   const S = fakeRuntime(document, clicked, (el) => { if (el === more) expanded = true; });
-  vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
+  vm.runInNewContext(source("adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
   return S.adapters["claude.ai"]._selectModel(/fable\s*5/i).then(() => {
     assert.ok(clicked.includes(fable), "Claude 深度思考模型必须能从 More models 子菜单选中");
     assert.equal(S.escCount, 1, "选中模型的成功路径必须 escMenus 收尾");
@@ -98,7 +98,7 @@ function geminiCase(build) {
   // 真机 2026-08-31：Escape / backdrop 都关不掉 Gemini 的 mode picker（escMenus 故意不改 open），
   // 只有再点一次触发器才收 —— 假对象照抄这个语义，否则 _close 的兜底分支永远测不到。
   S.clickEl = (el) => { clicked.push(el); if (el === button) open = false; return true; };
-  vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
+  vm.runInNewContext(source("adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
   return { adapter: S.adapters["gemini.google.com"], S, clicked, items, state, button, isOpen: () => open };
 }
 
@@ -182,7 +182,7 @@ function claudeEffortCase(options) {
   };
   const S = fakeRuntime(document, clicked, (el) => { if (el === trigger) expanded = true; });
   S.clickEl = (el) => { clicked.push(el); state.label = "Model: Fable 5 · " + (el.textContent || ""); return true; };
-  vm.runInNewContext(source("content/adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
+  vm.runInNewContext(source("adapters-intl.js"), { window: { __AMS: S }, t: (key) => key, document, console });
   return { adapter: S.adapters["claude.ai"], S, clicked, tiers, models, state };
 }
 
@@ -262,8 +262,8 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
     Event: FakeEvent, InputEvent: FakeEvent, KeyboardEvent: FakeEvent, MouseEvent: FakeEvent, CustomEvent: FakeEvent,
     matchMedia: () => ({ matches: true }), setTimeout, clearTimeout, Date, getSelection: () => { throw new Error("no selection"); },
   };
-  vm.runInNewContext(source("content/core.js"), context);
-  vm.runInNewContext(source("content/send.js"), context);
+  vm.runInNewContext(source("core.js"), context);
+  vm.runInNewContext(source("send.js"), context);
   const result = await context.window.__AMS.submitPrompt("hello", 0);
   assert.equal(result.ok, true, "发送键点不动时必须退回 Enter 并确认提交成功");
   assert.ok(clicks >= 1, "回退前仍应先尝试原生发送键");

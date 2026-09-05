@@ -1,4 +1,4 @@
-// content/diag.js — 巡检通用检查：给九站 diagnose() 统一前置只读常驻锚点（输入框/发送键）。
+// desktop/src/site-runtime/diag.js — 巡检通用检查：给九站 diagnose() 统一前置只读常驻锚点（输入框/发送键）。
 // 必须在 adapters-*.js 之后注入（注册表已填充才能逐站包装）；新增站点/新分卷自动获得通用检查。
 // 契约同 adapter.diagnose（CLAUDE.md / docs/adapters.md）：只读同步、不得开菜单、只列常驻控件。
 (function () {

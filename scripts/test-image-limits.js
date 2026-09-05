@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// 图片限额（4 张 / PNG+JPEG / 10 MiB）的全部落点：两份代码常量（content/upload.js、shared/images.ts）、
+// 图片限额（4 张 / PNG+JPEG / 10 MiB）的全部落点：两份代码常量（site-runtime/upload.js、shared/images.ts）、
 // 一处 accept、copy.ts 三语、README 两句、docs 叙述。任何一处漏改都不会让别的测试变红——
 // 站点运行时与 Desktop 各自校验自己那份常量。这里做唯一一次全落点对账。
 //
@@ -36,9 +36,9 @@ function has(source, file, label, needle) {
     `${file} 的「${label}」应包含 ${JSON.stringify(needle)}${HINT}`);
 }
 
-// ── 1. 站点运行时 content/upload.js：注入侧校验层 ──────────────────────
+// ── 1. 站点运行时 upload.js：注入侧校验层 ──────────────────────
 {
-  const file = "content/upload.js";
+  const file = "desktop/src/site-runtime/upload.js";
   const src = read(file);
   assert.equal(capture(src, file, "MAX_COUNT", /MAX_COUNT\s*=\s*(\d+)/)[1], String(COUNT));
   has(src, file, "MAX_BYTES", `MAX_BYTES = ${BYTES_EXPR}`);

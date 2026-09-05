@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const path = require("node:path");
 const vm = require("node:vm");
 
 const trigger = { textContent: "Qwen3.7-千问", children: [], getAttribute: () => null };
@@ -13,12 +14,12 @@ const document = { querySelectorAll(selector) {
 } };
 const helpers = { waitFor() {}, findByText() {}, openMenu() {}, clickEl() {}, sleep: () => Promise.resolve(), escMenus() {} };
 const context = { document, t: (key) => key, window: { __AMS: { ...helpers, adapters: {} } }, console };
-vm.runInNewContext(fs.readFileSync("content/adapters-cn.js", "utf8"), context);
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/site-runtime/adapters-cn.js"), "utf8"), context);
 
 const qwen = context.window.__AMS.adapters["qianwen.com"];
 // 档位正则必须只在源码里出现一次（执行端与识别端共用常量），两处各写一遍就是漂开的起点
 {
-  const src = fs.readFileSync("content/adapters-cn.js", "utf8");
+  const src = fs.readFileSync(path.join(__dirname, "../src/site-runtime/adapters-cn.js"), "utf8");
   for (const literal of ["Qwen3\\.7-千问(?!-Max)", "Qwen3\\.8-Max(?!-Preview)"]) {
     assert.equal(src.split(literal).length - 1, 1, `千问档位正则「${literal}」应只在 _THINK/_FAST 常量里出现一次`);
   }
@@ -70,7 +71,7 @@ assert.equal(qwen.state(), null, "Preview 不得冒充正式版档位");
         sleep: () => Promise.resolve(), escMenus() { escCount++; }, adapters: {},
       } },
     };
-    vm.runInNewContext(fs.readFileSync("content/adapters-cn.js", "utf8"), ctx);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/site-runtime/adapters-cn.js"), "utf8"), ctx);
     return { qwen: ctx.window.__AMS.adapters["qianwen.com"], trigger, escCount: () => escCount };
   }
   const reThink = /Qwen3\.7-千问(?!-Max)/i;

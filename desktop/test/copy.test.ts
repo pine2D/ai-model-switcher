@@ -310,19 +310,11 @@ test("desktop shell resolves exact supported locale and falls back to English", 
   assert.equal(getCopy("fr-FR").send, "Send");
 });
 
-test("resolveLocale is the desktop-side authority i18n.js's _resolveAuto must match (F223)", () => {
-  // i18n.js's `_resolveAuto` (used by every content-script injection via preload/site.ts,
-  // which always passes amsLang "auto") checks `.includes()` substrings; resolveLocale
-  // here checks `.startsWith()` prefixes. Both already agree on zh, zh-CN, zh-TW, zh-HK,
-  // zh-Hans-CN, zh-Hant-TW, zh-Hant-HK and en-US, but currently diverge on these four —
-  // i18n.js resolves zh-MO to zh_CN (no "mo" branch), zh-SG and zh-CHS to zh_CN (bare
-  // "zh" prefix falls through to Simplified with no locale-specific branch), and
-  // zh-yue-HK to zh_TW (its `.includes("hk")` check fires on a non-"zh-hk"-prefixed
-  // string) — while the renderer/main shell (which always resolves via getCopy/
-  // resolveLocale) resolves them as shown below. A viewer on one of these locales sees
-  // mismatched UI language between the site pane and the surrounding shell. This test
-  // locks resolveLocale's side of that contract; the i18n.js-side fix and a shared
-  // locale table belong to whichever agent owns i18n.js — see gap-verdicts F223.
+test("resolveLocale is the single locale authority for the shell and the site runtime (F223)", () => {
+  // shared/locale.ts is the only locale resolver: the shell reads it through getCopy, and
+  // preload/site.ts injects the same result into site-runtime/i18n.js via setLang, so the
+  // site pane and the surrounding shell can no longer disagree. This table locks the
+  // prefix semantics (no `.includes()` substring matching, no fallback to Simplified).
   assert.equal(resolveLocale("zh-MO"), "zhTW");
   assert.equal(resolveLocale("zh-SG"), "en");
   assert.equal(resolveLocale("zh-yue-HK"), "en");

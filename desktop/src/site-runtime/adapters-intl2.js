@@ -1,6 +1,6 @@
-// content/adapters-intl2.js — 国际站点适配器·续（ChatGPT）。
+// desktop/src/site-runtime/adapters-intl2.js — 国际站点适配器·续（ChatGPT）。
 // adapters-intl.js 触及 300 行上限后按站分卷；契约与注意事项同 adapters-intl.js / CLAUDE.md。
-// manifest.json 里必须排在 adapters-intl.js 之后、content/diag.js 之前（diag 按已填充的注册表
+// desktop/src/preload/site.ts 的 require 列表里必须排在 adapters-intl.js 之后、diag.js 之前（diag 按已填充的注册表
 // 统一包装 diagnose，排在它后面的分卷拿不到通用检查且静默缺席）。
 (function () {
   "use strict";

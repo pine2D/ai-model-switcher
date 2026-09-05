@@ -1,4 +1,4 @@
-// content/adapters-cn.js — 国内站点适配器（DeepSeek/豆包/千问；Kimi/元宝/智谱在 adapters-cn2.js）
+// desktop/src/site-runtime/adapters-cn.js — 国内站点适配器（DeepSeek/豆包/千问；Kimi/元宝/智谱在 adapters-cn2.js）
 // think = 最强思考(最强模型/最高思考档/思考开)；fast = 均衡快速(快模型/思考关)。
 // 切换前对有状态控件先读状态、仅在需要时点击(幂等)；单站失败由 runMode 兜底为 toast。
 (function () {
@@ -56,7 +56,7 @@
       },
       // 发送键无 send/发送 标签（真机审计 2026-07：composer 右下 primary 圆钮）；图片处理期间仅加
       // ds-button--disabled，不设 aria-disabled，需等按钮真正可用后再原生点击。
-      // sendSel 供 content/diag.js 做只读存在性巡检，与下方 submit 的选择子同步维护。
+      // sendSel 供 desktop/src/site-runtime/diag.js 做只读存在性巡检，与下方 submit 的选择子同步维护。
       sendSel: '[role="button"].ds-button--primary.ds-button--circle',
       // 已知限制（真机证实，DeepSeek/豆包/Kimi 同）：流式生成期间站点把同一按钮复用为「停止」（class/id 不变
       // 仅换图标），流式中二次群发会点成停止、截断上一条回答——confirmSubmitted 会诚实报失败，retry 可恢复；

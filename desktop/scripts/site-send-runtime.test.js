@@ -2,10 +2,11 @@
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = (file) => fs.readFileSync(file, "utf8");
+const source = (file) => fs.readFileSync(path.join(__dirname, "../src/site-runtime", file), "utf8");
 function helpers(document, extra = {}) {
   const sleep = () => Promise.resolve();
   const waitFor = async (fn) => fn() || null;
@@ -40,7 +41,7 @@ function coreWithTextarea(rollback) {
     getSelection: () => ({ removeAllRanges() {}, addRange() {} }), matchMedia: () => ({ matches: true }),
     setTimeout: (fn, ms) => { now += ms || 0; queueMicrotask(fn); return 1; }, clearTimeout() {}, Date: { now: () => now },
   };
-  vm.runInNewContext(source("content/core.js"), context);
+  vm.runInNewContext(source("core.js"), context);
   return { submit: (text) => context.window.__AMS.submitPrompt(text, 0, null), composer };
 }
 
@@ -68,7 +69,7 @@ test("DeepSeek 图片档切到 Vision，且无正文时不返回用户消息", a
     return [];
   } };
   const context = helpers(document);
-  vm.runInNewContext(source("content/adapters-cn.js"), context);
+  vm.runInNewContext(source("adapters-cn.js"), context);
   const deepseek = context.window.__AMS.adapters["deepseek.com"];
   await deepseek.fastImage();
   assert.equal(selected, "Vision");
@@ -80,7 +81,7 @@ test("DeepSeek DeepThink 开关点击被吞时抛错，不静默成功", async (
   const toggle = { textContent: "DeepThink", getAttribute: (n) => (n === "aria-pressed" ? String(pressed) : null) };
   const document = { querySelectorAll: (s) => (s === ".ds-toggle-button" ? [toggle] : []) };
   const context = helpers(document, { clickEl() {} }); // 站点吞掉点击，aria-pressed 不变
-  vm.runInNewContext(source("content/adapters-cn.js"), context);
+  vm.runInNewContext(source("adapters-cn.js"), context);
   await assert.rejects(() => context.window.__AMS.adapters["deepseek.com"]._setDeepThink(true), /DeepThink 未生效/);
 });
 
@@ -98,7 +99,7 @@ test("豆包识别带品牌和版本前缀的模式文案", async () => {
     return [];
   } };
   const context = helpers(document, { openMenu() { menuOpen = true; } });
-  vm.runInNewContext(source("content/adapters-cn.js"), context);
+  vm.runInNewContext(source("adapters-cn.js"), context);
   const doubao = context.window.__AMS.adapters["doubao.com"];
   assert.equal(doubao.state(), "fast");
   await doubao.think();
@@ -124,7 +125,7 @@ test("Kimi 走工具菜单取 file input 时收尾 escMenus 且等待夹取 dead
     setInputFiles(found, files, el, deadline) { attached = { found, files, el, deadline }; return Promise.resolve(true); },
     dropFiles() { return Promise.resolve(false); },
   });
-  vm.runInNewContext(source("content/adapters-cn2.js"), context);
+  vm.runInNewContext(source("adapters-cn2.js"), context);
   const kimi = context.window.__AMS.adapters["kimi.com"], files = [{ name: "probe.png" }], composer = {};
   const deadline = Date.now() + 900; // < 1500，等待必须被夹到剩余预算
   assert.equal(await kimi.attach(files, composer, deadline), true);
@@ -144,7 +145,7 @@ test("Kimi 模型名与菜单项文案含零宽字符时，判档和真实 _sele
   const document = { querySelector: (s) => (s === ".current-model" ? entry : null),
     querySelectorAll: (s) => (s === ".model-item" ? [modelItem] : []) };
   const context = helpers(document);
-  vm.runInNewContext(source("content/adapters-cn2.js"), context);
+  vm.runInNewContext(source("adapters-cn2.js"), context);
   const kimi = context.window.__AMS.adapters["kimi.com"];
   assert.equal(kimi.state(), "think", "模型名带零宽字符不该让判档失效");
   await kimi._select("K3"); // 真实调用，不 stub：菜单项 .name 也带零宽字符
@@ -174,7 +175,7 @@ test("元宝新模式菜单映射 Instant 与 Thinking，并使用语义发送�
     querySelectorAll(selector) { return selector === '[role="menuitemradio"]' && menuOpen ? items : []; },
   };
   const context = helpers(document, { openMenu: (el) => el.click(), dropFiles: () => Promise.resolve(true) });
-  vm.runInNewContext(source("content/adapters-cn2.js"), context);
+  vm.runInNewContext(source("adapters-cn2.js"), context);
   const yuanbao = context.window.__AMS.adapters["yuanbao.tencent.com"];
   assert.equal(yuanbao.state(), "fast");
   await yuanbao.think();
@@ -204,7 +205,7 @@ function coreWithAdapter(adapter) {
     matchMedia: () => ({ matches: true }), setTimeout, clearTimeout, Date,
     getSelection: () => { throw new Error("no selection"); },
   };
-  vm.runInNewContext(source("content/core.js"), context);
+  vm.runInNewContext(source("core.js"), context);
   context.window.__AMS.adapters["example.com"] = adapter;
   return { S: context.window.__AMS, seq, toasts, debug, send: (message) => new Promise((resolve) =>
     context.listener(Object.assign({ source: "AMS", cmd: "submitPrompt" }, message), null, resolve)) };
@@ -248,7 +249,7 @@ test("千问新模式按钮可读，think 与 fast 使用当前可用模型，�
     return [];
   } };
   const context = helpers(document, { escMenus() { escCount++; } });
-  vm.runInNewContext(source("content/adapters-cn.js"), context);
+  vm.runInNewContext(source("adapters-cn.js"), context);
   const qwen = context.window.__AMS.adapters["qianwen.com"];
   assert.equal(qwen.state(), "fast");
   trigger.textContent = "Qwen3.7-千问";
@@ -282,7 +283,7 @@ test("千问 _setThink 选项缺失或点击被吞时仍收尾 escMenus，且抛
       return [];
     } };
     const context = helpers(document, { escMenus() { escCount++; } });
-    vm.runInNewContext(source("content/adapters-cn.js"), context);
+    vm.runInNewContext(source("adapters-cn.js"), context);
     return { qwen: context.window.__AMS.adapters["qianwen.com"], esc: () => escCount };
   }
   const missing = run("missing");

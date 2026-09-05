@@ -1,8 +1,8 @@
-// content/md.js — 可见 DOM → Markdown 通用序列化（汇总复制用），挂到 __AMS.toMarkdown。
+// desktop/src/site-runtime/md.js — 可见 DOM → Markdown 通用序列化（汇总复制用），挂到 __AMS.toMarkdown。
 // 不做逐站规则：九站回答区都是 markdown 渲染出的标准 HTML（h/p/ul/ol/table/pre/a/strong…），
 // 一个串行器全站通吃。遍历时剔除隐藏节点（第三方注入的水印/翻译克隆）与操作件（按钮/svg），
 // 所见即所得；链接保留为 [文本](href)（引用 chip 因此带回来源 URL），href 中的圆括号会被
-// 百分号编码防止截断目标（同 console/archive-detail.js 的 markdownUrl）；表格转 GFM 管道表。
+// 百分号编码防止截断目标；表格转 GFM 管道表。
 // 图片不贴签名/临时 src（会产出死链或过期图），只保留 alt 占位，保证纯图回答 text 非空。
 // ponytail: 嵌套列表不缩进（平铺输出）——回答里深嵌套罕见，需要时再给 list 传递 depth。
 (function () {

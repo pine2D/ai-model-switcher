@@ -198,7 +198,7 @@ assert.strictEqual(typeof feed.freshEntries, "function", "release-feed 必须导
     /\b(gpt[-\s]?[0-9][\w.\-]*|o[0-9]+(?:-\w+)?|new model|model release|now available in chatgpt|rolling out.*model)\b/i;
   const src = {
     key: "openai", name: "OpenAI / ChatGPT", url: "https://openai.test/rss",
-    adapter: "content/adapters-intl.js", highSignal,
+    adapter: "desktop/src/site-runtime/adapters-intl.js", highSignal,
   };
   const lowBody = feed.issueBody(src, { title: "Introducing the Admin plugin for workspace owners", url: "https://openai.test/a" });
   assert.ok(
