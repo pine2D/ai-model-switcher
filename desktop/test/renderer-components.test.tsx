@@ -179,6 +179,7 @@ test("site health summarizes only the selected scope and keeps detail actions ex
       onReload={noop}
       onHardReload={noop}
       onClearData={noop}
+      onCopyReport={noop}
       onBack={noop}
     />
   );
@@ -488,6 +489,7 @@ test("workspace drawer exposes compact presets, continuous selection and bound g
       onReloadSite={noop}
       onHardReloadSite={noop}
       onClearSiteData={noop}
+      onCopyHealthReport={noop}
     />
   );
 
@@ -525,6 +527,7 @@ test("workspace health lists only sites in the current scope", () => {
       onReloadSite={noop}
       onHardReloadSite={noop}
       onClearSiteData={noop}
+      onCopyHealthReport={noop}
     />
   );
   assert.equal([...html.matchAll(/data-health-state="unknown"/g)].length, 2);

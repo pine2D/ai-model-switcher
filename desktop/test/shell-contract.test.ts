@@ -609,3 +609,42 @@ test("the new-session confirmation is drawn in-app, with no native dialog left b
   assert.match(renderer, /ConfirmDialog/);
   assert.match(renderer, /newSessionConfirmAction/);
 });
+
+test("local data management crosses the trusted bridge through its own IPC module", () => {
+  const ipc = readSource("src/main/data-admin-ipc.ts");
+  const shellIpc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  for (const channel of ["polyask:clear-history", "polyask:clear-archives", "polyask:reset-local"]) {
+    assert.match(ipc, new RegExp(channel));
+  }
+  assert.equal((ipc.match(/ipcMain\.handle\(/g) ?? []).length, (ipc.match(/options\.trusted\(event\)/g) ?? []).length);
+  assert.match(ipc, /for \(const channel of CHANNELS\) ipcMain\.removeHandler\(channel\)/);
+  assert.match(shellIpc, /registerDataAdminIpc\(/);
+  assert.match(shellIpc, /disposeDataAdminIpc\(\);/);
+  assert.match(preload, /clearHistory\(\): Promise<number>/);
+  assert.match(preload, /resetLocalData\(\): Promise<SyncStatus>/);
+});
+
+test("site responses are accepted only from a site view's main frame", () => {
+  const shellIpc = readSource("src/main/shell-ipc.ts");
+  const handler = shellIpc.slice(shellIpc.indexOf('ipcMain.on("polyask:site-response"'));
+  assert.match(handler, /event\.senderFrame\?\.parent !== null\) return;/);
+  assert.ok(handler.indexOf("senderFrame") < handler.indexOf("manager.owns(event.sender)"), "帧校验必须先于 owns 判定");
+});
+
+test("clearSiteData re-resolves the view after awaiting storage clearing", () => {
+  const manager = readSource("src/main/view-manager.ts");
+  const start = manager.indexOf("async clearSiteData(");
+  const body = manager.slice(start, manager.indexOf("\n  }\n", start));
+  const awaitAt = body.indexOf("await this.siteSession.clearStorageData(");
+  const reget = body.indexOf("const live = this.views.get(site);", awaitAt);
+  assert.ok(awaitAt > 0 && reget > awaitAt, "await 之后必须重新取视图");
+  assert.match(body.slice(reget), /live\.webContents\.isDestroyed\(\)\) return false;/);
+  assert.doesNotMatch(body.slice(reget), /\bview\.webContents\.reloadIgnoringCache/);
+});
+
+test("runtime gates depend on a diagnostic source interface, not on ViewManager", () => {
+  const gates = readSource("src/main/runtime-gates.ts");
+  assert.doesNotMatch(gates, /from "\.\/view-manager"/);
+  assert.match(gates, /export interface DiagnosticSource/);
+});

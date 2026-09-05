@@ -49,8 +49,8 @@ body:
     attributes:
       label: 诊断报告 / Diagnostic report
       description: >-
-        Chrome 扩展：控制台 → 站点选择窗 → 「巡检所选站点」→ 「复制诊断报告」，粘贴到这里（不含对话内容）。
-        Desktop 预览版目前只有 `Alt+H` 的站点状态实时检查，没有可复制的站点诊断报告——请改附截图。
+        Desktop：`Alt+H` 打开站点状态 → 「复制诊断报告」，粘贴到这里（只含版本、环境、各站状态与逐项检查结果，不含对话内容与网址）。
+        Chrome 扩展：控制台 → 站点选择窗 → 「巡检所选站点」→ 「复制诊断报告」。
       render: text
   - type: input
     id: env

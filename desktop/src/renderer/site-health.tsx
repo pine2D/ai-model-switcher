@@ -18,6 +18,7 @@ interface SiteHealthPanelProps {
   readonly onReload: (site: SiteKey) => void;
   readonly onHardReload: (site: SiteKey) => void;
   readonly onClearData: (site: SiteKey) => void;
+  readonly onCopyReport: () => void;
   readonly onBack: () => void;
 }
 
@@ -79,6 +80,7 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.reloadSite, { site: detailSite.label })} onClick={() => props.onReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.reloadSite, { site: detailSite.label })}</button>
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.hardReloadSite, { site: detailSite.label })} onClick={() => props.onHardReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.hardReloadSite, { site: detailSite.label })}</button>
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} aria-label={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} onClick={() => props.onClearData(detailSite.key)}><TrashIcon />{formatCopy(props.copy.clearSiteCache, { site: detailSite.label })}</button>
+          <button type="button" onClick={props.onCopyReport}>{props.copy.healthCopyReport}</button>
         </div>
         {reloadBlocked ? <p className="health-blocked">{props.copy.healthReloadBlocked}</p> : null}
       </section>
@@ -90,6 +92,7 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
       <div className="health-summary">
         <p>{formatCopy(props.copy.healthScopeSummary, { ...summary })}</p>
         <button type="button" disabled={props.checking || !props.sites.length} onClick={() => props.onCheck(props.sites.map((site) => site.key))}>{props.checking ? props.copy.checkingSiteHealth : props.copy.checkAgain}</button>
+        <button type="button" disabled={!props.sites.length} onClick={props.onCopyReport}>{props.copy.healthCopyReport}</button>
       </div>
       {props.sites.length ? (
         <div className="site-status-list">

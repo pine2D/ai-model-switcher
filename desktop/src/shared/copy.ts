@@ -1,5 +1,6 @@
 import { ARCHIVE_COPY } from "./archive-copy";
 import { COMMAND_COPY } from "./command-copy";
+import { DATA_ADMIN_COPY } from "./data-admin-copy";
 import { PROMPT_LIBRARY_COPY } from "./prompt-library-copy";
 import { PRODUCTIVITY_COPY } from "./productivity-copy";
 import { SYNC_COPY } from "./sync-copy";
@@ -13,6 +14,7 @@ export const COPY = {
     ...PROMPT_LIBRARY_COPY.en,
     ...PRODUCTIVITY_COPY.en,
     ...SYNC_COPY.en,
+    ...DATA_ADMIN_COPY.en,
     ...SYNTHESIS_COPY.en,
     ...WORKSPACE_COPY.en,
     appTitle: "PolyAsk · AI Answers",
@@ -142,6 +144,7 @@ export const COPY = {
     ...PROMPT_LIBRARY_COPY.zhCN,
     ...PRODUCTIVITY_COPY.zhCN,
     ...SYNC_COPY.zhCN,
+    ...DATA_ADMIN_COPY.zhCN,
     ...SYNTHESIS_COPY.zhCN,
     ...WORKSPACE_COPY.zhCN,
     appTitle: "PolyAsk · AI 众答",
@@ -271,6 +274,7 @@ export const COPY = {
     ...PROMPT_LIBRARY_COPY.zhTW,
     ...PRODUCTIVITY_COPY.zhTW,
     ...SYNC_COPY.zhTW,
+    ...DATA_ADMIN_COPY.zhTW,
     ...SYNTHESIS_COPY.zhTW,
     ...WORKSPACE_COPY.zhTW,
     appTitle: "PolyAsk · AI 眾答",

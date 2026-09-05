@@ -34,6 +34,7 @@ interface WorkspaceDrawerProps {
   readonly onReloadSite: (site: SiteKey) => void;
   readonly onHardReloadSite: (site: SiteKey) => void;
   readonly onClearSiteData: (site: SiteKey) => void;
+  readonly onCopyHealthReport: () => void;
 }
 
 export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element {
@@ -95,6 +96,7 @@ export function WorkspaceDrawer(props: WorkspaceDrawerProps): React.JSX.Element 
             onReload={props.onReloadSite}
             onHardReload={props.onHardReloadSite}
             onClearData={props.onClearSiteData}
+            onCopyReport={props.onCopyHealthReport}
             onBack={() => props.onStateChange({ ...props.state, detail: null })}
           />
         </div>

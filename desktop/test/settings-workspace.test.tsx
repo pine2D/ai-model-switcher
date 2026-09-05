@@ -237,3 +237,15 @@ test("settings expose an explicit local-only completion notification preference"
   assert.match(html, /应用更新/);
   assert.match(html, />检查更新</);
 });
+
+test("settings expose the three local-data entry points and promise cloud data stays", () => {
+  const html = renderSettings(status({ connected: true, state: "idle" }));
+  assert.match(html, /aria-labelledby="local-data-title"/);
+  for (const label of ["Clear prompt history", "Clear result library", "Reset all local data"]) {
+    assert.match(html, new RegExp(`<button type="button">${label}</button>`));
+  }
+  assert.match(html, /Resetting never deletes data on Google Drive/);
+  assert.doesNotMatch(html, /confirm-dialog/, "未点击前不得出现确认层");
+  const syncing = renderSettings(status({ connected: true, state: "syncing" }));
+  assert.match(syncing, /<button type="button" disabled="">Reset all local data<\/button>/);
+});

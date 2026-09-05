@@ -80,6 +80,9 @@ export interface PolyAskDesktopApi {
   checkSiteHealth(sites: readonly SiteKey[]): Promise<SiteHealth[]>;
   reloadSite(site: SiteKey, ignoreCache?: boolean): Promise<boolean>;
   clearSiteData(site: SiteKey): Promise<boolean>;
+  clearHistory(): Promise<number>;
+  clearArchives(): Promise<number>;
+  resetLocalData(): Promise<SyncStatus>;
   onStatus(listener: (status: SiteStatus) => void): () => void;
   onLayout(listener: (layout: LayoutState) => void): () => void;
   onDisplayPreferences(listener: (value: DisplayPreferences) => void): () => void;
@@ -146,6 +149,9 @@ const api: PolyAskDesktopApi = Object.freeze({
   checkSiteHealth: (sites: readonly SiteKey[]) => invoke("polyask:site-health", sites),
   reloadSite: (site: SiteKey, ignoreCache?: boolean) => invoke("polyask:reload-site", site, ignoreCache),
   clearSiteData: (site: SiteKey) => invoke("polyask:clear-site-data", site),
+  clearHistory: () => invoke("polyask:clear-history"),
+  clearArchives: () => invoke("polyask:clear-archives"),
+  resetLocalData: () => invoke("polyask:reset-local"),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>

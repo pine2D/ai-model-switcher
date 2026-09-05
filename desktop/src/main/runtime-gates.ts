@@ -3,18 +3,24 @@ import { dirname } from "node:path";
 
 import { app, type BrowserWindow } from "electron";
 
-import { buildDiagnosticSnapshot } from "./diagnostics";
+import type { LayoutState } from "../shared/protocol";
+import { buildDiagnosticSnapshot, type DiagnosticSiteInput } from "./diagnostics";
 import {
   StabilityMonitor,
   type StabilityEventInput,
   type StabilityMetric,
   type StabilitySummary
 } from "./stability-monitor";
-import type { ViewManager } from "./view-manager";
+
+// 只声明诊断快照需要的最小面，不反向依赖 ViewManager 整个模块。
+export interface DiagnosticSource {
+  getDiagnosticSites(): DiagnosticSiteInput[];
+  getLayout(): LayoutState;
+}
 
 interface RuntimeGates {
   readonly record: (event: StabilityEventInput) => void;
-  readonly writeDiagnostic: (manager: ViewManager) => void;
+  readonly writeDiagnostic: (source: DiagnosticSource) => void;
   readonly dispose: () => void;
 }
 
@@ -79,13 +85,13 @@ export function startRuntimeGates(window: BrowserWindow): RuntimeGates {
 
   return {
     record,
-    writeDiagnostic: (manager) => {
+    writeDiagnostic: (source) => {
       if (!diagnosticPath) return;
       mkdirSync(dirname(diagnosticPath), { recursive: true });
       const snapshot = buildDiagnosticSnapshot({
         shellId: window.webContents.id,
-        sites: manager.getDiagnosticSites(),
-        layout: manager.getLayout()
+        sites: source.getDiagnosticSites(),
+        layout: source.getLayout()
       });
       writeFileSync(diagnosticPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
     },

@@ -331,9 +331,12 @@ export class ViewManager {
       origin: `https://${definition.host}`,
       storages: ["cachestorage", "serviceworkers"]
     });
+    // await 期间用户可能取消勾选该站：releaseUnselectedViews 已销毁 webContents，上面那个 view 是悬垂引用。
+    const live = this.views.get(site);
+    if (!live || live.webContents.isDestroyed()) return false;
     this.runStatus.delete(site);
     this.updatePageStatus({ site, phase: "loading" });
-    view.webContents.reloadIgnoringCache();
+    live.webContents.reloadIgnoringCache();
     return true;
   }
 

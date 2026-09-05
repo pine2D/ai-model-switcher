@@ -11,6 +11,7 @@ import {
 } from "../shared/sync-diagnostics";
 import type { RuntimeInfo } from "../shared/runtime";
 import { CloseIcon } from "./icons";
+import { LocalDataCard } from "./local-data-card";
 import { SyncDiagnosticsPanel } from "./sync-diagnostics-panel";
 import { describeSync } from "./sync-status";
 import { shell } from "./shell-api";
@@ -208,6 +209,13 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
             }}
           >{props.copy.syncClear}</button>
         </section>
+        <LocalDataCard
+          copy={props.copy}
+          busy={busy}
+          onBusy={setActionBusy}
+          onFeedback={(message) => { setFeedback(message); props.onAnnounce(message); }}
+          onStatus={props.onStatus}
+        />
         <label className="settings-card preference-card">
           <span className="preference-copy">
             <strong id="completion-notifications-title" className="preference-title">{props.copy.completionNotifications}</strong>

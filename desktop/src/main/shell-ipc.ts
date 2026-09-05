@@ -23,6 +23,8 @@ import {
 import { BroadcastCoordinator } from "./broadcast";
 import { ArchiveService } from "./archive-service";
 import { CollectionService } from "./collection-service";
+import type { DataAdminService } from "./data-admin-service";
+import { registerDataAdminIpc } from "./data-admin-ipc";
 import { HistoryService } from "./history-service";
 import { PromptLibraryService } from "./prompt-library-service";
 import { SynthesisService } from "./synthesis-service";
@@ -57,6 +59,7 @@ interface ShellIpcOptions {
   readonly promptLibrary: PromptLibraryService;
   readonly synthesis: SynthesisService;
   readonly sync: SyncEngine;
+  readonly dataAdmin: DataAdminService;
   readonly shellEntry: string;
   readonly applyDisplay: (value: DisplayPreferences) => DisplayPreferences;
   readonly setCompletionNotifications: (enabled: boolean) => void;
@@ -128,6 +131,12 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
   };
   const disposeSyncIpc = registerSyncIpc({ sync, runtime: options.runtime, trusted: trustedShell });
   const disposeSiteHealthIpc = registerSiteHealthIpc({ manager, trusted: trustedShell });
+  const disposeDataAdminIpc = registerDataAdminIpc({
+    admin: options.dataAdmin,
+    trusted: trustedShell,
+    afterHistoryChange: () => { publishPromptLibrary(); },
+    afterReset: () => { publishWorkspace(); publishPromptLibrary(); }
+  });
 
   // 速查面板按需拉取：菜单会随显示偏好重建，按需读永远是当前那一份。
   ipcMain.handle("polyask:menu-shortcuts", (event) =>
@@ -337,12 +346,15 @@ export function registerShellIpc(options: ShellIpcOptions): () => void {
     options.setCompletionNotifications(value);
   });
   ipcMain.on("polyask:site-response", (event, envelope: SiteResponseEnvelope) => {
+    // 只认站点视图的主帧：nodeIntegrationInSubFrames 默认关闭，preload 本就不进子帧，这里把默认值写成显式不变量。
+    if (event.senderFrame?.parent !== null) return;
     if (manager.owns(event.sender)) manager.receiveResponse(event.sender, envelope);
   });
 
   return () => {
     disposeSyncIpc();
     disposeSiteHealthIpc();
+    disposeDataAdminIpc();
     for (const channel of HANDLERS) ipcMain.removeHandler(channel);
     for (const channel of LISTENERS) ipcMain.removeAllListeners(channel);
   };

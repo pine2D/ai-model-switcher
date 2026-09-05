@@ -7,6 +7,7 @@ import { HistoryRepository } from "./history-repository";
 import { DriveFileRepository } from "./drive-file-repository";
 import { MetaRepository } from "./meta-repository";
 import { OutboxRepository } from "./outbox-repository";
+import { inTransaction } from "./repository-utils";
 import { StateRepository } from "./state-repository";
 
 const SCHEMA_VERSION = 1;
@@ -95,6 +96,14 @@ export class DesktopDatabase {
       foreignKeys: Number(foreign?.foreign_keys) === 1,
       userVersion: Number(version?.user_version) || 0
     };
+  }
+
+  // 本机重置唯一的物理删除路径：只清本机，云端由重新连接后的全量拉取恢复。deviceId 保留（见 DataAdminService）。
+  resetLocalData(): void {
+    inTransaction(this.database, () => {
+      for (const table of ["history", "archives", "state_items", "outbox", "drive_files"]) this.database.exec(`DELETE FROM ${table}`);
+      this.database.prepare("DELETE FROM meta WHERE key <> ?").run("deviceId");
+    });
   }
 
   adoptImportedProfile(deviceId: string): void {

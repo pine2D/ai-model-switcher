@@ -19,6 +19,7 @@ import { describeStatus, describeSynthesisSendCode, errorCode } from "../shared/
 import type { SyncStatus } from "../shared/sync";
 import type { RuntimeInfo } from "../shared/runtime";
 import type { SiteHealth } from "../shared/site-health";
+import { buildSiteReport } from "../shared/site-report";
 import type { PromptLibraryState } from "../shared/prompt-library";
 import type { SynthesisSendRequest } from "../shared/synthesis";
 import { ArchiveSurface } from "./archive-surface";
@@ -667,6 +668,22 @@ function App(): React.JSX.Element {
                 : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
               if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
             }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+          }}
+          onCopyHealthReport={() => {
+            const report = buildSiteReport({
+              version: runtime.version,
+              distribution: runtime.distribution,
+              platform: navigator.platform,
+              scale: window.devicePixelRatio,
+              sites: sites.filter((site) => selected.has(site.key)),
+              statuses,
+              health,
+              now: Date.now()
+            });
+            navigator.clipboard.writeText(report).then(
+              () => setAnnouncement(copy.healthReportCopied),
+              () => setAnnouncement(copy.healthReportCopyFailed)
+            );
           }}
         />
       ) : null}

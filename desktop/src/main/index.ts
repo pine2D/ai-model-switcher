@@ -48,6 +48,7 @@ import {
 } from "./portable-profile";
 import { isTrustedShellUrl, safeExternalUrl } from "./security";
 import { startRuntimeGates } from "./runtime-gates";
+import { DataAdminService } from "./data-admin-service";
 import { registerShellIpc } from "./shell-ipc";
 import { SITES } from "./sites";
 import { runStartup } from "./startup";
@@ -407,6 +408,7 @@ async function createWindow(): Promise<void> {
       sendToShell("polyask:prompt-library", promptLibrary.getState());
     }
   });
+  const dataAdmin = new DataAdminService({ database, deviceId, sync });
   createMenu();
   const disposeIpc = registerShellIpc({
     runtime: runtimeInfo,
@@ -422,6 +424,7 @@ async function createWindow(): Promise<void> {
     promptLibrary,
     synthesis,
     sync,
+    dataAdmin,
     shellEntry: MAIN_WINDOW_WEBPACK_ENTRY,
     applyDisplay: (value) => applyDisplayPreferences(manager, value),
     setCompletionNotifications: (enabled) => completionNotifier.setEnabled(enabled)
