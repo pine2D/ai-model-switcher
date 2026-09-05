@@ -343,14 +343,20 @@ kbd { opacity: .7; font: 10px system-ui; }
 .confirm-dialog header { display: flex; align-items: center; gap: 8px; }
 .confirm-dialog h2 { margin: 0; flex: 1; font-size: 14px; }
 .confirm-dialog p { margin: 0; color: var(--muted); line-height: 1.55; }
-.confirm-close { min-height: 24px; padding: 0 4px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
-.confirm-close:hover { color: var(--accent); background: var(--accent-soft); }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
-.confirm-actions button.primary { border-color: var(--accent); color: #fff; background: var(--accent); }
-.confirm-actions button.primary:hover { filter: brightness(.92); }
+/* 弹层会渲染在任意宿主卡片里（如设置页的 .danger-zone），下面全部以 .confirm-dialog 前缀提高特异性，
+   否则宿主的 `.danger-zone button` 会把「取消」染成红边、把 ✕ 拉成 32px——确认/取消的视觉暗示直接反转。 */
+.confirm-dialog .confirm-close { min-height: 24px; margin: 0; padding: 0 4px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
+.confirm-dialog .confirm-close:hover { color: var(--accent); background: var(--accent-soft); }
+.confirm-dialog .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.confirm-dialog .confirm-actions button { min-height: 30px; margin: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: transparent; }
+.confirm-dialog .confirm-actions button:hover { color: var(--accent); border-color: var(--accent); background: transparent; }
+.confirm-dialog .confirm-actions button.primary { border-color: var(--accent); color: #fff; background: var(--accent); }
+.confirm-dialog .confirm-actions button.primary:hover { color: #fff; background: var(--accent); filter: brightness(.92); }
 .health-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
 .health-actions button { display: inline-flex; align-items: center; gap: 3px; }
 .health-blocked { color: var(--warning) !important; }
+.health-feedback { margin: 8px 5px 0 !important; min-height: 1.4em; color: var(--muted); font-size: 11px; }
+.health-feedback:empty { margin: 0 !important; min-height: 0; }
 .health-empty { margin: 18px 5px !important; text-align: center; }
 .detail-back { min-height: 28px; padding: 0 6px; display: inline-flex; align-items: center; gap: 3px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; }
 .detail-back:hover { color: var(--accent); background: var(--accent-soft); }

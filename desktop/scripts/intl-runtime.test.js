@@ -188,7 +188,8 @@ function claudeEffortCase(options) {
 
 // think 取已知序列里在场的最高档；站点减档时自动退到次高档，而不是写死 High
 async function claudeEffortMustTakeHighestKnownTier() {
-  for (const [tiers, wanted] of [[null, "Max"], [["Low", "MediumDefault", "High", "Extra"], "Extra"], [["Low", "High"], "High"]]) {
+  for (const [tiers, wanted] of [[null, "Max"], [["Low", "MediumDefault", "High", "Extra"], "Extra"], [["Low", "High"], "High"],
+    [["低", "中", "高", "超", "极致"], "极致"], [["低", "中", "高", "超"], "超"]]) { // 中文 UI：点到的档名 _THINK 也必须能复读
     const c = claudeEffortCase({ tiers: tiers });
     await c.adapter._setEffort();
     const picked = c.clicked.filter((el) => c.tiers.includes(el)).map((el) => el.textContent);

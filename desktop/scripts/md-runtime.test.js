@@ -50,7 +50,7 @@ function md(root) {
   };
   const getComputedStyle = () => ({ display: "block", visibility: "visible" });
   const context = vm.createContext({
-    window: { __AMS: {} }, document, getComputedStyle, NodeFilter: { SHOW_TEXT: 4 },
+    window: { __AMS: {} }, __AMS_I18N__: { t: (key) => `desktop:${key}` }, document, getComputedStyle, NodeFilter: { SHOW_TEXT: 4 },
     location: { href: "https://chatgpt.com/c/1" }, URL, console,
   });
   vm.runInContext(read("md.js"), context);
@@ -92,7 +92,7 @@ function headingBeforeCodeIsNotSwallowed() {
 // F097 回归：img 不再被静默丢弃，保留 alt（无 alt 给占位），保证纯图回答 text 非空、不触发 no_answer 误报
 function imagePreservesAltAsPlaceholder() {
   assert.equal(md(el("div", null, el("img", { src: "https://cdn.ex/a.png", alt: "柱状图" }))), "[柱状图]");
-  assert.equal(md(el("div", null, el("img", { src: "https://cdn.ex/a.png" }))), "[图片]");
+  assert.equal(md(el("div", null, el("img", { src: "https://cdn.ex/a.png" }))), "[desktop:md_image]", "无 alt 的图片占位必须走 i18n（md_image），不能写死中文");
 }
 
 // F090 回归：href 中的圆括号必须百分号编码，否则 CommonMark 括号配平规则会把链接目标截断

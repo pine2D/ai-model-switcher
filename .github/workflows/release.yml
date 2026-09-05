@@ -178,7 +178,8 @@ jobs:
           [ "$count" -eq 5 ] || { echo "::error::Desktop 包应为 5 个，实际 $count 个"; exit 1; }
 
       - name: 发布 Desktop 预览包
-        if: inputs.dry_run != true
+        # 手动触发即使取消 dry_run 也不得从分支 ref 创建 Release：action 会拒绝，但这里先挡住，别让它跑到最后一步才失败。
+        if: inputs.dry_run != true && github.ref_type == 'tag'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |

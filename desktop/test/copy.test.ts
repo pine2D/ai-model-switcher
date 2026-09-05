@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { COPY, getCopy, resolveLocale } from "../src/shared/copy";
+import { COPY, formatCopy, getCopy, resolveLocale } from "../src/shared/copy";
 import { describeCollectionCode, describeStatus, describeSynthesisSendCode, errorCode, visibleStatus } from "../src/shared/status-copy";
 import { describeSync } from "../src/renderer/sync-status";
 
@@ -42,9 +42,9 @@ test("site paging copy is concise, localized, and placeholder-compatible", () =>
     ["Page {page}, sites {range}", "第 {page} 页，站点 {range}", "第 {page} 頁，網站 {range}"]
   );
   for (const locale of Object.values(COPY)) {
-    assert.deepEqual([...locale.sitePageLabel.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{range}"]);
-    assert.deepEqual([...locale.sitePageChanged.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}", "{total}"]);
-    assert.deepEqual([...locale.sitePageMenu.matchAll(/\{[a-z]+\}/g)].map(String), ["{page}"]);
+    assert.deepEqual([...locale.sitePageLabel.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{page}", "{range}"]);
+    assert.deepEqual([...locale.sitePageChanged.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{page}", "{total}"]);
+    assert.deepEqual([...locale.sitePageMenu.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{page}"]);
   }
 });
 
@@ -65,8 +65,8 @@ test("Drive local-only state and settings close action stay precise in all local
     ["Close settings", "关闭设置", "關閉設定"]
   );
   for (const locale of Object.values(COPY)) {
-    assert.deepEqual([...locale.syncStateLocalOnly.matchAll(/\{[a-z]+\}/g)].map(String), []);
-    assert.deepEqual([...locale.closeSettings.matchAll(/\{[a-z]+\}/g)].map(String), []);
+    assert.deepEqual([...locale.syncStateLocalOnly.matchAll(/\{[A-Za-z]+\}/g)].map(String), []);
+    assert.deepEqual([...locale.closeSettings.matchAll(/\{[A-Za-z]+\}/g)].map(String), []);
   }
 });
 
@@ -164,7 +164,7 @@ test("result-library loading copy stays complete and localized", () => {
   assert.deepEqual(messages, ["Loading results…", "正在加载结果…", "正在載入結果…"]);
   assert.ok(messages.every((message) => message.endsWith("…") && !message.includes("...")));
   assert.deepEqual(
-    messages.map((message) => [...message.matchAll(/\{[a-z]+\}/g)].map(String)),
+    messages.map((message) => [...message.matchAll(/\{[A-Za-z]+\}/g)].map(String)),
     [[], [], []]
   );
 });
@@ -210,7 +210,7 @@ test("renderer bootstrap recovery copy stays complete and localized", () => {
     assert.deepEqual(messages, expected[locale]);
     assert.ok(messages.every((message) => !message.includes("...")));
     assert.deepEqual(
-      messages.map((message) => [...message.matchAll(/\{[a-z]+\}/g)].map(String)),
+      messages.map((message) => [...message.matchAll(/\{[A-Za-z]+\}/g)].map(String)),
       [[], [], [], []]
     );
   }
@@ -284,20 +284,20 @@ test("run recovery and new-session copy keeps matching keys and placeholders", (
     ]
   );
   for (const locale of Object.values(COPY)) {
-    assert.deepEqual([...locale.failedSummary.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
-    assert.deepEqual([...locale.cancelledSummary.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.failedSummary.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.cancelledSummary.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{count}"]);
     assert.deepEqual(
-      [...locale.mixedFailureSummary.matchAll(/\{[a-z]+\}/g)].map(String),
+      [...locale.mixedFailureSummary.matchAll(/\{[A-Za-z]+\}/g)].map(String),
       ["{failed}", "{cancelled}"]
     );
-    assert.deepEqual([...locale.retryFailedSites.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
-    assert.deepEqual([...locale.retryCancelledSites.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.retryFailedSites.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.retryCancelledSites.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{count}"]);
     assert.deepEqual(
-      [...locale.retryFailedOrCancelledSites.matchAll(/\{[a-z]+\}/g)].map(String),
+      [...locale.retryFailedOrCancelledSites.matchAll(/\{[A-Za-z]+\}/g)].map(String),
       ["{count}"]
     );
-    assert.deepEqual([...locale.newSessionDone.matchAll(/\{[a-z]+\}/g)].map(String), ["{count}"]);
-    assert.deepEqual([...locale.newSessionPartial.matchAll(/\{[a-z]+\}/g)].map(String), ["{ok}", "{failed}"]);
+    assert.deepEqual([...locale.newSessionDone.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{count}"]);
+    assert.deepEqual([...locale.newSessionPartial.matchAll(/\{[A-Za-z]+\}/g)].map(String), ["{ok}", "{failed}"]);
   }
 });
 
@@ -432,4 +432,18 @@ test("images-busy-while-broadcasting and answer-truncated copy are localized in 
       "該回答過長，已被截斷"
     ]
   );
+});
+
+test("formatCopy can substitute every placeholder that appears in any locale table", () => {
+  // 字典与格式化函数曾共用同一个小写字符类：{signIn} 在三语里都原样裸露到站点状态面板。
+  for (const locale of ["en", "zh-CN", "zh-TW"]) {
+    const copy = getCopy(locale) as unknown as Record<string, string>;
+    for (const [key, value] of Object.entries(copy)) {
+      const tokens = [...value.matchAll(/\{([A-Za-z_]+)\}/g)].map((m) => m[1]);
+      if (!tokens.length) continue;
+      const rendered = formatCopy(value, Object.fromEntries(tokens.map((token) => [token, "X"])));
+      assert.doesNotMatch(rendered, /\{[A-Za-z_]+\}/, `${locale}.${key} 的占位符没有被 formatCopy 替换：${rendered}`);
+    }
+  }
+  assert.equal(formatCopy(getCopy("en").healthScopeSummary, { ready: 3, signIn: 2, error: 1, unknown: 3 }).includes("{signIn}"), false);
 });

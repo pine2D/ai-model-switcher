@@ -65,7 +65,7 @@ export const COPY = {
     imageSizeError: "Images must total 10 MiB or less",
     imageInvalid: "An image could not be read safely",
     imagesBusy: "Broadcasting is in progress; images can't be added right now",
-    imageUnsupported: "{sites} do not support image broadcasts; adjust site scope",
+    imageUnsupported: "Image broadcasts are not supported by {sites}; adjust site scope",
     adjustImageScope: "Adjust site scope: {count} unsupported",
     imagePayloadInvalid: "Image payload is invalid",
     attachmentUnsupported: "This site does not support image broadcasts",
@@ -413,7 +413,8 @@ export function getCopy(rawLocale: string): DesktopCopy {
 }
 
 export function formatCopy(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{([a-z]+)\}/g, (token, key: string) =>
+  // 占位符允许驼峰（healthScopeSummary 的 {signIn}）；字符类漏了大写会让 token 原样裸露到界面上。
+  return template.replace(/\{([A-Za-z]+)\}/g, (token, key: string) =>
     Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : token
   );
 }

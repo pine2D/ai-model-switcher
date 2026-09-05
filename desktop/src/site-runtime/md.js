@@ -9,6 +9,7 @@
   "use strict";
   const S = window.__AMS;
   if (!S) return;
+  const t = globalThis.__AMS_I18N__ ? globalThis.__AMS_I18N__.t : globalThis.t; // 与其余 site-runtime 文件同一取法；漏了这行 md_image 就是死词条
   const SKIP = new Set(["BUTTON", "SVG", "STYLE", "SCRIPT", "NOSCRIPT", "SELECT", "TEXTAREA", "AUDIO", "VIDEO"]);
   const drop = (el) => {
     if (SKIP.has(el.tagName.toUpperCase()) || el.getAttribute("aria-hidden") === "true" || el.getAttribute("role") === "button") return true;

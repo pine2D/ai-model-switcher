@@ -16,12 +16,15 @@ export type SiteDispatch = (
   signal: AbortSignal
 ) => Promise<SiteResult>;
 
-/** 只读探测「这段文字是否已作为末条用户消息发出」；由 ViewManager.confirmSubmitted 实现。 */
+/**
+ * 只读探测「这段文字是否已作为末条用户消息发出」；由 ViewManager.confirmSubmitted 实现。
+ * 返回 null = 这一次没人应答（页面正在重挂、通道超时），与「站点不支持」是两回事：前者再问一次，后者立刻交用户。
+ */
 export type SubmittedProbe = (
   site: SiteKey,
   command: WasSubmittedSiteCommand,
   signal: AbortSignal
-) => Promise<SiteSubmittedResponse>;
+) => Promise<SiteSubmittedResponse | null>;
 
 export type ResultObserver = (result: SiteRunResult) => void;
 
@@ -40,6 +43,8 @@ const POLYASK_KIMI_RESUBMIT = false;
 // 只有这两个码代表「还没开始提交」，可以在同一 deadline 内等待重试；其它任何码（含新增的）默认不可重试。
 const RETRIABLE: ReadonlySet<SiteCode> = new Set<SiteCode>(["composer_not_found", "not_ready"]);
 const UNSUPPORTED: SiteSubmittedResponse = { supported: false, ok: false };
+const CONFIRM_WINDOW_MS = 1_500;
+const CONFIRM_PROBE_MS = 300;
 
 export class BroadcastCoordinator {
   private epoch = 0;
@@ -143,7 +148,11 @@ export class BroadcastCoordinator {
     }
   }
 
-  // Kimi 发送后会重挂页面并断开消息端口：给新 content 最多 1.5s（且不超过 deadline）注入并作答。
+  // Kimi 发送后会重挂页面并断开消息端口：给新 content 最多 1.5s 注入并作答。
+  // 这个窗口**独立于群发 deadline**：submit_unconfirmed 最常恰好在 deadline 那一刻到达（通道超时、带图时页内
+  // confirmSubmitted 跑满绝对线），从剩余预算里抠窗口 = 永远零次探测。只读探测不往页面写任何东西，
+  // 不受 deadline 夹取规则约束（CLAUDE.md 已记为例外）。单次探测只给 300ms：一次无人应答（页面重挂中）
+  // 不能吃掉整个窗口，也不能被读成「不支持」。
   // 结论：supported 且已见到该消息 → 已提交；supported 且连续 5 次未见 → 未提交；其余一律 unsupported（交用户）。
   private async confirmSubmitted(
     site: SiteKey,
@@ -152,19 +161,20 @@ export class BroadcastCoordinator {
     epoch: number,
     signal: AbortSignal
   ): Promise<SiteSubmittedResponse> {
-    const end = Math.min(command.deadline, this.now() + 1_500);
+    const end = this.now() + CONFIRM_WINDOW_MS;
     let misses = 0;
     while (this.now() < end) {
       if (epoch !== this.epoch) return UNSUPPORTED;
-      let verdict = UNSUPPORTED;
-      let probed = true;
+      let answer: SiteSubmittedResponse | null = null;
       try {
-        verdict = normalizeSubmitted(await confirm(site, { source: "AMS", cmd: "wasSubmitted", text: command.text, deadline: end }, signal));
+        const deadline = Math.min(end, this.now() + CONFIRM_PROBE_MS);
+        answer = await confirm(site, { source: "AMS", cmd: "wasSubmitted", text: command.text, deadline }, signal);
       } catch {
-        probed = false; // 页面重挂中，等新 content 注入
+        answer = null; // 页面重挂中，等新 content 注入
       }
       if (epoch !== this.epoch) return UNSUPPORTED;
-      if (probed) {
+      if (answer !== null) {
+        const verdict = normalizeSubmitted(answer);
         if (!verdict.supported || verdict.ok) return verdict;
         if (++misses >= 5) return verdict;
       }

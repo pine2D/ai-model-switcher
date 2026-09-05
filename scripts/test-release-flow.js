@@ -74,7 +74,7 @@ function sliceBetween(text, startMarker, endMarker) {
   assert.match(publish, /body_path: release-assets\/release-notes\.md/);
   // 不烧版本号的验证入口：手动触发默认 dry_run，走完汇总核对但不创建 Release
   assert.match(workflow, /workflow_dispatch:\s*\n\s+inputs:\s*\n\s+dry_run:/, "release.yml 必须提供 workflow_dispatch(dry_run)");
-  assert.match(publish, /if: inputs\.dry_run != true\s*\n\s+uses: softprops\/action-gh-release/, "dry_run 时不得创建 Release");
+  assert.match(publish, /if: inputs\.dry_run != true && github\.ref_type == 'tag'\s*\n\s+uses: softprops\/action-gh-release/, "dry_run 时、以及从分支 ref 手动触发时都不得创建 Release");
   assert.match(publish, /release-notes\.md \]/, "汇总步骤必须断言 release-notes.md 存在且非空");
 }
 {

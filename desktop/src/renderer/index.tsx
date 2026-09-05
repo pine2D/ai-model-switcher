@@ -42,6 +42,7 @@ import {
 import { ImagePicker } from "./image-picker";
 import { PageTabs } from "./page-tabs";
 import { clearDraft, loadDraft, saveDraft } from "./prompt-draft";
+import { useFeedback } from "./use-feedback";
 import { usePresence } from "./presence";
 import { SiteFrames } from "./site-frames";
 import { SettingsWorkspace } from "./settings-workspace";
@@ -125,7 +126,7 @@ function App(): React.JSX.Element {
   const [completionNotifications, setCompletionNotifications] = useState(() =>
     loadCompletionNotifications(window.localStorage)
   );
-  const [announcement, setAnnouncement] = useState("");
+  const { announcement, announcementSeq, announce: setAnnouncement, healthFeedback, noteHealth } = useFeedback();
   const [pageInputMethod, setPageInputMethod] = useState<"keyboard" | "pointer">("pointer");
   const drawerOpen = panelState !== null;
   if (panelState) lastOpenPanel.current = panelState;
@@ -520,7 +521,7 @@ function App(): React.JSX.Element {
     return <div className="surface-stage"><ArchiveSurface copy={copy} locale={navigator.language} sites={sites} synthesisSites={sites.filter((site) => selected.has(site.key))} defaultTier={workspace.tier} preferredId={synthesis.pending?.archiveId ?? null} pendingSynthesis={synthesis.pending} synthesisCandidate={synthesis.candidate} onClose={() => changeSurface("sites")} onCapture={archiveCapture.capture} onSendSynthesis={sendSynthesisFromArchive} onCollectSynthesis={async () => { await synthesis.collect(); }} onSaveSynthesis={synthesis.save} /></div>;
   }
   if (surface === "settings") {
-    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onCheckUpdates={openLatestReleasePage} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onClose={() => changeSurface("sites")} /></div>;
+    return <div className="surface-stage"><SettingsWorkspace copy={copy} locale={navigator.language} runtime={runtime} status={syncStatus} initialSection={settingsSection} completionNotifications={completionNotifications} onCompletionNotificationsChange={setCompletionNotifications} onCheckUpdates={openLatestReleasePage} onStatus={setSyncStatus} onAnnounce={setAnnouncement} onLocalReset={() => { clearDraft(window.localStorage); setText(""); }} onClose={() => changeSurface("sites")} /></div>;
   }
   if (surface === "commands") {
     return (
@@ -623,7 +624,7 @@ function App(): React.JSX.Element {
         onOpenMore={() => { void showMoreMenu(); }}
         onPasteImages={(files) => { void imageSelection.choose(files); }}
       />
-      <div className="sr-only" aria-live="polite">{announcement}</div>
+      <div className="sr-only" aria-live="polite" key={announcementSeq}>{announcement}</div>
       {drawerPresent ? (
         <WorkspaceDrawer
           copy={copy}
@@ -647,29 +648,29 @@ function App(): React.JSX.Element {
           onReloadSite={(site) => {
             void shell.reloadSite(site).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
-              setAnnouncement(ok
+              noteHealth(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
                 : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
               if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
-            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+            }).catch(() => noteHealth(copy.workspaceActionFailed));
           }}
           onHardReloadSite={(site) => {
             void shell.reloadSite(site, true).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
-              setAnnouncement(ok
+              noteHealth(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
                 : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
               if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
-            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+            }).catch(() => noteHealth(copy.workspaceActionFailed));
           }}
           onClearSiteData={(site) => {
             void shell.clearSiteData(site).then((ok) => {
               const definition = sites.find((candidate) => candidate.key === site);
-              setAnnouncement(ok
+              noteHealth(ok
                 ? formatCopy(copy.healthReloaded, { site: definition?.label ?? site })
                 : formatCopy(copy.healthReloadRejected, { site: definition?.label ?? site }));
               if (ok) setHealth((current) => ({ ...current, [site]: { site, state: "unknown", checks: [] } }));
-            }).catch(() => setAnnouncement(copy.workspaceActionFailed));
+            }).catch(() => noteHealth(copy.workspaceActionFailed));
           }}
           onCopyHealthReport={() => {
             const report = buildSiteReport({
@@ -682,11 +683,9 @@ function App(): React.JSX.Element {
               health,
               now: Date.now()
             });
-            navigator.clipboard.writeText(report).then(
-              () => setAnnouncement(copy.healthReportCopied),
-              () => setAnnouncement(copy.healthReportCopyFailed)
-            );
+            navigator.clipboard.writeText(report).then(() => noteHealth(copy.healthReportCopied), () => noteHealth(copy.healthReportCopyFailed));
           }}
+          healthFeedback={healthFeedback}
         />
       ) : null}
       <SiteFrames

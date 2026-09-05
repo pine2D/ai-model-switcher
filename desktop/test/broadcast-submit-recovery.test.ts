@@ -78,3 +78,39 @@ test("the resend switch ships as false until the F067 real-machine cases pass", 
   assert.match(readSource("src/main/broadcast.ts"), /^const POLYASK_KIMI_RESUBMIT = false;$/m);
   assert.match(readSource("src/preload/site.ts"), /probing \? normalizeSubmitted\(value\) : normalizeResult\(value\)/, "wasSubmitted 必须走 normalizeSubmitted，不得走 normalizeResult");
 });
+
+test("leaving the resend option out behaves like the shipped switch, not like 'on'", async () => {
+  const { coordinator } = clock();
+  let calls = 0;
+  const result = await coordinator.send(request, async () => { calls += 1; return unconfirmed(); }, 22_000, undefined, { confirm: async () => ({ supported: true, ok: false }) });
+  assert.equal(calls, 1);
+  assert.deepEqual(result[0], { site: "kimi", ok: false, code: "submit_unconfirmed" });
+});
+
+test("the read-only confirmation window is reserved even when the submit budget is already spent", async () => {
+  // 群发 deadline 到点才返回 submit_unconfirmed 是最常见的情形（等待确认超时）；确认窗若夹在 deadline 之内会归零，
+  // Kimi 的只读探测一次都跑不了，重发通道形同虚设。窗口固定 1.5s、单次探测 ≤300ms，与 deadline 无关。
+  let now = 1_000;
+  const coordinator = new BroadcastCoordinator(() => now, async (ms) => { now += ms; });
+  const deadlines: number[] = [];
+  const probe: SubmittedProbe = async (_site, command) => { deadlines.push(command.deadline - now); return { supported: true, ok: true }; };
+  const result = await coordinator.send(request, async () => { now += 22_000; return unconfirmed(); }, 22_000, undefined, { confirm: probe, resubmit: true });
+  assert.deepEqual(result[0], { site: "kimi", ok: true });
+  assert.equal(deadlines.length, 1);
+  assert.ok(deadlines[0] > 0 && deadlines[0] <= 300, `单次探测预算应在 (0, 300ms]，实际 ${deadlines[0]}`);
+});
+
+test("a probe that goes unanswered while the page remounts is asked again inside the window", async () => {
+  const { coordinator, now } = clock();
+  const start = now();
+  let asked = 0;
+  const probe: SubmittedProbe = async () => (++asked < 3 ? null : { supported: true, ok: true });
+  const result = await coordinator.send(request, unconfirmed, 22_000, undefined, { confirm: probe, resubmit: true });
+  assert.deepEqual(result[0], { site: "kimi", ok: true });
+  assert.equal(asked, 3);
+  assert.ok(now() - start <= 1_500, "确认必须落在 1.5s 窗口内");
+  // 一直无人应答：窗口用尽后按「无法确认」交给用户，不重发
+  const silent = await run(unconfirmed, async () => null, true);
+  assert.equal(silent.calls, 1);
+  assert.deepEqual(silent.result, { site: "kimi", ok: false, code: "submit_unconfirmed" });
+});

@@ -142,6 +142,7 @@ export class SyncPull {
       this.noteCorrupt(file.id);
       return;
     }
+    future.delete(file.id); // 曾经是未来 schema、现在按本机 schema 读得懂了：解除它贡献的只读锁
     this.repository.putDriveFile(file, key, seenAt);
   }
 

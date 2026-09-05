@@ -28,6 +28,7 @@ interface SettingsWorkspaceProps {
   readonly completionNotifications?: boolean;
   readonly onCompletionNotificationsChange?: (enabled: boolean) => void;
   readonly initialSection?: "overview" | "drive-diagnostics";
+  readonly onLocalReset?: () => void;
 }
 
 type SyncAction = () => Promise<SyncStatus>;
@@ -215,6 +216,7 @@ export function SettingsWorkspace(props: SettingsWorkspaceProps): React.JSX.Elem
           onBusy={setActionBusy}
           onFeedback={(message) => { setFeedback(message); props.onAnnounce(message); }}
           onStatus={props.onStatus}
+          onReset={props.onLocalReset}
         />
         <label className="settings-card preference-card">
           <span className="preference-copy">

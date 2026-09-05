@@ -33,7 +33,7 @@
       // effort 档位标签，由低到高（真机 2026-08-31：Low / MediumDefault / High / Extra / Max）。
       // think 取本表里在场的最高档，站点加减档自适应：撤掉 Max 就自动退到 Extra，再撤退到 High。
       _EFFORT: [/^(low|低)/i, /^(medium|中)/i, /^(high|高)/i, /^(extra|超)/i, /^(max|极致|最大|最高)/i],
-      _THINK: /adaptive|high|extra|max|高|最大/i, // state() 与 _setEffort() 的复读共用，避免两处漂开
+      _THINK: /adaptive|high|extra|max|高|最大|极致|超/i, // state() 与 _setEffort() 的复读共用；必须盖住 _EFFORT 最高两档会点到的每个词（中文 UI 是「极致」「超」）
       // 2026-08 改版：effort-menu-trigger / effort-option-* 两个 testid 已消失（Base UI 菜单只剩
       // 自动生成 id），入口退化成「文本 Effort+当前档」的 role=menuitem 子菜单项。
       _effortTrigger: function () {

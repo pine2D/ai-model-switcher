@@ -104,6 +104,8 @@ export class DesktopDatabase {
       for (const table of ["history", "archives", "state_items", "outbox", "drive_files"]) this.database.exec(`DELETE FROM ${table}`);
       this.database.prepare("DELETE FROM meta WHERE key <> ?").run("deviceId");
     });
+    // DELETE 只把页挂进 freelist，提问与回答明文仍留在 .sqlite / WAL 里；重置的承诺是「本机清空」，收缩一次。
+    this.database.exec("VACUUM");
   }
 
   adoptImportedProfile(deviceId: string): void {

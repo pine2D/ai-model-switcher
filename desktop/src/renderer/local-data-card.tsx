@@ -13,6 +13,8 @@ interface LocalDataCardProps {
   readonly onBusy: (value: boolean) => void;
   readonly onFeedback: (message: string) => void;
   readonly onStatus: (status: SyncStatus) => void;
+  /** 重置成功后由外壳清掉只存在渲染层的状态（提问草稿）。 */
+  readonly onReset?: () => void;
 }
 
 const CONFIRM_COPY: Record<LocalDataAction, { readonly title: keyof DesktopCopy; readonly message: keyof DesktopCopy }> = {
@@ -34,6 +36,7 @@ export function LocalDataCard(props: LocalDataCardProps): React.JSX.Element {
         props.onFeedback(formatCopy(props.copy.localDataArchivesCleared, { count: await shell.clearArchives() }));
       } else {
         props.onStatus(await shell.resetLocalData());
+        props.onReset?.();
         props.onFeedback(props.copy.localDataReset);
       }
     } catch {

@@ -65,7 +65,7 @@ i18n → core → send → upload → md → adapters-intl → adapters-intl2 �
 | 辅助综合发送 | 44s，**硬编码、无带图分支** | `index.ts` |
 | 辅助综合等新会话 | 22s | `synthesis-service.ts` |
 | 可重试码重投间隔 | `min(500ms, 剩余)` | `broadcast.ts` |
-| 只读提交确认窗 | `min(deadline, now+1.5s)`，轮询 150ms，连续 5 次未见判未提交 | `broadcast.ts` |
+| 只读提交确认窗 | 固定 `now+1.5s`，**独立于群发 deadline**（deadline 到点才收到 `submit_unconfirmed` 是常态，夹在内会归零）；单次探测 ≤300ms，无人应答（页面重挂）再问，连续 5 次明确未见判未提交 | `broadcast.ts` |
 | 回答采集（`collect`） | 每轮 8s | `collection-service.ts` |
 | 只读诊断（`diagnose`） | 2.5s | `view-manager.ts` |
 | 生成态探针（`generation`） | 单次 2.5s，轮询 900ms，连续 5 次读不到状态才放弃 | `view-manager.ts` |

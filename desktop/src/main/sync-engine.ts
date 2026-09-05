@@ -204,11 +204,10 @@ export class SyncEngine {
           if (code !== "rate_limited" && code !== "server_error") throw error;
           // Retry-After may only push the retry further out, never pull it forward.
           const hint = (error as { retryAfter?: number }).retryAfter;
-          for (const operation of batch) {
-            const attempt = operation.attempt + 1;
-            const wait = Math.max(retryDelay(attempt), typeof hint === "number" && hint > 0 ? hint : 0);
-            this.options.repository.enqueue({ ...operation, attempt, nextAt: this.now() + wait });
-          }
+          // 整批同一 attempt 与 nextAt：折叠的 state 行若各自抖动退避，下一轮会拆成 N 次一模一样的整份上传。
+          const attempt = Math.max(...batch.map((operation) => operation.attempt)) + 1;
+          const nextAt = this.now() + Math.max(retryDelay(attempt), typeof hint === "number" && hint > 0 ? hint : 0);
+          for (const operation of batch) this.options.repository.enqueue({ ...operation, attempt, nextAt });
           waiting = true;
         }
       }

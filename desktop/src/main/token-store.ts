@@ -42,12 +42,11 @@ export class TokenStore {
       const token = await this.crypto.decrypt(await readFile(this.path));
       this.memoryToken = token || null;
       return this.memoryToken;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      // Linux 钥匙环未解锁时 decrypt 抛的是「暂时读不到」，不是「令牌坏了」：复查 available()，读不到就原样返回，
-      // 绝不能把磁盘上唯一的 refresh token 删掉——否则用户解锁钥匙环后还得重走一遍 Google 授权且不知道为什么。
-      if (!await safeEncryptionAvailability(this.crypto.available)) return null;
-      await this.clear();
+    } catch {
+      // 读文件失败（EACCES/EBUSY/EIO…）或 decrypt 失败（Linux 钥匙环未解锁、密文与当前用户密钥不匹配）都到这里。
+      // 这两类在这里分不开——safeStorage 对锁住的钥匙环照样报 available——所以一律**只当本次读不到**，绝不 unlink：
+      // 磁盘上是唯一的 refresh token，删了用户就得重走一遍 Google 授权且不知道为什么；真坏掉的文件会在下次
+      // 成功授权时被 save() 整体覆盖，不需要在这里清。
       return null;
     }
   }

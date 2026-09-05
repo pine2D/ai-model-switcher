@@ -439,13 +439,13 @@ export class ViewManager {
     }).then((result) => "ok" in result ? result : { ok: false, code: "invalid_response" });
   }
 
-  // 只读确认，配合 BroadcastCoordinator 的 submit_unconfirmed 恢复；所有失败出口都是 unsupported（fail-closed）。
-  confirmSubmitted(site: SiteKey, command: WasSubmittedSiteCommand, signal: AbortSignal): Promise<SiteSubmittedResponse> {
-    const unsupported: SiteSubmittedResponse = { supported: false, ok: false };
+  // 只读确认，配合 BroadcastCoordinator 的 submit_unconfirmed 恢复。页面有回包才归一（fail-closed）；
+  // 通道超时/取消返回 null = 这一次没人应答（页面重挂中），协调器会在窗口内再问，不能读成「不支持」。
+  confirmSubmitted(site: SiteKey, command: WasSubmittedSiteCommand, signal: AbortSignal): Promise<SiteSubmittedResponse | null> {
     const view = this.views.get(site);
-    if (!view || view.webContents.isDestroyed()) return Promise.resolve(unsupported);
-    return this.commands.send(view.webContents, command, { signal, timeoutResult: unsupported })
-      .then((result) => normalizeSubmitted(result));
+    if (!view || view.webContents.isDestroyed()) return Promise.resolve({ supported: false, ok: false });
+    return this.commands.send(view.webContents, command, { signal, timeoutResult: { ok: false, code: "timeout" } })
+      .then((result) => "supported" in result ? normalizeSubmitted(result) : null);
   }
 
   collect(site: SiteKey, deadline: number): Promise<SiteCollectionResult> {

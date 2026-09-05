@@ -47,43 +47,41 @@ test("Linux basic_text keeps the refresh token in memory for this session only",
   }
 });
 
-test("a decrypt failure that is not ENOENT degrades to null and clears the corrupted file", async () => {
+test("a decrypt failure that is not ENOENT degrades to null and keeps the file for the next successful save", async () => {
   const directory = await mkdtemp(join(tmpdir(), "polyask-token-"));
   const path = join(directory, "oauth-token.bin");
   await writeFile(path, "corrupted", { mode: 0o600 });
   const store = new TokenStore(path, {
     backend: () => "dpapi",
     available: async () => true,
-    encrypt: async () => { throw new Error("must_not_encrypt"); },
+    encrypt: async (value) => Buffer.from(`cipher:${value}`),
     decrypt: async () => { throw Object.assign(new Error("cipher mismatch"), { code: "ERR_OSSL_BAD_DECRYPT" }); }
   });
   try {
     assert.equal(await store.load(), null);
-    await assert.rejects(
-      () => readFile(path),
-      (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT"
-    );
+    // 密文与当前密钥不匹配和「钥匙环没解锁」在 safeStorage 层分不开：一律不删，等下次 save() 覆盖
+    assert.equal((await readFile(path)).toString(), "corrupted");
+    assert.equal(await store.save("fresh"), true, "下一次成功授权直接覆盖坏文件");
+    assert.equal(await new TokenStore(path, store.crypto).load(), null, "本桩的 decrypt 仍然失败，但文件已是新密文");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
 test("a decrypt failure while safe storage has become unavailable keeps the stored token", async () => {
-  // Linux 钥匙环未解锁：decrypt 抛错、available() 复查为 false ——「现在读不到」不是「坏了」，不能删掉唯一的 refresh token。
+  // Linux 钥匙环未解锁：decrypt 抛错——「现在读不到」不是「坏了」，不能删掉唯一的 refresh token。
   const directory = await mkdtemp(join(tmpdir(), "polyask-token-"));
   const path = join(directory, "oauth-token.bin");
   await writeFile(path, "locked", { mode: 0o600 });
-  let availability = 0;
   const store = new TokenStore(path, {
     backend: () => "gnome_libsecret",
-    available: async () => { availability += 1; return availability === 1; },
+    available: async () => true, // 生产接线里 available() 是启动时探测一次的常量：即使钥匙环锁着也返回 true，不能拿它当判据
     encrypt: async () => { throw new Error("must_not_encrypt"); },
     decrypt: async () => { throw new Error("keyring locked"); }
   });
   try {
     assert.equal(await store.load(), null);
     assert.equal((await readFile(path)).toString(), "locked", "令牌文件必须原样保留");
-    assert.equal(availability, 2, "catch 分支必须复查一次 available()");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

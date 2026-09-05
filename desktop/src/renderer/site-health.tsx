@@ -20,6 +20,8 @@ interface SiteHealthPanelProps {
   readonly onClearData: (site: SiteKey) => void;
   readonly onCopyReport: () => void;
   readonly onBack: () => void;
+  /** 最近一次站点动作（复制报告/重载/清缓存）的可见反馈；与外壳的读屏播报同一句。 */
+  readonly feedback?: string;
 }
 
 function stateLabel(copy: DesktopCopy, state: SiteHealthState): string {
@@ -79,10 +81,11 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
           <button type="button" onClick={() => props.onFocus(detailSite.key)}><FocusIcon />{props.copy.healthFocusSite}</button>
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.reloadSite, { site: detailSite.label })} onClick={() => props.onReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.reloadSite, { site: detailSite.label })}</button>
           <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : formatCopy(props.copy.hardReloadSite, { site: detailSite.label })} onClick={() => props.onHardReload(detailSite.key)}><ReloadIcon />{formatCopy(props.copy.hardReloadSite, { site: detailSite.label })}</button>
-          <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} aria-label={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} onClick={() => props.onClearData(detailSite.key)}><TrashIcon />{formatCopy(props.copy.clearSiteCache, { site: detailSite.label })}</button>
+          <button type="button" disabled={reloadBlocked} title={reloadBlocked ? props.copy.healthReloadBlocked : props.copy.clearSiteCacheHint} onClick={() => props.onClearData(detailSite.key)}><TrashIcon />{formatCopy(props.copy.clearSiteCache, { site: detailSite.label })}</button>
           <button type="button" onClick={props.onCopyReport}>{props.copy.healthCopyReport}</button>
         </div>
         {reloadBlocked ? <p className="health-blocked">{props.copy.healthReloadBlocked}</p> : null}
+        <p className="health-feedback" role="status" aria-live="polite">{props.feedback ?? ""}</p>
       </section>
     );
   }
@@ -107,6 +110,7 @@ export function SiteHealthPanel(props: SiteHealthPanelProps): React.JSX.Element 
           })}
         </div>
       ) : <p className="health-empty">{props.copy.healthEmptyScope}</p>}
+      <p className="health-feedback" role="status" aria-live="polite">{props.feedback ?? ""}</p>
     </section>
   );
 }
