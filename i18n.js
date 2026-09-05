@@ -1,237 +1,40 @@
-// i18n.js — 运行时 UI 三语（popup/console/compose/内容脚本共用）。同步字典，避免 fetch/CSP/FOUC。
-// 真值存 storage.local.amsLang（默认 auto；popup 改）；扩展页镜像 localStorage 供同步启动。
-// MSG 由各 surface 任务填充：{ key: { en, zh_CN, zh_TW } }
+// i18n.js — 站点运行时（content/*.js）的三语词条。同步字典；语言由 Desktop 外壳在 preload 里通过
+// __AMS_I18N__.setLang(resolveLocale(navigator.language)) 单向注入，本文件不再自己解析 locale、不读任何存储。
+// 词条只保留 content/*.js 里真有 t("…") 调用的键（含 core.js runMode 三元取的 cs_switchedThink/cs_switchedFast）；
+// 派生规则与「死词条必须红」的反向断言见 scripts/test-desktop-shared-runtime.js。
 const MSG = {
-  // —— console 段（I2）——
-  con_windowTitle: { en: "Broadcast Console", zh_CN: "群发控制台", zh_TW: "群發主控台" },
-  con_scopeCount: { en: "{0}/{1} sites", zh_CN: "已选 {0}/{1}", zh_TW: "已選 {0}/{1}" },
-  con_tierKeep: { en: "Tier: keep", zh_CN: "档位：不变", zh_TW: "檔位：不變" },
-  con_tierThink: { en: "🧠 Deep think", zh_CN: "🧠 深度思考", zh_TW: "🧠 深度思考" },
-  con_tierFast: { en: "⚡ Fast", zh_CN: "⚡ 快速", zh_TW: "⚡ 快速" },
-  con_tierKeepShort: { en: "Keep", zh_CN: "保持", zh_TW: "保持" },
-  con_tierThinkShort: { en: "Think", zh_CN: "深思", zh_TW: "深思" },
-  con_tierFastShort: { en: "Fast", zh_CN: "快速", zh_TW: "快速" },
-  con_collectDonePart: { en: "Summary of {0} sites copied ({1} without answers)", zh_CN: "已复制 {0} 站汇总（{1} 站无回答）", zh_TW: "已複製 {0} 站彙總（{1} 站無回答）" },
-  con_autoRetried: { en: "auto-retried", zh_CN: "已自动重试", zh_TW: "已自動重試" },
-  con_archiveTitle: { en: "Open result library (questions and answers)", zh_CN: "打开结果库（问题和各站回答）", zh_TW: "開啟結果庫（問題和各網站回答）" },
-  arc_listAria: { en: "Result library entries", zh_CN: "结果库条目", zh_TW: "結果庫項目" },
-  arc_empty: { en: "The result library is empty.", zh_CN: "结果库中暂无内容。", zh_TW: "結果庫中尚無內容。" },
-  arc_capture: { en: "Save current results", zh_CN: "保存当前结果", zh_TW: "儲存目前結果" },
-  arc_capturing: { en: "Saving…", zh_CN: "正在保存…", zh_TW: "正在儲存…" },
-  arc_captured: { en: "Saved results from {0} sites", zh_CN: "已保存 {0} 站结果", zh_TW: "已儲存 {0} 個網站的結果" },
-  arc_noSites: { en: "Select at least one site first", zh_CN: "请先选择至少一个站点", zh_TW: "請先選擇至少一個網站" },
-  arc_copy: { en: "Copy", zh_CN: "复制", zh_TW: "複製" },
-  arc_copied: { en: "Copied", zh_CN: "已复制", zh_TW: "已複製" },
-  arc_export: { en: "Export .md", zh_CN: "导出 .md", zh_TW: "匯出 .md" },
-  arc_exported: { en: "Exported as Markdown", zh_CN: "已导出为 Markdown", zh_TW: "已匯出為 Markdown" },
-  arc_del: { en: "Delete", zh_CN: "删除", zh_TW: "刪除" },
-  arc_delConfirm: { en: "Delete this result?", zh_CN: "删除这条结果？", zh_TW: "刪除這筆結果？" },
-  arc_more: { en: "Load more", zh_CN: "加载更多", zh_TW: "載入更多" },
-  arc_loadFailed: { en: "Couldn't load the result library. Try again.", zh_CN: "结果库加载失败，请重试。", zh_TW: "結果庫載入失敗，請重試。" },
-  arc_saveFailed: { en: "Couldn't save the result to the result library. Try again.", zh_CN: "结果保存到结果库失败，请重试。", zh_TW: "結果儲存至結果庫失敗，請重試。" },
-  arc_deleteFailed: { en: "Couldn't delete the result. Try again.", zh_CN: "结果删除失败，请重试。", zh_TW: "結果刪除失敗，請重試。" },
-  con_promptPh: { en: "Ask a question to broadcast… (Enter to send · ↑↓ history)", zh_CN: "输入要群发的问题…（Enter 发送 · ↑↓ 历史）", zh_TW: "輸入要群發的問題…（Enter 發送 · ↑↓ 歷史）" },
-  con_promptAria: { en: "Broadcast question", zh_CN: "群发问题", zh_TW: "群發問題" },
-  con_imageAdd: { en: "Add images (up to 4 PNG/JPEG, 10 MiB total)", zh_CN: "添加图片（最多 4 张 PNG/JPEG，总计 10 MiB）", zh_TW: "新增圖片（最多 4 張 PNG/JPEG，合計 10 MiB）" },
-  con_imageDetail: { en: "{0} images · {1} MiB", zh_CN: "{0} 张 · {1} MiB", zh_TW: "{0} 張 · {1} MiB" },
-  con_imageRemove: { en: "Remove images: {0}", zh_CN: "移除图片：{0}", zh_TW: "移除圖片：{0}" },
-  con_imageAdded: { en: "Images attached: {0}", zh_CN: "已附加图片：{0}", zh_TW: "已附加圖片：{0}" },
-  con_imageRemoved: { en: "Images removed", zh_CN: "已移除图片", zh_TW: "已移除圖片" },
-  con_imageCount: { en: "Choose up to 4 images", zh_CN: "最多选择 4 张图片", zh_TW: "最多選擇 4 張圖片" },
-  con_imageType: { en: "Only PNG/JPEG images are supported", zh_CN: "仅支持 PNG/JPEG 图片", zh_TW: "僅支援 PNG/JPEG 圖片" },
-  con_imageSize: { en: "Images must total 10 MiB or less", zh_CN: "图片总大小必须小于或等于 10 MiB", zh_TW: "圖片總大小必須小於或等於 10 MiB" },
-  con_imageRead: { en: "Could not read the images. Choose them again.", zh_CN: "读取图片失败，请重新选择。", zh_TW: "讀取圖片失敗，請重新選擇。" },
-  con_sendAll: { en: "Send", zh_CN: "发送", zh_TW: "發送" },
-  con_scrollSitesLeft: { en: "Scroll sites left", zh_CN: "向左滚动站点", zh_TW: "向左捲動網站" },
-  con_scrollSitesRight: { en: "Scroll sites right", zh_CN: "向右滚动站点", zh_TW: "向右捲動網站" },
-  con_composeTitle: { en: "Open prompt workspace", zh_CN: "打开提示词工作区", zh_TW: "開啟提示詞工作區" },
-  con_retryTitle: { en: "Retry failed sites · Alt+R", zh_CN: "重试失败的站点 · Alt+R", zh_TW: "重試失敗的網站 · Alt+R" },
-  con_newSessionTitle: { en: "New session for selected sites (reload each window) · Alt+N", zh_CN: "为所选站点开启新会话（重载各窗口）· Alt+N", zh_TW: "為所選網站開啟新對話（重新載入各視窗）· Alt+N" },
-  con_closeAllTitle: { en: "Close all windows opened by console", zh_CN: "关闭控制台开启的全部窗口", zh_TW: "關閉主控台開啟的全部視窗" },
-  con_groupTitle: { en: "Select sites: all, clear, toggle one, or apply a group", zh_CN: "选择站点：全部、清空、切换单站或应用分组", zh_TW: "選擇網站：全部、清空、切換單一網站或套用群組" },
-  con_groupAria: { en: "Select sites", zh_CN: "选择站点", zh_TW: "選擇網站" },
-  con_tierTitle: { en: "Tier before send", zh_CN: "发送前档位", zh_TW: "發送前檔位" },
-  con_delete: { en: "Delete", zh_CN: "删除", zh_TW: "刪除" },
-  con_cancel: { en: "Cancel", zh_CN: "取消", zh_TW: "取消" },
-  con_sending: { en: "Sending {0}/{1}", zh_CN: "发送中 {0}/{1}", zh_TW: "發送中 {0}/{1}" },
-  con_winOpening: { en: "Opening…", zh_CN: "开窗中", zh_TW: "開窗中" },
-  con_sendingTile: { en: "Opening/Sending…", zh_CN: "开窗/发送中", zh_TW: "開窗／發送中" },
-  con_reused: { en: "Reused", zh_CN: "复用", zh_TW: "複用" },
-  con_opened: { en: "Opened", zh_CN: "已打开", zh_TW: "已開啟" },
-  con_failed: { en: "Failed", zh_CN: "失败", zh_TW: "失敗" },
-  con_grpNamePh: { en: "Group name (Enter to save)", zh_CN: "分组名称（回车保存）", zh_TW: "群組名稱（Enter 儲存）" },
-  con_tplNamePh: { en: "Template name (optional, Enter to save)", zh_CN: "模板名称（可留空，回车保存）", zh_TW: "範本名稱（可留空，Enter 儲存）" },
-  con_delGroup: { en: 'Delete group "{0}"?', zh_CN: "删除分组「{0}」？", zh_TW: "刪除群組「{0}」？" },
-  con_delTpl: { en: 'Delete template "{0}"?', zh_CN: "删除模板「{0}」？", zh_TW: "刪除範本「{0}」？" },
-  con_grpAll: { en: "All", zh_CN: "全部", zh_TW: "全部" },
-  con_grpImage: { en: "Supports images", zh_CN: "支持图片", zh_TW: "支援圖片" },
-  con_grpNone: { en: "None", zh_CN: "清空", zh_TW: "清空" },
-  con_grpIntl: { en: "International", zh_CN: "国外", zh_TW: "國際網站" },
-  con_grpDomestic: { en: "China-based", zh_CN: "国内", zh_TW: "中國網站" },
-  con_grpSites: { en: "Toggle site", zh_CN: "切换单站", zh_TW: "切換單站" },
-  con_moreGrpSave: { en: "Save selection as group…", zh_CN: "保存当前选择为分组…", zh_TW: "儲存目前選擇為群組…" },
-  con_moreGrpDel: { en: "Delete matching group…", zh_CN: "删除匹配当前选择的分组…", zh_TW: "刪除符合目前選擇的群組…" },
-  con_moreArchive: { en: "Open result library", zh_CN: "打开结果库", zh_TW: "開啟結果庫" },
-  con_moreCheckup: { en: "Check selected sites", zh_CN: "巡检所选站点", zh_TW: "巡檢所選網站" },
-  con_sendingDot: { en: "Sending…", zh_CN: "发送中", zh_TW: "發送中" },
-  // #live 播报（读屏专用，唯一进度通道，F119）
-  con_liveSendStart: { en: "Sending to {0} sites", zh_CN: "开始向 {0} 站发送", zh_TW: "開始向 {0} 站傳送" },
-  con_liveProgress: { en: "Progress {0}/{1}", zh_CN: "进度 {0}/{1}", zh_TW: "進度 {0}/{1}" },
-  con_liveTileDone: { en: "Tile done: {0} ready, {1} failed", zh_CN: "平铺完成：{0} 站已就绪，{1} 站失败", zh_TW: "平鋪完成：{0} 站已就緒，{1} 站失敗" },
-  con_liveNewSession: { en: "Started a new session for {0} sites", zh_CN: "已为 {0} 站开启新会话", zh_TW: "已為 {0} 站開啟新對話" },
-  con_liveClosedAll: { en: "Closed all sites", zh_CN: "已关闭全部站点", zh_TW: "已關閉全部網站" },
-  // 群发失败原因（错误码 → 文案，console.js ERR_KEYS）
-  con_errTimeout: { en: "Timed out. Check that the site is signed in and loaded, then retry.", zh_CN: "操作超时。请确认该站已登录且页面加载完成，然后重试。", zh_TW: "操作逾時。請確認該網站已登入且頁面載入完成，然後重試。" },
-  con_errImageInvalid: { en: "The image data is invalid. Choose the images again.", zh_CN: "图片数据无效，请重新选择。", zh_TW: "圖片資料無效，請重新選擇。" },
-  con_errAttachmentUnsupported: { en: "This site does not support image broadcast yet", zh_CN: "该站暂不支持图片群发", zh_TW: "該站暫不支援圖片群發" },
-  con_errAttachmentFailed: { en: "Image attachment failed; text was not sent", zh_CN: "图片附加失败，未发送文字", zh_TW: "圖片附加失敗，未傳送文字" },
-  con_errAttachmentTimeout: { en: "Image upload timed out; text was not sent", zh_CN: "等待图片上传超时，未发送文字", zh_TW: "等待圖片上傳逾時，未傳送文字" },
-  con_errAttachmentAction: { en: "Confirm image use on the site, then retry; text was not sent", zh_CN: "请先在站点页面确认图片使用条款后重试，未发送文字", zh_TW: "請先在網站頁面確認圖片使用條款後重試，未傳送文字" },
-  con_errNoComposer: { en: "Composer not found (page not ready, not signed in, or site changed)", zh_CN: "输入框未找到（页面未就绪、未登录或站点改版）", zh_TW: "找不到輸入框（頁面尚未就緒、未登入或網站已改版）" },
-  con_errGeneric: { en: "Unexpected error", zh_CN: "未知错误", zh_TW: "未知錯誤" },
-  con_errCancelled: { en: "Cancelled", zh_CN: "已取消", zh_TW: "已取消" },
-  con_errInvalidRequest: { en: "Invalid request. Reselect the target AI and send again.", zh_CN: "请求无效，请重新选择目标 AI 后再次发送。", zh_TW: "請求無效，請重新選擇目標 AI 後再次傳送。" },
-  con_allDone: { en: "Sent to all {0} sites", zh_CN: "已发送到全部 {0} 站", zh_TW: "已傳送到全部 {0} 個網站" },
-  con_errInject: { en: "Input failed because the editor rejected the text", zh_CN: "输入失败，站点编辑器拒绝写入文字", zh_TW: "輸入失敗，網站編輯器拒絕寫入文字" },
-  con_errSubmit: { en: "Submit not confirmed", zh_CN: "提交未确认", zh_TW: "提交未確認" },
-  con_errTier: { en: "Tier did not switch; sent using the current tier", zh_CN: "档位未切换，已按当前档位发送", zh_TW: "檔位未切換，已依目前檔位傳送" },
-  con_failSum: { en: "{0} failed: {1}. Hover over a chip for details, then select Retry.", zh_CN: "{0} 站发送失败：{1}。将鼠标悬停在站点上可查看原因，然后点击重试。", zh_TW: "{0} 個網站傳送失敗：{1}。將游標停在網站上可查看原因，然後按一下重試。" },
-  con_histPos: { en: "History {0}/{1}", zh_CN: "历史 {0}/{1}", zh_TW: "歷史 {0}/{1}" },
-  con_historySaveFailed: { en: "Question history was not saved", zh_CN: "提问历史未保存", zh_TW: "提問歷史未儲存" },
-  con_checking: { en: "Checking…", zh_CN: "巡检中", zh_TW: "巡檢中" },
-  con_checkupOk: { en: "Checkup passed", zh_CN: "自检通过", zh_TW: "自檢通過" },
-  // {0} 是**未通过**的档位类检查名。必须显式说明它是「读不出」，直接拼在「自检通过」后面会读成「这项通过了」，语义正好反过来
-  con_checkupOkAdvisory: { en: "Checkup passed · tier not readable: {0}", zh_CN: "自检通过 · 档位读不出：{0}", zh_TW: "自檢通過 · 檔位讀不出：{0}" },
-  scope_checkDone: { en: "{0} passed · {1} need attention", zh_CN: "{0} 站正常 · {1} 站需处理", zh_TW: "{0} 站正常 · {1} 站需處理" },
-  scope_report: { en: "Copy diagnostic report", zh_CN: "复制诊断报告", zh_TW: "複製診斷報告" },
-  scope_reportCopied: { en: "Diagnostic report copied", zh_CN: "已复制诊断报告", zh_TW: "已複製診斷報告" },
-  scope_reportHint: { en: "When reporting, note: 1) does text appear in the composer 2) was it actually sent 3) any error message 4) which step broke. Submit: https://github.com/pine2D/polyask/issues/new/choose", zh_CN: "报障请说明：①输入框有没有出现文字 ②有没有真的发出去 ③有没有报错文案 ④坏在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose", zh_TW: "回報請說明：①輸入框有沒有出現文字 ②有沒有真的送出 ③有沒有錯誤文案 ④壞在哪一步。提交：https://github.com/pine2D/polyask/issues/new/choose" },
-  con_errNoWindow: { en: "No window is open. Select Tile or Send first.", zh_CN: "尚未打开窗口，请先平铺或发送。", zh_TW: "尚未開啟視窗，請先平鋪或傳送。" },
-  con_errNoView: { en: "Site view unavailable", zh_CN: "站点视图不可用", zh_TW: "網站檢視無法使用" },
-  con_errNotReady: { en: "Not ready. Reload the site tab; this often happens after the extension reloads.", zh_CN: "页面未就绪，请刷新该站标签页。扩展刚重载时常会出现此情况。", zh_TW: "頁面尚未就緒，請重新整理該網站的分頁。擴充功能剛重新載入時常會出現此情況。" },
-  con_collectTitle: { en: "Copy the selected sites' latest answers as Markdown · Alt+C", zh_CN: "将所选站点的最新回答汇总为 Markdown 并复制 · Alt+C", zh_TW: "將所選網站的最新回答彙整為 Markdown 並複製 · Alt+C" },
-  con_collectDone: { en: "Summary of {0} sites copied to clipboard", zh_CN: "已复制 {0} 站汇总到剪贴板", zh_TW: "已複製 {0} 站彙總到剪貼簿" },
-  con_collectDoneUnarchived: { en: "Summary copied, but the result was not saved to the result library", zh_CN: "汇总已复制，但结果未保存到结果库", zh_TW: "彙總已複製，但結果未儲存至結果庫" },
-  con_collectFail: { en: "Copy failed", zh_CN: "复制失败", zh_TW: "複製失敗" },
-  con_errNoAnswer: { en: "No answer found (the site is unsupported or the answer is empty)", zh_CN: "未获取到回答（站点未适配或回答为空）", zh_TW: "找不到回答（網站尚未支援或回答為空）" },
-  con_mdHeader: { en: "PolyAsk comparison", zh_CN: "群发对比", zh_TW: "群發對比" },
-  con_mdQuestion: { en: "Question", zh_CN: "提问", zh_TW: "提問" },
-  con_mdThink: { en: "Deep think", zh_CN: "深度思考", zh_TW: "深度思考" },
-  con_mdFast: { en: "Fast", zh_CN: "快速", zh_TW: "快速" },
-  con_chipHint: { en: "Click to toggle selection", zh_CN: "点击可切换选择状态", zh_TW: "按一下可切換選取狀態" },
-  con_tileTitle: { en: "Arrange windows only, no send (Send opens missing windows automatically) · Alt+L", zh_CN: "只开窗与重排布局，不发送（发送会自动为缺窗站开窗）· Alt+L", zh_TW: "只開窗與重排版面，不發送（發送會自動為缺窗站開窗）· Alt+L" },
-  // —— compose 段（I3）——
-  cmp_title:       { en: "Prompt workspace",            zh_CN: "提示词工作区",    zh_TW: "提示詞工作區" },
-  cmp_ph:          { en: "Enter your broadcast question… (Ctrl+Enter to send)", zh_CN: "输入要群发的问题…（Ctrl+Enter 发送）", zh_TW: "輸入要群發的問題…（Ctrl+Enter 發送）" },
-  cmp_libraryAria: { en: "Prompt templates and history", zh_CN: "提示词模板与历史", zh_TW: "提示詞範本與歷史" },
-  cmp_templates:   { en: "Templates",                    zh_CN: "模板",            zh_TW: "範本" },
-  cmp_history:     { en: "History",                      zh_CN: "历史",            zh_TW: "歷史" },
-  cmp_emptyTemplates: { en: "No templates yet",          zh_CN: "暂无模板",        zh_TW: "尚無範本" },
-  cmp_emptyHistory: { en: "No question history yet",     zh_CN: "暂无提问历史",    zh_TW: "尚無提問歷史" },
-  cmp_more:       { en: "Load more",                     zh_CN: "加载更多",        zh_TW: "載入更多" },
-  cmp_historyLoadFailed: { en: "Couldn't load history. Try again.", zh_CN: "历史加载失败，请重试。", zh_TW: "歷史載入失敗，請重試。" },
-  cmp_saveTemplate: { en: "Save as template…",           zh_CN: "保存为模板…",    zh_TW: "儲存為範本…" },
-  cmp_deleteTemplate: { en: "Delete template",           zh_CN: "删除模板",        zh_TW: "刪除範本" },
-  cmp_save:        { en: "Save",                         zh_CN: "保存",            zh_TW: "儲存" },
-  cmp_close:       { en: "Close",                      zh_CN: "关闭",            zh_TW: "關閉" },
-  cmp_back:        { en: "Fill prompt and close",       zh_CN: "填入提示词并关闭", zh_TW: "填入提示詞並關閉" },
-  cmp_send:        { en: "Send to all",                 zh_CN: "发送到全部",      zh_TW: "群發到全部" },
-  cmp_scopeNone:   { en: "No sites selected",           zh_CN: "未选择站点",      zh_TW: "未選擇網站" },
-  cmp_scopePrefix: { en: "Broadcasting to ",            zh_CN: "将群发到 ",       zh_TW: "將群發到 " },
-  cmp_scopeN:      { en: "{0} sites",                   zh_CN: "{0} 站",          zh_TW: "{0} 站" },
-  cmp_scopeColon:  { en: ": ",                          zh_CN: "：",              zh_TW: "：" },
-  // —— popup 段（I4）——
-  pop_openConsole: { en: "Open Broadcast Console",                      zh_CN: "打开群发控制台",                    zh_TW: "開啟群發主控台" },
-  pop_unsupported: { en: "Tier switching works on AI site tabs (broadcast console is unaffected)", zh_CN: "档位切换需在 AI 站点页使用（群发控制台不受影响）", zh_TW: "檔位切換需在 AI 網站分頁中使用（群發主控台不受影響）" },
-  pop_detecting:   { en: "Checking…",                                   zh_CN: "检测中…",                          zh_TW: "偵測中…" },
-  pop_connected:   { en: "{0} connected",                              zh_CN: "{0} 已连接",                       zh_TW: "{0} 已連線" },
-  pop_unsupportedShort: { en: "Unsupported page",                       zh_CN: "当前页面不支持",                    zh_TW: "目前頁面不支援" },
-  pop_modeLabel:   { en: "Model mode",                                  zh_CN: "模型模式",                          zh_TW: "模型模式" },
-  pop_thinkShort:  { en: "Think",                                       zh_CN: "深思",                              zh_TW: "深思" },
-  pop_fastShort:   { en: "Fast",                                        zh_CN: "快速",                              zh_TW: "快速" },
-  pop_diagStale:   { en: "The site may have changed, or this language may not be supported", zh_CN: "站点可能已改版，或当前界面语言尚未适配", zh_TW: "網站可能已改版，或目前的介面語言尚未支援" },
-  pop_diagUnsupported: { en: "Current page not supported", zh_CN: "当前页面不支持", zh_TW: "目前頁面不支援" },
-  pop_diagPass:        { en: "passed", zh_CN: "通过", zh_TW: "通過" },
-  pop_diagFail:        { en: "failed", zh_CN: "失败", zh_TW: "失敗" },
-  // 档位读不出属合法状态（各站 state() 是刻意的偏函数），既不是通过也不是失败，见 docs/adapters.md
-  pop_diagAdvisory:    { en: "advisory", zh_CN: "提示", zh_TW: "提示" },
-  pop_shortcutUnset:   { en: "not set",                  zh_CN: "未设置",      zh_TW: "未設定" },
-  pop_consoleKeys:     { en: "Console shortcuts",        zh_CN: "控制台内快捷键", zh_TW: "主控台內快捷鍵" },
-  pop_manageShortcuts: { en: "Manage shortcuts",         zh_CN: "管理快捷键",     zh_TW: "管理快速鍵" },
-  pop_settings:        { en: "Settings",                 zh_CN: "设置",           zh_TW: "設定" },
-  pop_diagShort:       { en: "Diagnose",                 zh_CN: "诊断",           zh_TW: "診斷" },
-  pop_shortcutOpen:    { en: "Open or focus console",    zh_CN: "打开或聚焦控制台", zh_TW: "開啟或聚焦主控台" },
-  pop_shortcutThink:   { en: "Switch to deep think",     zh_CN: "切换深度思考",   zh_TW: "切換深度思考" },
-  pop_shortcutFast:    { en: "Switch to fast model",     zh_CN: "切换快速模型",   zh_TW: "切換快速模型" },
-  pop_keyCollect:      { en: "Copy summary",             zh_CN: "汇总复制",      zh_TW: "彙總複製" },
-  pop_keyTile:         { en: "Tile windows",             zh_CN: "平铺窗口",      zh_TW: "平鋪視窗" },
-  pop_keyNew:          { en: "New session",              zh_CN: "开启新会话",    zh_TW: "開啟新對話" },
-  pop_keyPrompt:       { en: "Focus prompt",             zh_CN: "聚焦输入框",    zh_TW: "聚焦輸入框" },
-  pop_keyRetry:        { en: "Retry failures",           zh_CN: "重试失败站点",  zh_TW: "重試失敗網站" },
-  // —— content-script 段（I5）——
-  cs_switchedThink:  { en: "Switched: Deep Think",                              zh_CN: "已切到：深度思考",                zh_TW: "已切到：深度思考" },
-  cs_switchedFast:   { en: "Switched: Fast Model",                              zh_CN: "已切到：快速模型",                zh_TW: "已切到：快速模型" },
+  cs_diagError:      { en: "Diagnostic error",                                  zh_CN: "诊断异常",                        zh_TW: "診斷錯誤" },
+  cs_siteAdapter:    { en: "Site adapter",                                      zh_CN: "站点适配器",                      zh_TW: "網站適配器" },
   cs_stopped:        { en: "Stopped",                                           zh_CN: "已停止",                          zh_TW: "已停止" },
   cs_switchFailGeneric: { en: "Switch failed",                                  zh_CN: "切换失败",                        zh_TW: "切換失敗" },
-  md_image:          { en: "image",                                            zh_CN: "图片",                            zh_TW: "圖片" },
   cs_switchUnstable:      { en: "Switch not confirmed; sent using the current tier", zh_CN: "切换未确认，已按当前档位发送", zh_TW: "切換未確認，已依目前檔位傳送" },
-  cs_pillThink:      { en: "🧠 Think",                                          zh_CN: "🧠 思考",                        zh_TW: "🧠 思考" },
-  cs_pillFast:       { en: "⚡ Fast",                                           zh_CN: "⚡ 快速",                        zh_TW: "⚡ 快速" },
-  cs_pillThinkTitle: { en: "Deep Think (Alt+T)",                                zh_CN: "深度思考（Alt+T）",                zh_TW: "深度思考（Alt+T）" },
-  cs_pillFastTitle:  { en: "Fast Model (Alt+Y)",                                zh_CN: "快速模型（Alt+Y）",                zh_TW: "快速模型（Alt+Y）" },
-  cs_pillHandleTitle:{ en: "PolyAsk · Model tier switcher",                     zh_CN: "PolyAsk · 模型档位切换",          zh_TW: "PolyAsk · 模型檔位切換" },
-  cs_siteAdapter:    { en: "Site adapter",                                      zh_CN: "站点适配器",                      zh_TW: "網站適配器" },
-  cs_diagError:      { en: "Diagnostic error",                                  zh_CN: "诊断异常",                        zh_TW: "診斷錯誤" },
-  // —— diagnose 检查名（I5）——
-  diag_modelEntry:   { en: "Model entry",                                       zh_CN: "模型入口",                        zh_TW: "模型入口" },
-  diag_modelReadable:{ en: "Model detected",                                    zh_CN: "已识别模型",                      zh_TW: "已辨識模型" },
-  diag_tierReadable: { en: "Tier detected",                                     zh_CN: "已识别档位",                      zh_TW: "已辨識檔位" },
-  diag_intelEntry:   { en: "Intelligence entry",                                zh_CN: "Intelligence 入口",               zh_TW: "Intelligence 入口" },
+  cs_switchedThink:  { en: "Switched: Deep Think",                              zh_CN: "已切到：深度思考",                zh_TW: "已切到：深度思考" },
+  cs_switchedFast:   { en: "Switched: Fast Model",                              zh_CN: "已切到：快速模型",                zh_TW: "已切到：快速模型" },
+  diag_composer:     { en: "Composer",                                          zh_CN: "输入框",                          zh_TW: "輸入框" },
   diag_deepThink:    { en: "DeepThink toggle",                                  zh_CN: "DeepThink 开关",                  zh_TW: "DeepThink 開關" },
+  diag_intelEntry:   { en: "Intelligence entry",                                zh_CN: "Intelligence 入口",               zh_TW: "Intelligence 入口" },
   diag_modeBtn:      { en: "Mode button",                                       zh_CN: "模式按钮",                        zh_TW: "模式按鈕" },
   diag_modelDropdown:{ en: "Model dropdown",                                    zh_CN: "模型下拉",                        zh_TW: "模型下拉" },
+  diag_modelEntry:   { en: "Model entry",                                       zh_CN: "模型入口",                        zh_TW: "模型入口" },
+  diag_modelReadable:{ en: "Model detected",                                    zh_CN: "已识别模型",                      zh_TW: "已辨識模型" },
+  diag_sendKey:      { en: "Send button",                                       zh_CN: "发送键",                          zh_TW: "發送鍵" },
   diag_thinkBtn:     { en: "Thinking toggle",                                   zh_CN: "思考开关",                        zh_TW: "思考開關" },
   diag_thinkButton:  { en: "Thinking button",                                   zh_CN: "思考按钮",                        zh_TW: "思考按鈕" },
-  diag_composer:     { en: "Composer",                                          zh_CN: "输入框",                          zh_TW: "輸入框" },
-  diag_sendKey:      { en: "Send button",                                       zh_CN: "发送键",                          zh_TW: "發送鍵" },
+  diag_tierReadable: { en: "Tier detected",                                     zh_CN: "已识别档位",                      zh_TW: "已辨識檔位" },
+  md_image:          { en: "image",                                            zh_CN: "图片",                            zh_TW: "圖片" }
 };
 const I18N_LANGS = ["en", "zh_CN", "zh_TW"];
-function _resolveAuto() {
-  // 判据须与 desktop/src/shared/copy.ts 的 resolveLocale 逐档一致（F106/F223）：两边都是
-  // 前缀匹配（非 includes），未命中任何 zh-* 分支一律落 en，不再兜底成 zh_CN —— 否则同一
-  // locale 在扩展内容脚本与 Desktop 外壳会显示不同语言。改这两个函数任一个都要保持同步。
-  const ui = (chrome.i18n && chrome.i18n.getUILanguage && chrome.i18n.getUILanguage() || "en").toLowerCase();
-  if (ui === "zh" || ui.startsWith("zh-cn") || ui.startsWith("zh-hans")) return "zh_CN";
-  if (ui.startsWith("zh-tw") || ui.startsWith("zh-hk") || ui.startsWith("zh-mo") || ui.startsWith("zh-hant")) return "zh_TW";
-  return "en";
-}
 let _lang = "en";
-function _setLangFrom(pref) {
-  const p = pref || "auto";
-  _lang = (p !== "auto" && I18N_LANGS.includes(p)) ? p : _resolveAuto();
-  if (location.protocol === "chrome-extension:") { try { localStorage.amsLang = p; } catch (e) {} } // 仅扩展页镜像；内容脚本运行在第三方 origin，不写入
+// 接受本文件自己的 zh_CN / zh_TW，也接受 desktop/src/shared/locale.ts 的 zhCN / zhTW；其余一律 en。
+function setLang(lang) {
+  const normalized = String(lang || "").replace(/^zh(CN|TW)$/, "zh_$1");
+  _lang = I18N_LANGS.includes(normalized) ? normalized : "en";
 }
-// 启动同步：扩展页用 localStorage 镜像即时定语言（无 FOUC）；内容脚本拿不到则先 auto，稍后 storage 回写
-try { _setLangFrom(localStorage.amsLang); } catch (e) { _setLangFrom("auto"); }
 function t(key, ...subs) {
   const row = MSG[key];
   let s = (row && (row[_lang] || row.en)) || key;
   subs.forEach((v, i) => { s = s.split("{" + i + "}").join(String(v)); });
   return s;
 }
-function applyI18n(root) {
-  if (location.protocol !== "chrome-extension:") return; // 内容脚本跑在第三方站点 origin，宿主 <html>/data-i18n 不是我们的（F094）
-  root = root || document;
-  try { document.documentElement.lang = _lang.replace("_", "-"); } catch (e) {}
-  root.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.getAttribute("data-i18n")); });
-  root.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.getAttribute("data-i18n-title")); });
-  root.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.getAttribute("data-i18n-ph")); });
-  root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria"))); });
-}
-// Desktop preload 会把 classic scripts 分别打包成模块；显式命名空间避免依赖跨脚本词法作用域。
-globalThis.__AMS_I18N__ = Object.freeze({ t, applyI18n });
-// 权威值取 storage.local；变更实时重应用 + 通知各 surface 重渲动态串
-chrome.storage.local.get({ amsLang: "auto" }, (v) => { _setLangFrom(v.amsLang); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); });
-chrome.storage.onChanged.addListener((c, area) => {
-  if (area === "local" && c.amsLang) { _setLangFrom(c.amsLang.newValue); try { applyI18n(); } catch (e) {} document.dispatchEvent(new CustomEvent("i18n:changed")); }
-});
+// Desktop preload 把 classic scripts 分别打包成模块；显式命名空间避免依赖跨脚本词法作用域。
+globalThis.__AMS_I18N__ = Object.freeze({ t, setLang });

@@ -1,6 +1,7 @@
 import { ARCHIVE_COPY } from "./archive-copy";
 import { COMMAND_COPY } from "./command-copy";
 import { DATA_ADMIN_COPY } from "./data-admin-copy";
+import { resolveLocale, type DesktopLocale } from "./locale";
 import { PROMPT_LIBRARY_COPY } from "./prompt-library-copy";
 import { PRODUCTIVITY_COPY } from "./productivity-copy";
 import { SYNC_COPY } from "./sync-copy";
@@ -401,19 +402,11 @@ export const COPY = {
 } as const;
 
 export type DesktopCopy = { readonly [Key in keyof typeof COPY.en]: string };
-export type DesktopLocale = keyof typeof COPY;
-
-export function resolveLocale(rawLocale: string): DesktopLocale {
-  const locale = rawLocale.toLowerCase();
-  if (locale === "zh" || locale.startsWith("zh-cn") || locale.startsWith("zh-hans")) return "zhCN";
-  if (
-    locale.startsWith("zh-tw") ||
-    locale.startsWith("zh-hk") ||
-    locale.startsWith("zh-mo") ||
-    locale.startsWith("zh-hant")
-  ) return "zhTW";
-  return "en";
-}
+export type { DesktopLocale };
+export { resolveLocale };
+// 编译期保证 COPY 覆盖 DesktopLocale 的每一个值（locale.ts 是 locale 的唯一真源）。
+const LOCALE_COVERAGE: Record<DesktopLocale, DesktopCopy> = COPY;
+void LOCALE_COVERAGE;
 
 export function getCopy(rawLocale: string): DesktopCopy {
   return COPY[resolveLocale(rawLocale)];

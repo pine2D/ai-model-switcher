@@ -50,15 +50,6 @@ function baseContext(extra = {}) {
   });
 }
 
-function chromeForI18n() {
-  return {
-    i18n: { getUILanguage: () => "zh-CN" },
-    storage: {
-      local: { get(defaults, callback) { callback(defaults); } },
-      onChanged: { addListener() {} },
-    },
-  };
-}
 
 function runtime() {
   return {
@@ -74,12 +65,51 @@ function runtime() {
   };
 }
 
+// i18n.js 不再碰 chrome.* 与任何存储：语言只由外壳经 setLang 单向注入（接受 zh_CN/zh_TW，也接受 locale.ts 的 zhCN/zhTW）。
 function i18nMustExposeDesktopNamespace() {
-  const context = baseContext({ chrome: chromeForI18n() });
+  const context = baseContext();
   runAsBundledModule("i18n.js", context);
-  assert.equal(typeof context.__AMS_I18N__?.t, "function",
-    "i18n 必须向隔离的 desktop preload 模块暴露翻译函数");
-  assert.equal(context.__AMS_I18N__.t("cs_siteAdapter"), "站点适配器");
+  const i18n = context.__AMS_I18N__;
+  assert.equal(typeof i18n?.t, "function", "i18n 必须向隔离的 desktop preload 模块暴露翻译函数");
+  assert.equal(typeof i18n?.setLang, "function", "i18n 必须暴露 setLang 供外壳注入语言");
+  assert.equal(i18n.t("cs_siteAdapter"), "Site adapter", "未注入语言前一律 en");
+  i18n.setLang("zh_TW");
+  assert.equal(i18n.t("diag_composer"), "輸入框");
+  i18n.setLang("zhCN");
+  assert.equal(i18n.t("diag_composer"), "输入框", "必须接受 locale.ts 的 zhCN 写法");
+  i18n.setLang("fr");
+  assert.equal(i18n.t("diag_composer"), "Composer", "未知语言落 en");
+  assert.equal(i18n.t("no_such_key"), "no_such_key", "缺词条时返回 key 本身，别抛");
+  assert.doesNotMatch(source("i18n.js"), /chrome\.|localStorage|applyI18n|_resolveAuto/, "i18n.js 不得再读 chrome.* / localStorage，也不得自己解析 locale");
+}
+
+// 词条覆盖双向对账：site-runtime 里每个 t("x") 的 key 必须在 i18n.js 存在且三语齐全；反过来 i18n.js 里
+// 派生清单与显式补充清单都没有的 key = 死词条，必须红（否则瘦身之后又会长出新的死词条）。
+// 收紧的派生正则：前缀必须是非标识符字符（挡住 createElement("div") 与 act("think")），键允许大小写与数字（diag_* 是驼峰）。
+const TERNARY_KEYS = ["cs_switchedThink", "cs_switchedFast"]; // core.js runMode：toast(t(mode === "think" ? … : …))，正则抠不到
+function i18nKeysMustMatchSiteRuntimeUsage() {
+  const used = new Set(TERNARY_KEYS);
+  for (const file of preloadRequires()) {
+    if (file === "i18n.js") continue;
+    for (const m of source(file).matchAll(/(^|[^A-Za-z0-9_$.])t\("([A-Za-z0-9_]+)"\)/g)) used.add(m[2]);
+  }
+  assert.ok(used.size >= 15, `派生清单只抽到 ${used.size} 条，正则或 require 列表坏了`);
+  const rows = new Map();
+  for (const m of source("i18n.js").matchAll(/^\s+([A-Za-z0-9_]+):\s*\{([^}]*)\},?\s*$/gm)) rows.set(m[1], m[2]);
+  for (const key of used) {
+    assert.ok(rows.has(key), `site-runtime 用到 t("${key}")，但 i18n.js 没有这条词条——Alt+H 检查名会裸露 key`);
+    for (const lang of ["en", "zh_CN", "zh_TW"]) assert.match(rows.get(key), new RegExp(`\\b${lang}:`), `i18n.js 的 ${key} 缺 ${lang}`);
+  }
+  for (const key of rows.keys()) assert.ok(used.has(key), `i18n.js 的 ${key} 没有任何 t("${key}") 调用点 → 死词条，删掉或把调用点写进 TERNARY_KEYS`);
+}
+
+// chrome.runtime.onMessage 监听器注册点有且只有一个（core.js）：preload 的 dispatch 是遍历分发，多一个监听器
+// 就会有两方争抢同一条命令；少一个则九站收不到任何命令。放在离线测试里数，绝不在 preload 模块作用域硬断言。
+function siteRuntimeMustRegisterExactlyOneMessageListener() {
+  let count = 0;
+  for (const file of preloadRequires()) count += (source(file).match(/onMessage\.addListener\(/g) ?? []).length;
+  assert.equal(count, 1, "site-runtime 里 chrome.runtime.onMessage.addListener 必须恰好出现一次");
+  assert.doesNotMatch(source("desktop/src/preload/site.ts"), /listeners\[0\]/, "preload 不得只取第一个监听器");
 }
 
 function coreMustResolveTranslationAcrossModuleBoundary() {
@@ -166,6 +196,8 @@ function sendBtnMustBeExposedByTheSharedRuntime() {
 }
 
 i18nMustExposeDesktopNamespace();
+i18nKeysMustMatchSiteRuntimeUsage();
+siteRuntimeMustRegisterExactlyOneMessageListener();
 coreMustResolveTranslationAcrossModuleBoundary();
 adapterMustResolveTranslation("content/adapters-intl.js", "claude.ai", "diag_modelEntry");
 adapterMustResolveTranslation("content/adapters-intl2.js", "chatgpt.com", "diag_intelEntry");

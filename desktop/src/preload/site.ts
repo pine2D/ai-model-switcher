@@ -12,6 +12,7 @@ import type {
   SiteSubmittedResponse
 } from "../shared/protocol";
 import { normalizeSubmitted, parseGenerationState } from "../shared/protocol";
+import { resolveLocale } from "../shared/locale";
 import { normalizeDiagnosticChecks } from "../shared/site-health";
 
 type SendResponse = (response: unknown) => void;
@@ -22,16 +23,9 @@ type RuntimeListener = (
 ) => unknown;
 
 const listeners: RuntimeListener[] = [];
+// 站点运行时只用到 chrome.runtime.onMessage 这一条 API（core.js 用它收命令）。语言不再经 chrome.i18n /
+// storage 让 i18n.js 自己猜，而是下面 require 完成后由外壳单向注入——locale 解析全应用只有 shared/locale.ts 一份。
 const chromeShim = {
-  i18n: { getUILanguage: () => navigator.language || "en" },
-  storage: {
-    local: {
-      get: (defaults: Record<string, unknown>, callback: (value: Record<string, unknown>) => void) => {
-        callback({ ...defaults });
-      }
-    },
-    onChanged: { addListener: (_listener: unknown) => undefined }
-  },
   runtime: {
     onMessage: {
       addListener: (listener: RuntimeListener) => { listeners.push(listener); }
@@ -57,6 +51,9 @@ require("../../../content/adapters-cn.js");
 require("../../../content/adapters-cn2.js");
 require("../../../content/generation.js");
 require("../../../content/diag.js");
+
+(globalThis as typeof globalThis & { __AMS_I18N__?: { setLang?: (lang: string) => void } })
+  .__AMS_I18N__?.setLang?.(resolveLocale(navigator.language || "en"));
 
 function normalizeResult(value: unknown): SiteResult {
   if (!value || typeof value !== "object") return { ok: false, code: "invalid_response" };
@@ -118,8 +115,7 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
   // wasSubmitted 的每一个失败出口都是「不支持」：超时、无适配器、异常、形状不对，一律不能被读成「确认未提交」。
   const probing = command.cmd === "wasSubmitted";
   const unsupported: SiteSubmittedResponse = { supported: false, ok: false };
-  const listener = listeners[0];
-  if (!listener) return Promise.resolve(probing ? unsupported : { ok: false, code: "adapter_unavailable" });
+  if (!listeners.length) return Promise.resolve(probing ? unsupported : { ok: false, code: "adapter_unavailable" });
   const remaining = Math.max(0, command.deadline - Date.now());
   if (remaining === 0) return Promise.resolve(probing ? unsupported : { ok: false, code: "timeout" });
 
@@ -144,8 +140,11 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
       const message = command.cmd === "collect"
         ? { source: "AMS", cmd: "collectAnswer" }
         : command.cmd === "diagnose" ? { source: "AMS", cmd: "diagnose" } : command;
-      const asyncResponse = listener(message, {}, finish) === true;
-      if (!asyncResponse && !settled) finish(probing ? unsupported : { ok: false, code: "invalid_response" });
+      // 逐个分发：某个监听器返回 true（会异步 sendResponse）或已同步作答就停；没有任何监听器接手才判 invalid_response。
+      // 「有且只有一个监听器」由 scripts/test-desktop-shared-runtime.js 离线数 addListener 调用点守着，
+      // 绝不在这里硬断言——模块作用域一抛，下面的 site-command 监听就注册不上，九站整链失守。
+      const claimed = listeners.some((listener) => listener(message, {}, finish) === true || settled);
+      if (!claimed && !settled) finish(probing ? unsupported : { ok: false, code: "invalid_response" });
     } catch {
       finish(probing ? unsupported : { ok: false, code: "error" });
     }

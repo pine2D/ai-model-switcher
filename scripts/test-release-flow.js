@@ -181,4 +181,14 @@ assert.ok(
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+// 术语守卫（原在 test-content-l10n.js，随站点侧 i18n 收口搬到这里）：面向用户的文档统一叫「结果库」。
+assert.doesNotMatch(fs.readFileSync("README.md", "utf8"), /归档|歸檔|封存/, "README.md：术语已改为「结果库」");
+{
+  // 正则直接捕获「未发布」到下一个版本标题之间的内容；锚点丢失时显式断言，不能悄悄放行（F210/F185）
+  const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+  const unreleasedMatch = changelog.match(/## \[未发布\]([\s\S]*?)(?=\n## \[|$)/);
+  assert.ok(unreleasedMatch, "CHANGELOG.md: 找不到「## [未发布]」段，术语回归检查失去锚点");
+  assert.doesNotMatch(unreleasedMatch[1], /归档|歸檔|封存/, "CHANGELOG.md 未发布段：术语已改为「结果库」，不应再出现「归档」");
+}
+
 console.log("release flow tests passed");

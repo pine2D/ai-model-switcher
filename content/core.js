@@ -47,22 +47,10 @@
     }
   }
 
-  // 提示条：顶部居中（胶囊在 top:8px，toast 放 48px 不遮挡）
-  function toast(msg, ok) {
-    try {
-      const d = document.createElement("div"), accent = ok ? "#4ade80" : "#ff8f91";
-      d.textContent = msg; d.setAttribute("role", "status");
-      d.style.cssText =
-        "position:fixed;pointer-events:none;z-index:2147483647;top:48px;left:50%;transform:translateX(-50%);" +
-        "max-width:90%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 12px;" +
-        "border:1px solid rgba(255,255,255,.14);border-left:3px solid " + accent + ";border-radius:9px;" +
-        "background:#12161e;color:#fff;font:13px/1.4 sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.32)";
-      document.body.appendChild(d); const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      d.animate(reduce ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: "translate(-50%,-6px)" }, { opacity: 1, transform: "translateX(-50%)" }], { duration: 140, easing: "cubic-bezier(0.23,1,0.32,1)", fill: "both" });
-      setTimeout(() => { const exit = d.animate(reduce ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: "translateX(-50%)" }, { opacity: 0, transform: "translate(-50%,-4px)" }], { duration: 110, easing: "cubic-bezier(0.23,1,0.32,1)", fill: "both" });
-        exit.finished.then(() => d.remove(), () => d.remove()); }, 2390);
-    } catch (e) {}
-  }
+  // 用户可见反馈的所有权在 Desktop 外壳（状态通道 + live region），站点视图里不再弹横幅：
+  // 九个视图各弹一条硬编码配色、与外壳主题/语言/进度脱节的提示条只会制造噪音。保留函数与调用点，
+  // 函数体早退——preload 覆盖 __AMS.toast 拦不住 IIFE 内对局部闭包的调用。
+  function toast() {}
   // 视口内可见、面积最大的编辑区（textarea / contenteditable）；找不到返回 null。高度阈值须留余量：
   // Claude 单行编辑器标称 20px，缩放机器上实测 19.99…，贴着实测值的 >=20 会筛掉唯一的真编辑器（2026-08）
   function findComposer() {

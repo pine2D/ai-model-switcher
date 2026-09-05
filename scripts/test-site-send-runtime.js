@@ -210,12 +210,13 @@ function coreWithAdapter(adapter) {
     context.listener(Object.assign({ source: "AMS", cmd: "submitPrompt" }, message), null, resolve)) };
 }
 
-test("切档失败只弹中性词条，并在最后一次失败后收尾菜单", async () => {
+test("切档失败不在站点视图内弹横幅，原因降级进控制台，并在最后一次失败后收尾菜单", async () => {
   const c = coreWithAdapter({ state: () => null,
     think: async () => { c.seq.push("adapter"); throw new Error("Gemini: 模型菜单未展开"); } });
   await c.S.runMode("think");
-  // 适配器抛的全是硬编码简体（九站几十处），原样插进 toast 等于绕开 i18n；原始 message 只降级进控制台
-  assert.deepEqual(c.toasts, ["cs_switchFailGeneric"]);
+  // toast 已收口为 no-op（用户可见反馈由 Desktop 外壳负责）：站点视图内不得再追加任何提示节点；
+  // 适配器抛的硬编码简体只降级进控制台，不进用户可见文案
+  assert.deepEqual(c.toasts, []);
   assert.ok(c.debug.some((line) => line.includes("Gemini: 模型菜单未展开")), "原因不能丢，降级到控制台/诊断");
   assert.ok(c.seq.lastIndexOf("esc") > c.seq.lastIndexOf("adapter"),
     "最后一次切档失败后必须 escMenus 收尾——残留菜单会罩住输入框，让紧随其后的注入点空");
