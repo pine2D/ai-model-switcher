@@ -52,13 +52,13 @@ function sliceBetween(text, startMarker, endMarker) {
   assert.ok(!/contents: write/.test(top), "release.yml 顶层不得再声明 contents: write");
   assert.match(top, /cancel-in-progress:\s*false/, "release.yml 的 concurrency 必须是 cancel-in-progress: false（半途失败要能重跑补齐）");
 
-  const validate = sliceBetween(workflow, "\n  validate:\n", "\n  extension:\n");
+  const validate = sliceBetween(workflow, "\n  validate:\n", "\n  desktop:\n");
   assert.match(validate, /permissions:\s*\n\s+contents: read\s*\n\s+actions: read/, "validate 作业必须显式保留 actions: read（gh run list 依赖它）");
   assert.match(validate, /timeout-minutes:\s*\d+/, "validate 作业缺少 timeout-minutes");
-
-  const extension = sliceBetween(workflow, "\n  extension:\n", "\n  desktop:\n");
-  assert.match(extension, /permissions:\s*\n\s+contents: read/, "extension 作业权限必须降为 contents: read");
-  assert.match(extension, /timeout-minutes:\s*\d+/, "extension 作业缺少 timeout-minutes");
+  // Release 正文由 validate 产出并以 artifact 交给 publish；漏上传 = 推 tag 后 publish 才炸，且 tag 不可覆盖
+  assert.match(validate, /bash scripts\/release\.sh --build-only/, "validate 必须跑 release.sh --build-only 产出 Release 正文");
+  assert.match(validate, /name: release-notes\s*\n\s+path: dist\/release-notes\.md\s*\n\s+if-no-files-found: error/, "validate 必须以 if-no-files-found: error 上传 release-notes artifact");
+  assert.doesNotMatch(workflow, /\n  extension:\n/, "extension 作业已随扩展删除，不得残留");
 
   const desktop = sliceBetween(workflow, "\n  desktop:\n", "\n  publish:\n");
   assert.match(desktop, /permissions:\s*\n\s+contents: read/, "desktop 作业权限必须降为 contents: read");
@@ -67,6 +67,15 @@ function sliceBetween(text, startMarker, endMarker) {
   const publish = sliceBetween(workflow, "\n  publish:\n", null);
   assert.match(publish, /permissions:\s*\n\s+contents: write/, "publish 作业必须保留 contents: write（发布 Release 需要）");
   assert.match(publish, /timeout-minutes:\s*\d+/, "publish 作业缺少 timeout-minutes");
+  assert.match(publish, /needs: \[validate, desktop\]/, "publish 只依赖 validate 与 desktop");
+  assert.doesNotMatch(publish, /polyask-v\*\.zip/, "publish 的 files 不得再含扩展 ZIP——fail_on_unmatched_files 会让 Desktop-only 发版在最后一步炸掉");
+  assert.match(publish, /files: \|\s*\n\s+release-assets\/polyask-desktop-\*\s*\n/, "publish 只发布 Desktop 包");
+  assert.match(publish, /fail_on_unmatched_files: true/, "publish 必须保留 fail_on_unmatched_files: true");
+  assert.match(publish, /body_path: release-assets\/release-notes\.md/);
+  // 不烧版本号的验证入口：手动触发默认 dry_run，走完汇总核对但不创建 Release
+  assert.match(workflow, /workflow_dispatch:\s*\n\s+inputs:\s*\n\s+dry_run:/, "release.yml 必须提供 workflow_dispatch(dry_run)");
+  assert.match(publish, /if: inputs\.dry_run != true\s*\n\s+uses: softprops\/action-gh-release/, "dry_run 时不得创建 Release");
+  assert.match(publish, /release-notes\.md \]/, "汇总步骤必须断言 release-notes.md 存在且非空");
 }
 {
   const top = sliceBetween(ciWorkflow, "\npermissions:\n", "\njobs:\n");
@@ -112,6 +121,28 @@ assert.ok(
   releaseScript.includes("五个 Desktop 预览包"),
   "release.sh 的成功提示必须反映当前 Desktop 产物数量"
 );
+
+// Release 正文的信任尾段：校验和命令 + 未签名/无自动更新的诚实说明，随每次发版固定附带
+{
+  const trailer = releaseScript.slice(releaseScript.indexOf("# RELEASE_TRUST_TRAILER_START"), releaseScript.indexOf("# RELEASE_TRUST_TRAILER_END"));
+  assert.ok(trailer.length > 0, "release.sh 缺少信任尾段标记块");
+  for (const needle of ["Get-FileHash -Algorithm SHA256", "shasum -a 256", "未签名", "自动更新", "SmartScreen", "隐私与安全性"]) {
+    assert.ok(trailer.includes(needle), `release.sh 信任尾段缺 ${needle}`);
+  }
+  assert.ok(releaseScript.indexOf("# F191_UNRELEASED_GUARD_END") < releaseScript.indexOf("# RELEASE_TRUST_TRAILER_START"),
+    "尾段必须在 CHANGELOG 校验之后追加，否则尾段的 - 列表会让「版本段必须有条目」的检查假绿");
+}
+
+// CHANGELOG 三条校验必须跑在每个 PR 都会经过的路径上（ci.yml 首步 release.sh --build-only），
+// 不能只剩 --publish 一个执行点——tag 不可覆盖，把检查往后挪是错误方向
+{
+  assert.match(ciWorkflow, /bash scripts\/release\.sh --build-only/, "ci.yml 必须跑 release.sh --build-only");
+  const shared = releaseScript.slice(releaseScript.indexOf("bash scripts/verify.sh"), releaseScript.indexOf("# F191_UNRELEASED_GUARD_START"));
+  assert.doesNotMatch(shared, /"\$MODE" = "publish"/, "两种模式共用段里不得出现 publish 分支");
+  for (const needle of ["缺少 [$VERSION] 的有效版本条目", "[未发布] 链接未从 $TAG 开始", "缺少 [$VERSION] 版本链接"]) {
+    assert.ok(shared.includes(needle), `CHANGELOG 校验「${needle}」必须在 --build-only 也会跑的共用段里`);
+  }
+}
 
 // F191：--publish 必须拦住「[未发布] 段仍有未晋升条目」，但绝不能拦 --build-only（PR/日常 CI 会全红）。
 // 直接切片、真跑源码里的那段 shell，而不是另抄一份判据——防止测试与实现各写各的、悄悄分叉。

@@ -1,10 +1,18 @@
 name: Release
 
-# 推送 v* 标签后发布 Chrome 扩展与无签名 Desktop 预览包。
+# 推送 v* 标签后发布五个无签名 Desktop 预览包（各附 .sha256）与 CHANGELOG 说明。
 # 本地入口：prepare-release.sh 准备版本 → release.sh --publish 做 exact-HEAD CI 门禁并推 tag。
+# 手动触发（workflow_dispatch，dry_run 默认 true）会走完 validate → desktop → 汇总核对，但不创建 Release——
+# 不消耗版本号就能验证整条发布链；tag 一旦推出不可覆盖，任何 workflow 改动先用它跑一遍。
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只构建与核对资产，不创建 GitHub Release"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -63,29 +71,6 @@ jobs:
         with:
           name: release-notes
           path: dist/release-notes.md
-          if-no-files-found: error
-
-  extension:
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10 # 实测最大 20s，上浮远超 50% 留量级余量
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-
-      - name: 构建并校验 Chrome 扩展
-        run: bash scripts/release.sh --build-only
-
-      - name: 暂存扩展发布资产
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: release-extension
-          path: |
-            dist/polyask-*.zip
-            dist/polyask-*.zip.sha256
           if-no-files-found: error
 
   desktop:
@@ -170,7 +155,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [extension, desktop]
+    needs: [validate, desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 5 # 实测最大 28s；这里需要真正的 contents: write 来发布 Release
     permissions:
@@ -183,12 +168,20 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: 发布 Chrome 扩展与 Desktop 预览包
+      # 与下面 files 同一 glob：dry_run 时这一步就是终点，真发版时它先于 action-gh-release 把缺资产暴露成可读的清单。
+      - name: 核对 Release 正文与资产
+        run: |
+          [ -s release-assets/release-notes.md ] || { echo "::error::release-notes.md 缺失或为空"; exit 1; }
+          echo "--- release-notes.md ---"; cat release-assets/release-notes.md; echo "--- 资产 ---"
+          ls -1 release-assets/polyask-desktop-* || { echo "::error::没有匹配到任何 polyask-desktop-* 资产"; exit 1; }
+          count=$(ls -1 release-assets/polyask-desktop-* | grep -vc '\.sha256$')
+          [ "$count" -eq 5 ] || { echo "::error::Desktop 包应为 5 个，实际 $count 个"; exit 1; }
+
+      - name: 发布 Desktop 预览包
+        if: inputs.dry_run != true
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
-            release-assets/polyask-v*.zip
-            release-assets/polyask-v*.zip.sha256
             release-assets/polyask-desktop-*
           body_path: release-assets/release-notes.md
           fail_on_unmatched_files: true
