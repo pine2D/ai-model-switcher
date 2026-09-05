@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 用法：bash scripts/prepare-release.sh <auto|patch|minor|major|X.Y.Z> [--dry-run]
 
-把 CHANGELOG.md 的「未发布」晋升为新版本，并同步 manifest.json 与底部比较链接。
+把 CHANGELOG.md 的「未发布」晋升为新版本，并同步 Desktop package/lock、底部比较链接（扩展退役前 manifest.json 作为跟随项一并回写）。
 只改文件，不 commit、不打 tag；auto 按上次版本后的 Conventional Commits 取最高级别。
 EOF
 }
@@ -46,18 +46,19 @@ manifest_text = manifest_file.read_text(encoding="utf-8")
 manifest = json.loads(manifest_text)
 desktop = json.loads(desktop_file.read_text(encoding="utf-8"))
 desktop_lock = json.loads(desktop_lock_file.read_text(encoding="utf-8"))
-current = manifest.get("version", "")
+# 版本真源是 desktop/package.json；manifest.json 与 desktop/package-lock.json 是跟随项（manifest 在扩展退役时摘掉）。
+current = desktop.get("version", "")
 
 def parse(value, label):
     if not re.fullmatch(r"\d+\.\d+\.\d+", value):
         raise SystemExit(f"错误：{label} 不是 X.Y.Z：{value}")
     return tuple(map(int, value.split(".")))
 
-current_parts = parse(current, "manifest 版本")
-if desktop.get("version") != current:
-    raise SystemExit(f"错误：desktop/package.json 版本 {desktop.get('version')} 与 manifest {current} 不一致")
+current_parts = parse(current, "desktop/package.json 版本")
+if manifest.get("version") != current:
+    raise SystemExit(f"错误：manifest.json 版本 {manifest.get('version')} 与 desktop/package.json {current} 不一致")
 if desktop_lock.get("version") != current or desktop_lock.get("packages", {}).get("", {}).get("version") != current:
-    raise SystemExit("错误：desktop/package-lock.json 根版本与 manifest 不一致")
+    raise SystemExit("错误：desktop/package-lock.json 根版本与 desktop/package.json 不一致")
 
 if spec == "auto":
     result = subprocess.run(
@@ -151,5 +152,5 @@ else:
     desktop_lock["packages"][""]["version"] = target
     desktop_file.write_text(json.dumps(desktop, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     desktop_lock_file.write_text(json.dumps(desktop_lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("已更新扩展、Desktop 与 CHANGELOG.md；请审阅后提交。")
+    print("已更新 Desktop、CHANGELOG.md 与跟随项 manifest.json；请审阅后提交。")
 PY

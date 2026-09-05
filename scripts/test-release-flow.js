@@ -9,7 +9,8 @@ const portableArchive = fs.readFileSync("desktop/scripts/archive-portable.ps1", 
 const prepareRelease = fs.readFileSync("scripts/prepare-release.sh", "utf8");
 const releaseScript = fs.readFileSync("scripts/release.sh", "utf8");
 
-assert.strictEqual(desktopPackage.version, manifest.version, "Desktop 与扩展必须使用同一发布版本");
+// TODO(Step 9)：manifest.json 随扩展一起删，这条跟随项断言与上面的 manifest 读取届时一并摘掉。
+assert.strictEqual(manifest.version, desktopPackage.version, "扩展退役前 manifest.json 必须跟随 desktop/package.json 的发布版本");
 assert.strictEqual(desktopPackage.scripts.make, "electron-forge make", "Desktop 必须提供 make 命令");
 assert.ok(desktopPackage.scripts["collect-release"], "Desktop 必须提供发布产物归档命令");
 assert.ok(desktopPackage.scripts["prepare-portable"], "Desktop 必须提供 portable 目录准备命令");
@@ -100,14 +101,14 @@ for (const path of ["desktop/package.json", "desktop/package-lock.json"]) {
   assert.ok(prepareRelease.includes(path), `prepare-release.sh 未同步 ${path}`);
 }
 
-// F190：desktop/package-lock.json 的版本必须真的等于 manifest 版本，不能只检查
+// F190：desktop/package-lock.json 的版本必须真的等于 desktop/package.json 版本，不能只检查
 // prepare-release.sh 源码里出现过这个路径字符串（那样即使 lock 悄悄漂移也测不出来）。
 const desktopLock = JSON.parse(fs.readFileSync("desktop/package-lock.json", "utf8"));
-assert.strictEqual(desktopLock.version, manifest.version, "desktop/package-lock.json 的根 version 与 manifest 不一致");
+assert.strictEqual(desktopLock.version, desktopPackage.version, "desktop/package-lock.json 的根 version 与 desktop/package.json 不一致");
 assert.strictEqual(
   desktopLock.packages && desktopLock.packages[""] && desktopLock.packages[""].version,
-  manifest.version,
-  'desktop/package-lock.json 的 packages[""].version 与 manifest 不一致'
+  desktopPackage.version,
+  'desktop/package-lock.json 的 packages[""].version 与 desktop/package.json 不一致'
 );
 
 assert.ok(

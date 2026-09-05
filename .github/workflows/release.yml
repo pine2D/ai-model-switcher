@@ -19,7 +19,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5 # 实测 <10s；留量级余量，不是贴着实测值写
+    timeout-minutes: 10 # gh 校验实测 <10s；加上 release.sh --build-only（ci.yml verify 作业实测 ≤145s 含 desktop 段）后仍留量级余量
     permissions:
       contents: read
       actions: read # gh run list 查 CI 结论必需；顶层降权后这里必须显式保留，否则误判「无记录」exit 1
@@ -28,6 +28,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Release 正文是 tag 不可覆盖的产物，与 ci.yml 同口径钉在 .nvmrc 的 Node 上产出；validate 不跑 npm ci，无需 cache。
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: desktop/.nvmrc
 
       - name: 校验 tag 来自已通过 CI 的 main
         env:
@@ -48,6 +53,17 @@ jobs:
             echo "::error::当前提交没有成功完成的 CI（实际：${CI_RESULT:-无记录}）"
             exit 1
           }
+
+      # Release 正文在这里产出，不再依赖 extension 作业——扩展退役后 publish 的 body_path 仍有来源。
+      - name: 校验源码并提取 Release 正文
+        run: bash scripts/release.sh --build-only
+
+      - name: 暂存 Release 正文
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-notes
+          path: dist/release-notes.md
+          if-no-files-found: error
 
   extension:
     needs: validate
@@ -70,7 +86,6 @@ jobs:
           path: |
             dist/polyask-*.zip
             dist/polyask-*.zip.sha256
-            dist/release-notes.md
           if-no-files-found: error
 
   desktop:

@@ -21,8 +21,9 @@ esac
 
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
-VERSION=$(node -p 'require("./manifest.json").version')
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "manifest 版本不是 X.Y.Z：$VERSION" >&2; exit 1; }
+# 版本真源是 desktop/package.json；manifest.json 只是扩展退役前的跟随项（见下方 ZIP 内一致性校验）。
+VERSION=$(node -p 'require("./desktop/package.json").version')
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "desktop/package.json 版本不是 X.Y.Z：$VERSION" >&2; exit 1; }
 TAG="v$VERSION"
 ZIP_NAME="polyask-${TAG}.zip"
 DIST_DIR="${POLYASK_DIST_DIR:-dist}"
@@ -32,7 +33,7 @@ CHECKSUM="$DIST_DIR/${ZIP_NAME}.sha256"
 HEAD_SHA=$(git rev-parse HEAD)
 
 if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "${GITHUB_REF_NAME:-}" != "$TAG" ]; then
-  echo "tag ${GITHUB_REF_NAME} 与 manifest $TAG 不一致" >&2
+  echo "tag ${GITHUB_REF_NAME} 与 desktop/package.json 的 $TAG 不一致" >&2
   exit 1
 fi
 
@@ -93,7 +94,7 @@ if [ "$MODE" = "publish" ]; then
 fi
 # F191_UNRELEASED_GUARD_END
 packaged_version=$(unzip -p "$ZIP" manifest.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).version))')
-[ "$packaged_version" = "$VERSION" ] || { echo "ZIP 内 manifest 版本不一致" >&2; exit 1; }
+[ "$packaged_version" = "$VERSION" ] || { echo "ZIP 内 manifest 版本 $packaged_version 与 desktop/package.json 的 $VERSION 不一致（扩展退役前 manifest 是跟随项）" >&2; exit 1; }
 (cd "$DIST_DIR" && sha256sum "$ZIP_NAME" > "${ZIP_NAME}.sha256")
 
 echo "✓ $TAG 构建通过：$ZIP"
