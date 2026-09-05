@@ -141,7 +141,7 @@ function dispatch(command: SiteCommand): Promise<SiteCommandResponse> {
         ? { source: "AMS", cmd: "collectAnswer" }
         : command.cmd === "diagnose" ? { source: "AMS", cmd: "diagnose" } : command;
       // 逐个分发：某个监听器返回 true（会异步 sendResponse）或已同步作答就停；没有任何监听器接手才判 invalid_response。
-      // 「有且只有一个监听器」由 scripts/test-desktop-shared-runtime.js 离线数 addListener 调用点守着，
+      // 「有且只有一个监听器」由 desktop/scripts/desktop-shared-runtime.test.js 离线数 addListener 调用点守着，
       // 绝不在这里硬断言——模块作用域一抛，下面的 site-command 监听就注册不上，九站整链失守。
       const claimed = listeners.some((listener) => listener(message, {}, finish) === true || settled);
       if (!claimed && !settled) finish(probing ? unsupported : { ok: false, code: "invalid_response" });

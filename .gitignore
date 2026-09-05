@@ -7,8 +7,7 @@
 /docs/*
 !/docs/adapters.md
 !/docs/audit-2026-07.md
-!/docs/console-windows.md
-!/docs/desktop-m0.md
+!/docs/desktop.md
 !/docs/desktop-oauth-security.md
 !/docs/release.md
 !/docs/verify.md

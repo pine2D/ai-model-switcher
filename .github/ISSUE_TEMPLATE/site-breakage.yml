@@ -22,16 +22,6 @@ body:
         - 智谱 (chatglm.cn)
     validations:
       required: true
-  - type: dropdown
-    id: client
-    attributes:
-      label: 哪个客户端？/ Which client?
-      options:
-        - Chrome 扩展 / Chrome extension
-        - Desktop 预览版 / Desktop preview
-        - 两端都有 / Both
-    validations:
-      required: true
   - type: textarea
     id: symptoms
     attributes:
@@ -49,11 +39,10 @@ body:
     attributes:
       label: 诊断报告 / Diagnostic report
       description: >-
-        Desktop：`Alt+H` 打开站点状态 → 「复制诊断报告」，粘贴到这里（只含版本、环境、各站状态与逐项检查结果，不含对话内容与网址）。
-        Chrome 扩展：控制台 → 站点选择窗 → 「巡检所选站点」→ 「复制诊断报告」。
+        `Alt+H` 打开站点状态 → 「复制诊断报告」，把文本粘贴到这里（只含版本、系统、显示缩放、各站状态与逐项检查结果，不含对话内容与网址）。
       render: text
   - type: input
     id: env
     attributes:
       label: 环境 / Environment
-      placeholder: "PolyAsk 版本 · Chrome 或 Desktop 版本 · 系统 · 显示缩放（如 125%）· 站点界面语言"
+      placeholder: "PolyAsk 版本 · 安装版或便携版 · 系统 · 显示缩放（如 125%）· 站点界面语言"

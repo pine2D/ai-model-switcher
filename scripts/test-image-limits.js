@@ -5,8 +5,7 @@
 // 站点运行时与 Desktop 各自校验自己那份常量。这里做唯一一次全落点对账。
 //
 // 断言风格：先按锚点把片段抠出来，抠不到就 assert.fail（宁红勿假绿）——锚点漂了必须有人
-// 来看一眼，静默跳过等于这份测试白写。别把它塞进 test-multi-image.js（278 行，且那份用的是
-// 会在布防时推进的虚拟时钟，见 docs/verify.md）。
+// 来看一眼，静默跳过等于这份测试白写。
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 
@@ -14,7 +13,7 @@ const COUNT = 4;
 const BYTES_EXPR = "10 * 1024 * 1024";
 const TYPES = ["image/png", "image/jpeg"];
 const ACCEPT = "image/png,image/jpeg";
-const HINT = "（改图片限额要同改九处落点，清单见 docs/adapters.md 的「图片载荷」与 CLAUDE.md 硬约束）";
+const HINT = "（改图片限额要同改全部落点，清单见 docs/adapters.md 的「图片载荷」与 CLAUDE.md 硬约束）";
 
 const read = (file) => {
   try {
@@ -96,7 +95,7 @@ for (const file of ["desktop/src/renderer/image-picker.tsx"]) {
   }
 }
 
-// ── 8. docs：数值真源在 adapters.md，desktop-m0.md 另有一句叙述 ────────
+// ── 8. docs：数值真源在 adapters.md，desktop.md 另有一句叙述 ────────
 {
   const file = "docs/adapters.md";
   const src = read(file);
@@ -104,10 +103,10 @@ for (const file of ["desktop/src/renderer/image-picker.tsx"]) {
   has(src, file, "图片载荷", "**≤10 MiB**");
 }
 {
-  const file = "docs/desktop-m0.md";
+  const file = "docs/desktop.md";
   const src = read(file);
   const line = capture(src, file, "桌面图片限额叙述", /^.*4 张 PNG\/JPEG.*$/m)[0];
   assert.ok(/10 MiB/.test(line), `${file} 的图片限额叙述缺 10 MiB：${line}${HINT}`);
 }
 
-console.log("test-image-limits: 图片限额九处落点一致");
+console.log("test-image-limits: 图片限额全部落点一致");

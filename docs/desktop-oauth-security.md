@@ -7,13 +7,13 @@
 - Desktop 是 OAuth 公开客户端。Google 当前要求 Desktop 客户端在授权码交换和刷新时提交 Client Secret，但该值会随安装包分发，不能用于证明请求来自正版 PolyAsk。
 - Client Secret 单独不能读取用户数据。攻击者仍需诱导用户授权或取得 Access Token / Refresh Token；因此令牌保护比隐藏静态 Secret 更重要。
 - Desktop 固定使用 PKCE S256、随机 `state`、系统浏览器、`127.0.0.1` 随机端口回调和 `drive.appdata` 最小权限。Refresh Token 只通过 Electron `safeStorage` 持久化。
-- Chrome 扩展使用独立的 Chrome Extension OAuth Client，并由 `chrome.identity` 管理令牌，不使用 Desktop Client Secret。
+- 已停维的 Chrome 扩展曾使用独立的 Chrome Extension OAuth Client，由 `chrome.identity` 管理令牌，从不使用 Desktop Client Secret。该客户端的处置见下面的「凭据与环境隔离」。
 
 ### 已知并接受的风险：打包版仍读诊断环境变量
 
 `desktop/src/main/runtime-gates.ts` 对 `POLYASK_DIAGNOSTICS_FILE` 与 `POLYASK_SOAK_REPORT` **没有 `app.isPackaged` 门禁**，正式安装包同样认这两个变量。`POLYASK_SOAK_REPORT` 命中时会对该路径建目录、覆写清空已有内容、每 60 秒追加采样，超时后自动退出应用。
 
-危害边界：攻击前提已经是「同用户代码执行 / 能持久化环境变量」，能造成的是以应用身份截断任意可写路径的文件、外加定时自退出这一级别的同用户骚扰性拒绝服务；**不涉及凭据，也不提权**。不修的原因是 `desktop/scripts` 下的 smoke、soak、runtime-runner 三个脚本依赖这两个变量对打包后产物做自动化验收，`docs/desktop-m0.md` 已写成既定口径并被 CI 依赖，照搬门禁会打断该验证链。
+危害边界：攻击前提已经是「同用户代码执行 / 能持久化环境变量」，能造成的是以应用身份截断任意可写路径的文件、外加定时自退出这一级别的同用户骚扰性拒绝服务；**不涉及凭据，也不提权**。不修的原因是 `desktop/scripts` 下的 smoke、soak、runtime-runner 三个脚本依赖这两个变量对打包后产物做自动化验收，`docs/desktop.md` 已写成既定口径并被 CI 依赖，照搬门禁会打断该验证链。
 
 这与已经收紧的 `sync-runtime.ts`（打包版不再优先读环境变量凭据，`environment: app.isPackaged ? undefined : process.env`）是同一种模式的两处实例——一处已收紧、一处未收紧，是权衡后的现状而非疏漏。要动它，得先给三个验收脚本换一条不依赖环境变量的通道。
 
@@ -23,7 +23,11 @@
 | --- | --- | --- | --- |
 | Desktop 正式版 | Production Desktop Client | GitHub Actions Variable + Secret | 只用于 tag 对应的 Release workflow |
 | Desktop 本地开发/测试 | Development Desktop Client | 被 Git 忽略的 `desktop/resources/oauth.json` 或本机环境变量 | 不得复用 Production Secret |
-| Chrome 扩展 | Chrome Extension Client | `manifest.json` 的 Client ID | 与 Desktop Client 分离，不存在 Client Secret |
+| Chrome 扩展（已停用） | Chrome Extension Client | 记录在 v0.25.1 的 `manifest.json`（tag `archive/extension-v0.25.1`） | 与 Desktop Client 分离，不存在 Client Secret。**停用日期：1.0.0 发布当天，见 CHANGELOG** |
+
+**扩展客户端为什么不留窗口。** 扩展形态在 1.0.0 终结，这个 Chrome-extension 类型的 OAuth 客户端在发布当天就在 Google Cloud 停用，不保留 30 天过渡期：除本机外没有第二台装着扩展的机器，本机的扩展也会随停维卸载——**没有任何消费者**，窗口只剩风险不剩收益。一个不再维护的授权入口留着就是纯风险面（虽窄：绑定扩展 ID、scope 只有 `drive.appdata`），而且到期停用是仓库外的人工动作、没有任何自动提醒，早停一天少一天。停用顺序是**先卸载本机扩展再停用客户端**，否则会先给自己撞一次 `invalid_client`。
+
+这一行保留在表里是**历史记录**：停用不等于从文档里抹掉，「曾经存在过这个客户端」和它的停用时点都要留档。表格里那条指向扩展清单文件的来源也是全仓仅存的一处提法——文件本身已随扩展删除，Client ID 只能从 tag `archive/extension-v0.25.1` 取回。
 
 正式客户端平时只保留一个启用的 Secret；第二个只在轮换窗口中启用。Client ID 可以公开，Client Secret 不得进入 Git、CI 日志、问题附件、崩溃报告或诊断快照。正式安装包必须包含它不属于泄露事件，但不得把安装包中的值复制到其它公开渠道。
 
@@ -40,9 +44,9 @@ Google 不提供具体 Secret 的使用日志，也不向普通应用开发者�
 
 ### Google Auth Platform
 
-进入 **Google Cloud Console → Google Auth Platform → Overview**，查看每日 OAuth 请求、错误和 Token 授予速率。预览期每周检查一次；稳定期至少每月及每次发版前检查一次。先保留不少于 14 天的正常基线，再调查无法由发布、用户增长或集中测试解释的阶跃变化。
+进入 **Google Cloud Console → Google Auth Platform → Overview**，查看每日 OAuth 请求、错误和 Token 授予速率。发出新版本后的头几周每周检查一次；平稳后至少每月以及每次发版前检查一次。先保留不少于 14 天的正常基线，再调查无法由发布、用户增长或集中测试解释的阶跃变化。
 
-Overview 指标是项目下所有 OAuth Client 的汇总。需要更强隔离时，应把 Desktop 与 Extension 放入不同 Google Cloud 项目；仅创建不同 Client ID 不能获得 Secret 级归因。
+Overview 指标是项目下所有 OAuth Client 的汇总。扩展客户端停用之后，项目里实际在用的只剩 Production 与 Development 两个 Desktop Client，这两者的流量在 Overview 里仍是合并的；需要把它们彻底分开时只能各放一个 Google Cloud 项目，仅创建不同 Client ID 不能获得 Secret 级归因。
 
 ### Google Drive API
 

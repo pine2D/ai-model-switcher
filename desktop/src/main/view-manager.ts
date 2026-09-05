@@ -66,7 +66,7 @@ const GENERATION_MISS_LIMIT = 5;
 const GENERATION_PROBE_INTERVAL = 900;
 // Permissions the nine site views may use. Everything else — camera, microphone,
 // geolocation, MIDI, notifications, clipboard-read, window-management — stays
-// denied. Keep docs/desktop-m0.md in step with this list.
+// denied. Keep docs/desktop.md in step with this list.
 const SITE_PERMISSION_ALLOWLIST = new Set<string>([
   "clipboard-sanitized-write",
   "fullscreen",
