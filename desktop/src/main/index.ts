@@ -59,6 +59,8 @@ import { UiStateStore } from "./ui-state-store";
 import { ViewManager } from "./view-manager";
 import { WorkspaceService } from "./workspace-service";
 
+// TODO(size-ratchet)：548 行，目标 ≤400——抽出 createServices（数据库、archives/history/promptLibrary/synthesis/sync/dataAdmin 装配）
+// 与 createMainWindow（BrowserWindow、菜单、runtime gates），入口只留 app 生命周期。
 if (squirrelStartup) app.quit();
 const startupLocale = (): string => {
   try { return app.getPreferredSystemLanguages()[0] ?? "en"; }

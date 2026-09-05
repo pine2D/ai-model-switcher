@@ -33,6 +33,30 @@ for file in "${JS_FILES[@]}"; do
   [ "$lines" -le 300 ] || { echo "✗ $file: $lines 行" >&2; exit 1; }
 done
 
+echo "[size] 检查 desktop/src 的 .ts/.tsx 单文件不超过 400 行（越界文件走棘轮：只许降不许升）"
+# 棘轮基线：2026-09-05 生成时的实际行数。要上调必须在同一 commit 里改这里并在行尾写明理由——
+# 只接受「修 bug / 补安全断言」，不接受「加新功能」；上调超过 20 行的同批给出拆分 TODO。
+# 豁免只写死 copy.ts 一条（纯三语词条表，按行数拆没有意义）；不用通配，通配会让日后新建的文件自动逃逸。
+declare -A TS_RATCHET=(
+  [desktop/src/main/view-manager.ts]=748   # TODO 抽出 site-workspace-state / site-status-registry / generation-watcher 三块纯逻辑后压回 ≤400
+  [desktop/src/renderer/index.tsx]=723     # TODO 抽出命令表（buildCommands）/ 站点健康动作 / 辅助综合流三块后压回 ≤400
+  [desktop/src/main/index.ts]=548          # TODO 抽出 createServices（数据层装配）与 createMainWindow（窗口/菜单装配）后压回 ≤400
+)
+TS_EXEMPT=("desktop/src/shared/copy.ts")
+mapfile -d '' -t TS_FILES < <(existing_files 'desktop/src/*.ts'; existing_files 'desktop/src/*.tsx')
+for file in "${TS_FILES[@]}"; do
+  lines=$(wc -l < "$file")
+  exempt=0; for e in "${TS_EXEMPT[@]}"; do [ "$e" = "$file" ] && exempt=1; done
+  [ "$exempt" -eq 1 ] && continue
+  if [ -n "${TS_RATCHET[$file]:-}" ]; then
+    [ "$lines" -le "${TS_RATCHET[$file]}" ] || {
+      echo "✗ $file: $lines 行，超过棘轮基线 ${TS_RATCHET[$file]}（只许降不许升；确需上调请同一 commit 改 verify.sh 基线并写明理由）" >&2; exit 1;
+    }
+  else
+    [ "$lines" -le 400 ] || { echo "✗ $file: $lines 行 > 400（desktop/src 的 .ts/.tsx 上限；要加行先按职责拆分）" >&2; exit 1; }
+  fi
+done
+
 echo "[security] 检查 Desktop OAuth 凭据卫生"
 OAUTH_RESOURCE='desktop/resources/oauth.json'
 git check-ignore --quiet --no-index -- "$OAUTH_RESOURCE" || {

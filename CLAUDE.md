@@ -45,11 +45,11 @@
 ## 命令
 
 ```bash
-bash scripts/verify.sh               # 语法 + JSON + 300 行 + OAuth 卫生 + 文档/测试登记 + workflow YAML + 扩展侧全部 node 测试 + git diff --check
-node scripts/test-<name>.js          # 单跑一个（改完仍要跑 verify.sh 全量）
-cd desktop && npm test && npm run typecheck   # Desktop 门禁：verify.sh 不跑它（详见 docs/desktop-m0.md）
-bash scripts/prepare-release.sh auto # 推导版本、晋升 CHANGELOG、同步扩展与 Desktop 版本（只改文件不 commit）
-bash scripts/release.sh --publish    # 推 tag 并触发六个主包发布（--build-only 只验 Chrome 包）
+bash scripts/verify.sh               # 零依赖的仓库级卫生：.js/.mjs 语法 + JSON + 300 行（.js）+ desktop/src 400 行棘轮 + OAuth 卫生 + 文档/.github 引用 + workflow YAML + 根 scripts 五个跨端测试 + git diff --check
+cd desktop && npm test               # Desktop 门禁：tsc --noEmit + tsx --test（test/）+ node --test（scripts/*.test.{js,mjs}，含九站适配器回归）；verify.sh 不跑它
+cd desktop && npm run typecheck      # 与 npm test 首段重叠，CI 单独再跑一遍是刻意的双保险
+bash scripts/prepare-release.sh auto # 推导版本、晋升 CHANGELOG、同步 Desktop package/lock（只改文件不 commit）
+bash scripts/release.sh --publish    # 推 tag 并触发五个 Desktop 包发布（--build-only 只校验源码并提取 Release 正文）
 ```
 
 ## 架构（先在这里定位入口文件）

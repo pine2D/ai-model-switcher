@@ -57,6 +57,8 @@ import type { StabilityEventInput } from "./stability-monitor";
 import { applyWorkspaceLayout, computeWorkspaceLayout } from "./workspace-layout";
 import { reconcileVisibleSiteKeys, stackOrder } from "./view-visibility";
 
+// TODO(size-ratchet)：748 行，目标 ≤400——抽出 site-workspace-state（勾选/分页/布局纯状态）、
+// site-status-registry（pageStatus/runStatus 合并与 unread）、generation-watcher（生成态轮询）三块无 Electron 依赖的纯逻辑。
 // Consecutive probes that read no state (renderer busy, adapter without a
 // generation hook, view momentarily off-site) before monitoring gives up. A
 // single miss must never end the watch: that stranded whole runs on "submitted".

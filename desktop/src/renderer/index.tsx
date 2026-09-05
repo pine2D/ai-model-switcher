@@ -64,6 +64,8 @@ import "./styles.css";
 import "./settings.css";
 import "./accessibility.css";
 
+// TODO(size-ratchet)：723 行，目标 ≤400——抽出命令表装配（buildCommands）、站点健康动作（reload/hard-reload/clear/copy-report）
+// 与辅助综合/结果库流三块；App 只留状态编排与渲染分支。
 const INITIAL_LAYOUT: LayoutState = {
   mode: "overview",
   focused: "claude",

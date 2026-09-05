@@ -6,7 +6,7 @@
 
 ## 离线回归
 
-**两端有两条互不重叠的门禁**：`bash scripts/verify.sh` 只覆盖扩展侧（外加 Desktop OAuth 凭据卫生这一段）；Desktop 的 `npm test` / `npm run typecheck` 一条都不在里面，要单独跑（`cd desktop`，命令与验收边界见 `docs/desktop-m0.md`）。本节其余内容讲的都是扩展侧那条。
+**两条互不重叠的门禁，顺序与职责写死**：`bash scripts/verify.sh` 是零 node_modules 依赖的仓库级卫生（`.js/.mjs` 语法、JSON、`.js` 300 行、`desktop/src` 的 `.ts/.tsx` 400 行棘轮、OAuth 凭据卫生、文档与 `.github` 引用、workflow YAML、根 `scripts/` 的五个跨端测试）；`cd desktop && npm test` 是 Desktop 门禁（首段 `tsc --noEmit`，其后 `tsx --test` 跑 `test/`、`node --test` 跑 `scripts/*.test.{js,mjs}`——九站适配器的离线回归就在后者里）。`verify.sh` 不跑 `npm test`，两条都要过。
 
 - `scripts/` 下的 `test-*.js` 都是**对源码字符串做断言的 node 脚本**（`fs.readFileSync` + 正则 / `indexOf` / `vm`），无构建无框架。改 UI 的 class/id/顺序/CSS 数值都可能打断看似无关的测试。`verify.sh` 另跑 `node --check`、JSON parse、300 行上限、Desktop OAuth 凭据卫生、三语检查、文档引用与测试登记检查、workflow YAML 解析、`git diff --check`。
 - **workflow YAML 检查**优先用 `actionlint`（连 `runs-on` 拼错、`needs` 指向不存在的 job 都查），没装则退化到 python3 + PyYAML 的纯语法解析，两者都缺时打印警告跳过（不阻断 verify）。本机想拿最强校验就装一个 actionlint（apt/brew 都有）——YAML 错误只能在推 tag 后由 GitHub 暴露，而 tag 不可覆盖 = 烧掉一个版本号。
