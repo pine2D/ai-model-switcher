@@ -1,0 +1,88 @@
+{
+  "file": {
+    "id": "drive-archive-mixed",
+    "name": "archive-9b1c0d2e-3f4a-4b5c-8d6e-7f8091a2b3c4.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "archive",
+      "id": "9b1c0d2e-3f4a-4b5c-8d6e-7f8091a2b3c4",
+      "deleted": "0",
+      "preview": "为什么天空是蓝色的？"
+    }
+  },
+  "body": {
+    "ts": 1756800001000,
+    "text": "为什么天空是蓝色的？",
+    "task": "为什么天空是蓝色的？",
+    "source": null,
+    "results": [
+      {
+        "host": "claude.ai",
+        "label": "Claude",
+        "text": "因为瑞利散射：短波长的蓝光被大气分子散射得更强。",
+        "state": "think",
+        "code": null
+      },
+      {
+        "host": "chatgpt.com",
+        "label": "ChatGPT",
+        "text": null,
+        "state": null,
+        "code": "no_window"
+      },
+      {
+        "host": "gemini.google.com",
+        "label": "Gemini",
+        "text": null,
+        "state": null,
+        "code": "no_answer"
+      },
+      {
+        "host": "www.kimi.com",
+        "label": "Kimi",
+        "text": "太阳光进入大气后，蓝光散射占优。",
+        "state": null,
+        "code": null
+      },
+      {
+        "host": "chat.deepseek.com",
+        "label": "DeepSeek",
+        "text": null,
+        "state": "fast",
+        "code": "timeout"
+      }
+    ],
+    "id": "9b1c0d2e-3f4a-4b5c-8d6e-7f8091a2b3c4",
+    "favorite": false,
+    "tags": [],
+    "note": "",
+    "winnerHost": null,
+    "synthesis": null,
+    "hosts": [
+      "claude.ai",
+      "chatgpt.com",
+      "gemini.google.com",
+      "www.kimi.com",
+      "chat.deepseek.com"
+    ],
+    "resultPreviews": [
+      {
+        "host": "claude.ai",
+        "label": "Claude",
+        "text": "因为瑞利散射：短波长的蓝光被大气分子散射得更强。"
+      },
+      {
+        "host": "www.kimi.com",
+        "label": "Kimi",
+        "text": "太阳光进入大气后，蓝光散射占优。"
+      }
+    ],
+    "createdAt": 1756800001000,
+    "updatedAt": 1756800001000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "searchText": "为什么天空是蓝色的？\nclaude\nchatgpt\ngemini\nkimi\ndeepseek\n因为瑞利散射：短波长的蓝光被大气分子散射得更强。\n太阳光进入大气后，蓝光散射占优。",
+    "schema": 1,
+    "preview": "为什么天空是蓝色的？"
+  }
+}

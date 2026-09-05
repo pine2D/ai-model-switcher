@@ -55,7 +55,7 @@ export function describeCollectionCode(copy: DesktopCopy, code?: string): string
   switch (code) {
     case "no_answer": return copy.noAnswer;
     case "no_view": return copy.siteUnavailable;
-    // no_window 是扩展端产的码（尚未开窗）；跨端同步的归档条目可能带这个码（F218），
+    // no_window 来自 Drive schema 1 线格式（扩展时代写入的结果库条目，见 test/fixtures/schema1-*.json），
     // 语义与 no_view（视图已销毁/未打开）相通，复用同一条文案。
     case "no_window": return copy.siteUnavailable;
     case "not_ready": return copy.siteNotReady;

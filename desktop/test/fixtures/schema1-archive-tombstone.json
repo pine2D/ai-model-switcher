@@ -1,0 +1,22 @@
+{
+  "file": {
+    "id": "drive-archive-tombstone",
+    "name": "archive-aaaa1111-2222-4333-8444-555566667777.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "archive",
+      "id": "aaaa1111-2222-4333-8444-555566667777",
+      "deleted": "1",
+      "preview": ""
+    }
+  },
+  "body": {
+    "id": "aaaa1111-2222-4333-8444-555566667777",
+    "createdAt": 1756800000000,
+    "updatedAt": 1756800004000,
+    "deletedAt": 1756800004000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "schema": 1
+  }
+}

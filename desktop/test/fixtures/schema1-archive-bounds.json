@@ -1,0 +1,67 @@
+{
+  "file": {
+    "id": "drive-archive-bounds",
+    "name": "archive-b0b0b0b0-1111-4222-8333-444455556666.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "archive",
+      "id": "b0b0b0b0-1111-4222-8333-444455556666",
+      "deleted": "0",
+      "preview": "边界值样本"
+    }
+  },
+  "body": {
+    "ts": 1756800008000,
+    "text": "边界值样本",
+    "task": "边界值样本",
+    "source": null,
+    "results": [
+      {
+        "host": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+        "label": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+        "text": "有回答。",
+        "state": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+        "code": null
+      },
+      {
+        "host": "claude.ai",
+        "label": "Claude",
+        "text": null,
+        "state": null,
+        "code": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "host": "chatgpt.com",
+        "label": "ChatGPT",
+        "text": "",
+        "state": null,
+        "code": null
+      }
+    ],
+    "id": "b0b0b0b0-1111-4222-8333-444455556666",
+    "favorite": false,
+    "tags": [],
+    "note": "",
+    "winnerHost": null,
+    "synthesis": null,
+    "hosts": [
+      "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+      "claude.ai",
+      "chatgpt.com"
+    ],
+    "resultPreviews": [
+      {
+        "host": "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+        "label": "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+        "text": "有回答。"
+      }
+    ],
+    "createdAt": 1756800008000,
+    "updatedAt": 1756800008000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "searchText": "边界值样本\nllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll\nclaude\nchatgpt\n有回答。",
+    "schema": 1,
+    "preview": "边界值样本"
+  }
+}

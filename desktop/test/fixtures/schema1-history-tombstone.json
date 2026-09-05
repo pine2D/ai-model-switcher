@@ -1,0 +1,25 @@
+{
+  "file": {
+    "id": "drive-history-tombstone",
+    "name": "history-ba8984b662eead0d7280d280808b715beea0154ce9d5c75a142c452669530683-ext-7f3c2a10-1b4e-4d0a-9c55-extension001.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "history",
+      "id": "ba8984b662eead0d7280d280808b715beea0154ce9d5c75a142c452669530683",
+      "device": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+      "deleted": "1",
+      "preview": ""
+    }
+  },
+  "body": {
+    "id": "ba8984b662eead0d7280d280808b715beea0154ce9d5c75a142c452669530683",
+    "textHash": "ba8984b662eead0d7280d280808b715beea0154ce9d5c75a142c452669530683",
+    "createdAt": 1756800000100,
+    "lastUsedAt": 1756800000200,
+    "updatedAt": 1756800007000,
+    "deletedAt": 1756800007000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "schema": 1
+  }
+}

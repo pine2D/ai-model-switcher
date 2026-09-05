@@ -31,7 +31,10 @@ export class ArchiveRepository {
     const rows = this.database.prepare(
       "SELECT body FROM archives WHERE deleted_at IS NULL ORDER BY sort_time DESC, id DESC"
     ).all();
-    return rows.map((row) => readJson<StoredArchive>(row)).filter(isArchiveRecord);
+    // 读路径只挡 JSON 解析失败：入库时 put() 已用 isStoredArchive 校验过。这里若再跑一遍 isArchiveRecord，
+    // 任何一次校验收紧都会把存量记录静默过滤掉——不报错、不计数、不落日志，用户只看到结果库凭空少了几条。
+    // deleted_at IS NULL 已排除 tombstone。
+    return rows.flatMap((row) => readJson<ArchiveRecord>(row) ?? []);
   }
 
   put(record: StoredArchive, enqueue = true): StoredArchive {

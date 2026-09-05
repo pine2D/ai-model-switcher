@@ -1,0 +1,79 @@
+{
+  "file": {
+    "id": "drive-archive-updated",
+    "name": "archive-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "archive",
+      "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "deleted": "0",
+      "preview": "总结这页的要点"
+    }
+  },
+  "body": {
+    "ts": 1756800002000,
+    "text": "总结这页的要点",
+    "task": "总结这页的要点",
+    "createdAt": 1756800002000,
+    "source": {
+      "kind": "page",
+      "title": "Rayleigh scattering - Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rayleigh_scattering",
+      "truncated": true,
+      "capturedAt": 1756800001500
+    },
+    "results": [
+      {
+        "host": "claude.ai",
+        "label": "Claude",
+        "text": "要点：散射强度与波长四次方成反比。",
+        "state": null,
+        "code": null
+      },
+      {
+        "host": "chatgpt.com",
+        "label": "ChatGPT",
+        "text": "Rayleigh scattering explains the blue sky.",
+        "state": "fast",
+        "code": null
+      }
+    ],
+    "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "favorite": true,
+    "tags": [
+      "物理",
+      "光学"
+    ],
+    "note": "课堂用",
+    "winnerHost": "claude.ai",
+    "synthesis": {
+      "host": "chatgpt.com",
+      "text": "综合：两者一致，Claude 更简洁。",
+      "state": "think",
+      "instruction": "指出分歧",
+      "createdAt": 1756800003000
+    },
+    "hosts": [
+      "claude.ai",
+      "chatgpt.com"
+    ],
+    "resultPreviews": [
+      {
+        "host": "claude.ai",
+        "label": "Claude",
+        "text": "要点：散射强度与波长四次方成反比。"
+      },
+      {
+        "host": "chatgpt.com",
+        "label": "ChatGPT",
+        "text": "Rayleigh scattering explains the blue sky."
+      }
+    ],
+    "updatedAt": 1756800003000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "searchText": "总结这页的要点\nrayleigh scattering - wikipedia\nhttps://en.wikipedia.org/wiki/rayleigh_scattering\n课堂用\n物理\n光学\nclaude\nchatgpt\n要点：散射强度与波长四次方成反比。\nrayleigh scattering explains the blue sky.\n综合：两者一致，claude 更简洁。",
+    "schema": 1,
+    "preview": "总结这页的要点"
+  }
+}

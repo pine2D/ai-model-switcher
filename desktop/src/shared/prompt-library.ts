@@ -68,10 +68,11 @@ export function isStoredPromptTemplate(value: unknown): value is StoredPromptTem
     typeof item.deviceId !== "string" || !item.deviceId || !validSyncTime(item.updatedAt)) return false;
   if ("deletedAt" in item) return validSyncTime(item.deletedAt);
   // Ingestion is deliberately more lenient on `name` than createPromptTemplate() below:
-  // a template synced in from another device (e.g. the extension, which has no name
-  // length/empty guard on its own save path) must still surface on this device rather
-  // than vanish silently. Only PROMPT_TEMPLATE_NAME_LIMIT is enforced there because it
-  // is a local *creation* guard for this device's own new templates (see F212).
+  // the Drive schema 1 wire format (records written in the extension era, frozen in
+  // test/fixtures/schema1-state.json) carries no name length/empty guard, and such a
+  // template must still surface on this device rather than vanish silently. Only
+  // PROMPT_TEMPLATE_NAME_LIMIT is enforced there because it is a local *creation* guard
+  // for this device's own new templates (see F212).
   return typeof item.name === "string" && [...item.name].length <= PROMPT_TEMPLATE_TEXT_LIMIT &&
     typeof item.text === "string" && !!item.text.trim() && [...item.text].length <= PROMPT_TEMPLATE_TEXT_LIMIT;
 }

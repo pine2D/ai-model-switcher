@@ -1,0 +1,26 @@
+{
+  "file": {
+    "id": "drive-history-live",
+    "name": "history-e14b32daf4a74efca50f73e34574d1bff53f9a59878cdb1161886c6781071abc-ext-7f3c2a10-1b4e-4d0a-9c55-extension001.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "history",
+      "id": "e14b32daf4a74efca50f73e34574d1bff53f9a59878cdb1161886c6781071abc",
+      "device": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+      "deleted": "0",
+      "preview": "把下面这段话翻译成英文，并保留 Markdown 格式。"
+    }
+  },
+  "body": {
+    "id": "e14b32daf4a74efca50f73e34574d1bff53f9a59878cdb1161886c6781071abc",
+    "textHash": "e14b32daf4a74efca50f73e34574d1bff53f9a59878cdb1161886c6781071abc",
+    "text": "把下面这段话翻译成英文，并保留 Markdown 格式。",
+    "preview": "把下面这段话翻译成英文，并保留 Markdown 格式。",
+    "createdAt": 1756800005000,
+    "lastUsedAt": 1756800006000,
+    "updatedAt": 1756800006000,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "schema": 1
+  }
+}

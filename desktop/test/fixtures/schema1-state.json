@@ -1,0 +1,88 @@
+{
+  "file": {
+    "id": "drive-state-extension",
+    "name": "state-ext-7f3c2a10-1b4e-4d0a-9c55-extension001.json",
+    "appProperties": {
+      "app": "polyask",
+      "schema": "1",
+      "kind": "state",
+      "id": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+    }
+  },
+  "body": {
+    "schema": 1,
+    "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+    "settings": {
+      "amsLang": {
+        "value": "zh-CN",
+        "updatedAt": 1756800000010,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "amsTheme": {
+        "value": "dark",
+        "updatedAt": 1756800000010,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "displayMode": {
+        "value": "grid",
+        "updatedAt": 1756800000010,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "amsAutoRaise": {
+        "value": true,
+        "updatedAt": 1756800000010,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "amsConsole.selected": {
+        "value": {
+          "claude.ai": true,
+          "chatgpt.com": false,
+          "gemini.google.com": false,
+          "www.kimi.com": true,
+          "chat.deepseek.com": true
+        },
+        "updatedAt": 1756800000020,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "amsConsole.tier": {
+        "value": "think",
+        "updatedAt": 1756800000020,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      }
+    },
+    "templates": {
+      "tpl-summarize": {
+        "id": "tpl-summarize",
+        "name": "总结",
+        "text": "请用三句话总结以下内容：",
+        "updatedAt": 1756800000030,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "tpl-gone": {
+        "id": "tpl-gone",
+        "updatedAt": 1756800000040,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+        "deletedAt": 1756800000040
+      }
+    },
+    "groups": {
+      "grp-cn": {
+        "id": "grp-cn",
+        "name": "国内三家",
+        "hosts": [
+          "www.kimi.com",
+          "chat.deepseek.com",
+          "yuanbao.tencent.com"
+        ],
+        "updatedAt": 1756800000050,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001"
+      },
+      "grp-gone": {
+        "id": "grp-gone",
+        "updatedAt": 1756800000060,
+        "deviceId": "ext-7f3c2a10-1b4e-4d0a-9c55-extension001",
+        "deletedAt": 1756800000060
+      }
+    }
+  }
+}
