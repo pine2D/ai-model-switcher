@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const test = require("node:test");
 const vm = require("node:vm");
+const { PRELOAD, preloadRequires } = require("./lib/desktop-anchors");
 
 const source = (file) => fs.readFileSync(file, "utf8");
 const plain = (value) => JSON.parse(JSON.stringify(value)); // vm 产物跨 realm，strict deepEqual 会连原型一起比
@@ -68,13 +69,21 @@ test("包装幂等：重复执行 diag.js 不叠加通用检查", () => {
   assert.deepEqual(plain(adapter.diagnose().map((c) => c.name)), ["diag_composer", "orig"]);
 });
 
-test("manifest 注入顺序：diag.js 在全部 adapters 分卷之后、pill 之前", () => {
+test("preload 注入顺序：diag.js 在全部 adapters 分卷之后", () => {
+  const js = preloadRequires();
+  const di = js.findIndex((f) => /\/diag\.js$/.test(f));
+  const adapterAt = js.map((f, i) => (/\/adapters-.*\.js$/.test(f) ? i : -1)).filter((i) => i >= 0);
+  assert.ok(di >= 0, `${PRELOAD} 缺 diag.js（九站将静默失去通用检查）`);
+  assert.ok(adapterAt.length >= 3 && di > Math.max(...adapterAt), "diag.js 必须排在全部适配器分卷之后（含新增分卷）");
+});
+
+// TODO(Step 9)：manifest 随扩展一起删，这条届时整段删除；此刻并存只为对拍新锚点。
+test("manifest 注入顺序：diag.js 在全部 adapters 分卷之后", () => {
   const js = JSON.parse(source("manifest.json")).content_scripts[0].js;
   const di = js.indexOf("content/diag.js");
   const adapterAt = js.map((f, i) => (/^content\/adapters-.*\.js$/.test(f) ? i : -1)).filter((i) => i >= 0);
   assert.ok(di >= 0, "manifest 缺 content/diag.js（九站将静默失去通用检查）");
   assert.ok(adapterAt.length >= 3 && di > Math.max(...adapterAt), "diag.js 必须排在全部适配器分卷之后（含新增分卷）");
-  assert.ok(js.indexOf("content/pill.js") > di, "diag.js 应在 pill.js 之前");
 });
 
 test("集成：真实 DeepSeek 适配器包装后通用检查在前、原检查在后", () => {
