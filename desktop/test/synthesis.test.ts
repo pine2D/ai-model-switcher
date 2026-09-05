@@ -6,7 +6,7 @@ import {
   selectedSynthesisAnswers,
   validateSynthesisRequest
 } from "../src/shared/synthesis";
-import { archiveFixture } from "./archive.test";
+import { archiveFixture } from "./fixtures";
 
 test("synthesis prompt contains only selected successful answers", () => {
   const record = {

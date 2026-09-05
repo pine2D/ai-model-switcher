@@ -8,7 +8,7 @@ import * as archiveSurface from "../src/renderer/archive-surface";
 import { ArchiveWorkspace } from "../src/renderer/archive-workspace";
 import { MarkdownPreview } from "../src/renderer/markdown-preview";
 import { getCopy } from "../src/shared/copy";
-import { archiveFixture } from "./archive.test";
+import { archiveFixture } from "./fixtures";
 
 const noop = () => undefined;
 

@@ -6,7 +6,7 @@ import test from "node:test";
 import { SITES } from "../src/main/sites";
 import { SynthesisWorkspace } from "../src/renderer/synthesis-workspace";
 import { getCopy } from "../src/shared/copy";
-import { archiveFixture } from "./archive.test";
+import { archiveFixture } from "./fixtures";
 
 const noop = () => undefined;
 

@@ -33,30 +33,59 @@ function isRuntimeElectronPackage(name) {
   return name.startsWith("@electron/") && !BUILD_TIME_ELECTRON_SCOPE.has(name);
 }
 
-function runAudit() {
+// registry 端点抖动时 npm 会输出 {"error":{code,summary,detail,uri}} 这类没有 vulnerabilities 的 JSON，
+// 只按「能 parse」放行等于静默通过。这里要求结构完整，并在判死前重试，避免一次抖动挡住发版
+// （release.sh 的 preflight_publish 硬要求 exact-HEAD 的 CI 成功）。
+const AUDIT_ATTEMPTS = 3;
+const AUDIT_RETRY_DELAY_MS = 5_000;
+
+function auditOnce() {
   try {
-    const out = execFileSync("npm", ["audit", "--json"], {
+    return execFileSync("npm", ["audit", "--json"], {
       cwd: DESKTOP_ROOT,
       encoding: "utf8",
       maxBuffer: 32 * 1024 * 1024,
     });
-    return JSON.parse(out);
   } catch (err) {
-    // npm audit 只要存在任何漏洞就退出非零；JSON 报告本身仍写在 stdout，
-    // 只有连 stdout 都解析不出 JSON 才是真的执行失败（网络/registry 不可达等）。
-    if (err.stdout) {
-      try {
-        return JSON.parse(err.stdout);
-      } catch {
-        // 继续走下面的失败分支
-      }
-    }
-    console.error("✗ npm audit 执行失败，且未产出可解析的 JSON：", err.message);
-    process.exit(1);
+    // npm audit 只要存在任何漏洞就退出非零；JSON 报告本身仍写在 stdout。
+    if (typeof err.stdout === "string" && err.stdout.trim()) return err.stdout;
+    throw new Error(`npm audit 未产出 stdout：${err.message}`);
   }
 }
 
-const report = runAudit();
+function parseAuditReport(stdout) {
+  let report;
+  try {
+    report = JSON.parse(stdout);
+  } catch (err) {
+    throw new Error(`npm audit 输出不是 JSON：${err.message}`);
+  }
+  const structural =
+    report && typeof report === "object" &&
+    report.vulnerabilities && typeof report.vulnerabilities === "object" &&
+    report.metadata && typeof report.metadata === "object";
+  if (structural) return report;
+  const failure = report?.error ?? {};
+  const detail = [failure.code, failure.summary ?? failure.message, failure.uri].filter(Boolean).join("  ");
+  throw new Error(`npm audit 报告缺少 vulnerabilities/metadata：${detail || JSON.stringify(report).slice(0, 200)}`);
+}
+
+async function runAudit() {
+  let lastError;
+  for (let attempt = 1; attempt <= AUDIT_ATTEMPTS; attempt += 1) {
+    try {
+      return parseAuditReport(auditOnce());
+    } catch (err) {
+      lastError = err;
+      console.error(`✗ npm audit 第 ${attempt}/${AUDIT_ATTEMPTS} 次失败：${err.message}`);
+      if (attempt < AUDIT_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, AUDIT_RETRY_DELAY_MS));
+    }
+  }
+  console.error(`✗ npm audit 重试 ${AUDIT_ATTEMPTS} 次后仍失败：${lastError.message}`);
+  process.exit(1);
+}
+
+const report = await runAudit();
 const vulns = report.vulnerabilities || {};
 const entries = Object.values(vulns).filter((v) => isRuntimeElectronPackage(v.name));
 const hits = entries.filter((v) => v.severity === "high" || v.severity === "critical");

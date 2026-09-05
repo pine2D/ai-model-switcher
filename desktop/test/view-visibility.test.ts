@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { reconcileVisibleSiteKeys } from "../src/main/view-visibility";
+import { readSource } from "./fixtures";
 
 test("view reconciliation detaches inactive pages and attaches only newly visible sites", () => {
   assert.deepEqual(
@@ -22,12 +22,12 @@ test("view reconciliation detaches inactive pages and attaches only newly visibl
 });
 
 test("commands is a supported shell surface", () => {
-  const protocol = readFileSync("src/shared/protocol.ts", "utf8");
+  const protocol = readSource("src/shared/protocol.ts");
   assert.match(protocol, /export type DesktopSurface =[^\n]*"commands"/);
 });
 
 test("unread badges are only cleared while the site surface is showing", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const clear = manager.slice(
     manager.indexOf("private clearVisibleUnread("),
     manager.indexOf("private isSiteVisible(")
@@ -37,7 +37,7 @@ test("unread badges are only cleared while the site surface is showing", () => {
 });
 
 test("restored focus prefers the site remembered for the restored page", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const constructor = manager.slice(
     manager.indexOf("const initial = options.initialUiState;"),
     manager.indexOf("setPermissionCheckHandler")

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import React, { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
@@ -22,7 +21,7 @@ import { formatCopy, getCopy } from "../src/shared/copy";
 import { COMMANDS } from "../src/shared/commands";
 import type { LayoutState } from "../src/shared/protocol";
 import { SITES } from "../src/main/sites";
-import { archiveFixture } from "./archive.test";
+import { archiveFixture, readSource } from "./fixtures";
 
 // 模拟 Menu.getApplicationMenu() 读回来的 role 项（真机 Electron 43.4.0 实测形态）
 const MENU_SHORTCUTS = [
@@ -456,7 +455,7 @@ test("image picker stays icon-first and exposes removable previews and scope war
 });
 
 test("a closing image tray is removed from focus and the accessibility tree", () => {
-  const source = readFileSync("src/renderer/image-picker.tsx", "utf8");
+  const source = readSource("src/renderer/image-picker.tsx");
   assert.match(source, /aria-hidden=\{trayOpen \? undefined : true\}/);
   assert.match(source, /inert=\{!trayOpen\}/);
 });
@@ -839,7 +838,7 @@ test("collected answer text is bounded with a non-silent truncation code", () =>
   // F131: preload/site.ts cannot be imported outside Electron (it pulls in `electron`
   // at module scope), so this is a source-string regression like the ones in
   // shell-contract.test.ts — it only guards against the cap or the code disappearing.
-  const preload = readFileSync("src/preload/site.ts", "utf8");
+  const preload = readSource("src/preload/site.ts");
   assert.match(preload, /TEXT_LIMIT\s*=\s*1_000_000/);
   assert.match(preload, /"answer_truncated"/);
   assert.match(preload, /points\.length > TEXT_LIMIT/);
@@ -848,8 +847,8 @@ test("collected answer text is bounded with a non-silent truncation code", () =>
 test("the dead polyask:focus-prompt IPC channel stays removed", () => {
   // F134: this channel was declared and subscribed but never sent from the main
   // process — the real focus path is the "focus-prompt" command in executeCommand.
-  const shellPreload = readFileSync("src/preload/shell.ts", "utf8");
-  const app = readFileSync("src/renderer/index.tsx", "utf8");
+  const shellPreload = readSource("src/preload/shell.ts");
+  const app = readSource("src/renderer/index.tsx");
   assert.doesNotMatch(shellPreload, /focus-prompt/);
   assert.doesNotMatch(app, /onFocusPrompt/);
   assert.match(app, /"focus-prompt":\s*\(\)\s*=>\s*\{/);
@@ -863,7 +862,7 @@ test("status announcements use the site label, and command-palette page jumps an
   // like the toolbar PageTabs does, since onLayout suppresses its own announcement
   // whenever requestedPage.current is set.
   // Windows CI 用 autocrlf checkout，源文件是 CRLF；下面的抽取标记内嵌 \n，必须先归一化换行
-  const app = readFileSync("src/renderer/index.tsx", "utf8").replace(/\r\n/g, "\n");
+  const app = readSource("src/renderer/index.tsx").replace(/\r\n/g, "\n");
   assert.match(app, /sitesRef\.current\.find\(\(site\) => site\.key === status\.site\)\?\.label \?\? status\.site/);
   const subscribeEffect = app.slice(app.indexOf("useEffect(() => {\n    if (!bootstrapStarted"), app.indexOf("}, [copy]);") + "}, [copy]);".length);
   assert.match(subscribeEffect, /const offStatus = window\.polyask\.onStatus/);
@@ -875,7 +874,7 @@ test("status announcements use the site label, and command-palette page jumps an
 test("the preference switch respects reduced motion", () => {
   // F170: the settings toggle's thumb transition must be neutralized under
   // prefers-reduced-motion, matching the rest of the workbench's motion contract.
-  const css = readFileSync("src/renderer/settings.css", "utf8");
+  const css = readSource("src/renderer/settings.css");
   assert.match(
     css,
     /@media \(prefers-reduced-motion: reduce\) \{\s*\.preference-switch span::after \{ transition: none; \}/
@@ -886,7 +885,7 @@ test("the packaged renderer CSP adds base-uri and form-action without breaking d
   // F231: base-uri/form-action do not fall back to default-src per the CSP spec, so
   // they were silently absent. connect-src keeps a scoped ws://localhost:* (webpack
   // dev server's HMR socket) instead of a bare ws: that would accept any host.
-  const html = readFileSync("src/renderer/index.html", "utf8");
+  const html = readSource("src/renderer/index.html");
   assert.match(html, /base-uri 'self'/);
   assert.match(html, /form-action 'self'/);
   assert.match(html, /connect-src 'self' ws:\/\/localhost:\*/);

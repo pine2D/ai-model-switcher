@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
@@ -7,6 +6,7 @@ import test from "node:test";
 import { SettingsWorkspace } from "../src/renderer/settings-workspace";
 import { getCopy } from "../src/shared/copy";
 import type { SyncStatus } from "../src/shared/sync";
+import { readSource } from "./fixtures";
 
 const noop = () => undefined;
 const runtime = { version: "0.19.0", distribution: "installed" } as const;
@@ -97,13 +97,13 @@ test("waiting for browser authorization never traps the settings page", () => {
   const html = renderSettings(status({ connected: false, state: "syncing", reason: "oauth" }));
   assert.doesNotMatch(html, /aria-label="Close settings" disabled=""/);
   assert.match(html, />Waiting for browser authorization…</);
-  const source = fs.readFileSync("src/renderer/settings-workspace.tsx", "utf8");
+  const source = readSource("src/renderer/settings-workspace.tsx");
   assert.match(source, /event\.key === "Escape" && !closeLocked/);
   assert.match(source, /aria-label=\{props\.copy\.closeSettings\} disabled=\{closeLocked\}/);
 });
 
 test("background status pushes refresh diagnostics without stealing focus or reopening the panel", () => {
-  const source = fs.readFileSync("src/renderer/settings-workspace.tsx", "utf8");
+  const source = readSource("src/renderer/settings-workspace.tsx");
   assert.match(
     source,
     /useEffect\(\(\) => \{\s*setDiagnostics\(createSyncDiagnosticSnapshot\(props\.status, props\.runtime\)\);\s*\}, \[props\.runtime, props\.status\]\);/,

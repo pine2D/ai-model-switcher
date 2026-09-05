@@ -5,16 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { DesktopDatabase } from "../src/main/database";
-import { createArchiveRecord } from "../src/shared/archive";
-
-function archiveFixture() {
-  return createArchiveRecord({
-    text: "Why is the sky blue?",
-    task: "Why is the sky blue?",
-    results: [{ host: "claude.ai", label: "Claude", text: "Rayleigh scattering." }],
-    createdAt: 1_000
-  }, { id: "archive-a", now: 1_000, deviceId: "device-a" });
-}
+import { archiveFixture } from "./fixtures";
 
 test("desktop database enables WAL and preserves archive tombstones across reopen", () => {
   const directory = mkdtempSync(join(tmpdir(), "polyask-database-"));

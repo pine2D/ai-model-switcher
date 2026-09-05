@@ -7,6 +7,9 @@
   "author": "pine2D",
   "homepage": "https://github.com/pine2D/polyask",
   "main": ".webpack/main",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
@@ -16,7 +19,7 @@
     "prepare-portable": "node scripts/prepare-portable.mjs",
     "smoke": "node scripts/smoke.mjs",
     "soak": "node scripts/soak.mjs",
-    "test": "tsx --test test/**/*.test.ts test/**/*.test.tsx && node --test scripts/*.test.mjs",
+    "test": "tsc --noEmit && tsx --test 'test/**/*.test.ts' 'test/**/*.test.tsx' && node --test 'scripts/*.test.{js,mjs}'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -34,7 +37,7 @@
     "@electron-forge/shared-types": "7.11.2",
     "@electron/fuses": "^1.8.0",
     "@types/electron-squirrel-startup": "^1.0.2",
-    "@types/node": "^22.10.5",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
     "css-loader": "^7.1.2",

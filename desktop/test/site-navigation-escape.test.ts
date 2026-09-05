@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 
 import { COMMANDS, commandAccelerator } from "../src/shared/commands";
 import { safeExternalUrl } from "../src/main/security";
 import { SITES } from "../src/main/sites";
 import { SiteNavigationPolicy } from "../src/main/navigation-guard";
+import { readSource } from "./fixtures";
 
 const claude = SITES.find((site) => site.key === "claude")!;
 
@@ -25,7 +25,7 @@ test("a user-initiated external link is refused by the view, not swallowed", () 
 });
 
 test("site-view hands refused external links to the browser instead of dropping them", () => {
-  const source = readFileSync("src/main/site-view.ts", "utf8");
+  const source = readSource("src/main/site-view.ts");
 
   // 两条路都要转交，漏一条就还是静默无反应；而且必须是「用户主动点出去」的那类。
   assert.match(source, /callbacks\.onExternal\(event\.url\)/);
@@ -35,7 +35,7 @@ test("site-view hands refused external links to the browser instead of dropping 
 });
 
 test("the external hop is validated before it reaches the OS browser", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readSource("src/main/index.ts");
   assert.match(main, /safeExternalUrl\(url\)/);
   assert.match(main, /electronShell\.openExternal/);
 
@@ -58,10 +58,10 @@ test("in-site back and forward are registered as real commands with accelerators
 });
 
 test("history navigation is wired end to end and gated like reload", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const renderer = readSource("src/renderer/index.tsx");
   const body = manager.slice(manager.indexOf("navigateHistory("), manager.indexOf("canNavigateHistory("));
 
   assert.match(body, /siteReloadAllowed/,
@@ -74,12 +74,12 @@ test("history navigation is wired end to end and gated like reload", () => {
 
 // 格子头部的后退按钮：只在该站真有历史可退时出现，免得摆一个点了没反应的按钮。
 test("the tile back button appears only when that site can actually go back", () => {
-  const frames = readFileSync("src/renderer/site-frames.tsx", "utf8");
+  const frames = readSource("src/renderer/site-frames.tsx");
 
   assert.match(frames, /history\[site\.key\]\?\.back &&/,
     "后退按钮必须按该站真实历史条件渲染，不能无条件摆着");
   assert.match(frames, /onBack\(site\.key\)/);
 
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const renderer = readSource("src/renderer/index.tsx");
   assert.match(renderer, /stepHistory\(-1, site\)/, "格子按钮要能指定站点，不能只作用于聚焦站");
 });

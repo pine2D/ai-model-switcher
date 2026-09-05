@@ -16,6 +16,10 @@ mapfile -d '' -t JS_FILES < <(existing_files '*.js')
 for file in "${JS_FILES[@]}"; do
   node --check "$file"
 done
+mapfile -d '' -t MJS_FILES < <(existing_files '*.mjs')
+for file in "${MJS_FILES[@]}"; do
+  node --check "$file"
+done
 
 echo "[json] 检查 JSON"
 mapfile -d '' -t JSON_FILES < <(existing_files '*.json')

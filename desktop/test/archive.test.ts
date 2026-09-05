@@ -7,18 +7,7 @@ import {
   tombstoneArchive,
   updateArchiveRecord
 } from "../src/shared/archive";
-
-export function archiveFixture() {
-  return createArchiveRecord({
-    text: "Why is the sky blue?",
-    task: "Why is the sky blue?",
-    results: [
-      { host: "claude.ai", label: "Claude", text: "Rayleigh scattering." },
-      { host: "chatgpt.com", label: "ChatGPT", text: null, code: "no_answer" }
-    ],
-    createdAt: 1_000
-  }, { id: "archive-a", now: 1_000, deviceId: "device-a" });
-}
+import { archiveFixture } from "./fixtures";
 
 test("archive records retain extension schema 1 metadata", () => {
   const record = archiveFixture();

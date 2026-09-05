@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { PostAuthReloadTracker } from "../src/main/auth-navigation";
+import { readSource } from "./fixtures";
 
 test("Gemini reloads once after returning from an authentication host", () => {
   const tracker = new PostAuthReloadTracker(true);
@@ -39,6 +39,6 @@ test("Gemini ignores authentication redirects from an embedded frame", () => {
 });
 
 test("site views arm the reload tracker with real Electron frame details", () => {
-  const source = readFileSync("src/main/site-view.ts", "utf8");
+  const source = readSource("src/main/site-view.ts");
   assert.match(source, /authRecovery\.observe\(decision\.disposition, event\.isMainFrame\)/);
 });

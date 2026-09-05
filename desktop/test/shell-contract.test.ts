@@ -1,22 +1,22 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 
 import { SiteNavigationPolicy } from "../src/main/navigation-guard";
 import { SITES } from "../src/main/sites";
 
 const chatgptSite = SITES.find((s) => s.key === "chatgpt")!;
 import test from "node:test";
+import { readSource } from "./fixtures";
 
 test("shell segmented controls expose state and site changes use a live region", () => {
-  const app = readFileSync("src/renderer/index.tsx", "utf8");
-  const commandBar = readFileSync("src/renderer/command-bar.tsx", "utf8");
+  const app = readSource("src/renderer/index.tsx");
+  const commandBar = readSource("src/renderer/command-bar.tsx");
   assert.match(commandBar, /aria-pressed=/);
   assert.match(app, /aria-live="polite"/);
 });
 
 test("production cancel recreates only the pending site view", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const sitePreload = readFileSync("src/preload/site.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
+  const sitePreload = readSource("src/preload/site.ts");
   assert.match(manager, /removeChildView\(/);
   assert.match(manager, /webContents\.close\(\)/);
   assert.doesNotMatch(manager, /forcefullyCrashRenderer\(\)/);
@@ -24,15 +24,15 @@ test("production cancel recreates only the pending site view", () => {
 });
 
 test("focus action transfers keyboard focus to the native site view", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   assert.match(manager, /webContents\.focus\(\)/);
 });
 
 test("application menu offers a keyboard route back to the prompt", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
-  const commands = readFileSync("src/shared/commands.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const main = readSource("src/main/index.ts");
+  const commands = readSource("src/shared/commands.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const renderer = readSource("src/renderer/index.tsx");
   assert.match(main, /commandAccelerator/);
   assert.match(main, /polyask:command/);
   assert.match(main, /before-input-event/);
@@ -57,7 +57,7 @@ test("application menu offers a keyboard route back to the prompt", () => {
 // 层序靠「重挂即提升」，不靠全拆重挂——后者实测会让被聚焦站点的渲染进程丢焦点（blur）。
 // 这条钉死 attach() 不得退回 detach-then-attach。
 test("view attach relies on reordering, never on a full detach-and-reattach", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const attach = manager.slice(manager.indexOf("private attach("), manager.indexOf("private detach("));
   const reconcile = manager.slice(manager.indexOf("private reconcileViews("), manager.indexOf("private attach("));
 
@@ -71,11 +71,11 @@ test("view attach relies on reordering, never on a full detach-and-reattach", ()
 // Ctrl+C / Ctrl+Q…）——它们不写在模板里，测试扫不到，于是速查仍然缺一大截却全绿。
 // 这条钉死速查必须从**真实菜单**读，而不是再维护第二张表。
 test("the shortcut reference reads the real application menu", () => {
-  const main = readFileSync("src/main/menu-shortcuts.ts", "utf8");
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const palette = readFileSync("src/renderer/command-palette.tsx", "utf8");
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const main = readSource("src/main/menu-shortcuts.ts");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const palette = readSource("src/renderer/command-palette.tsx");
+  const renderer = readSource("src/renderer/index.tsx");
 
   assert.match(main, /Menu\.getApplicationMenu\(\)/);
   assert.match(ipc, /polyask:menu-shortcuts/);
@@ -85,7 +85,7 @@ test("the shortcut reference reads the real application menu", () => {
 });
 
 test("every menu accelerator comes from the shared command table", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readSource("src/main/index.ts");
   const template = main.slice(main.indexOf("function createMenu"), main.indexOf("Menu.setApplicationMenu"));
   const handWritten = [...template.matchAll(/accelerator:\s*"([^"]+)"/g)].map((match) => match[1]);
 
@@ -95,8 +95,8 @@ test("every menu accelerator comes from the shared command table", () => {
 });
 
 test("every navigation command a menu exposes is reachable from the renderer", () => {
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const renderer = readSource("src/renderer/index.tsx");
+  const main = readSource("src/main/index.ts");
 
   // 命令面板与快捷键速查都按「渲染层是否给了动作」过滤（index.tsx 的 availableCommands），
   // 所以纯主进程处理的命令必须同时有渲染层入口，否则用户在速查里根本看不到它。
@@ -107,7 +107,7 @@ test("every navigation command a menu exposes is reachable from the renderer", (
 });
 
 test("CI tests and packages desktop on Linux, Windows and macOS", () => {
-  const workflow = readFileSync("../.github/workflows/ci.yml", "utf8");
+  const workflow = readSource("../.github/workflows/ci.yml");
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run typecheck/);
@@ -121,7 +121,7 @@ test("CI tests and packages desktop on Linux, Windows and macOS", () => {
 });
 
 test("shell navigation and IPC trust both lock to the local top frame", () => {
-  const main = readFileSync("src/main/index.ts", "utf8") + readFileSync("src/main/shell-ipc.ts", "utf8");
+  const main = readSource("src/main/index.ts") + readSource("src/main/shell-ipc.ts");
   assert.match(main, /senderFrame/);
   assert.match(main, /will-navigate/);
   assert.match(main, /setWindowOpenHandler/);
@@ -129,7 +129,7 @@ test("shell navigation and IPC trust both lock to the local top frame", () => {
 });
 
 test("site views grant an explicit permission allowlist and no more", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const allowlist = manager.slice(
     manager.indexOf("const SITE_PERMISSION_ALLOWLIST"),
     manager.indexOf("interface ViewManagerOptions")
@@ -145,7 +145,7 @@ test("site views grant an explicit permission allowlist and no more", () => {
 });
 
 test("site view wires split navigation guards, a commit signal and deny-only popups", () => {
-  const siteView = readFileSync("src/main/site-view.ts", "utf8");
+  const siteView = readSource("src/main/site-view.ts");
   assert.match(siteView, /contents\.on\("will-navigate", guardNavigation\(false\)\)/);
   assert.match(siteView, /contents\.on\("will-redirect", guardNavigation\(true\)\)/);
   assert.match(siteView, /contents\.on\("did-navigate", \(_event, url\) => policy\.commit\(url\)\)/);
@@ -173,8 +173,8 @@ test("navigation policy behavior: renderer external blocked, server redirect flo
 });
 
 test("site view security is read back from the live view and rate-limits dialogs", () => {
-  const siteView = readFileSync("src/main/site-view.ts", "utf8");
-  const diagnostics = readFileSync("src/main/diagnostics.ts", "utf8");
+  const siteView = readSource("src/main/site-view.ts");
+  const diagnostics = readSource("src/main/diagnostics.ts");
   assert.match(siteView, /getLastWebPreferences/);
   assert.match(siteView, /sandbox: prefs\.sandbox === true/);
   assert.match(siteView, /contextIsolation: prefs\.contextIsolation === true/);
@@ -187,15 +187,15 @@ test("site view security is read back from the live view and rate-limits dialogs
 });
 
 test("shell bootstrap exposes only sanitized runtime metadata", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const main = readSource("src/main/index.ts");
+  const ipc = readSource("src/main/shell-ipc.ts");
   assert.match(main, /const runtimeInfo: RuntimeInfo/);
   assert.match(main, /runtime: runtimeInfo/);
   assert.match(ipc, /runtime: options\.runtime/);
 });
 
 test("a copied profile receives a distinct sync device identity before services start", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readSource("src/main/index.ts");
   const databaseOpen = main.indexOf("DesktopDatabase.open");
   const resetIdentity = main.indexOf("applyPortableImportIdentity", databaseOpen);
   const createWindow = main.indexOf("await createWindow()", databaseOpen);
@@ -204,7 +204,7 @@ test("a copied profile receives a distinct sync device identity before services 
 });
 
 test("portable setup failures localize without calling app.getLocale before ready", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readSource("src/main/index.ts");
   assert.match(main, /getPreferredSystemLanguages\(\)\[0\]/);
   const setup = main.slice(main.indexOf("let profileReady"), main.indexOf("const coordinator"));
   assert.ok(setup.indexOf("isPortableDataInitialized(runtimeProfile)")
@@ -222,8 +222,8 @@ test("portable setup failures localize without calling app.getLocale before read
 });
 
 test("display preferences cross only the trusted shell bridge", () => {
-  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const main = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
   assert.match(main, /polyask:set-display/);
   assert.match(main, /trustedShell\(event\)/);
   assert.match(preload, /setDisplayPreferences/);
@@ -231,9 +231,9 @@ test("display preferences cross only the trusted shell bridge", () => {
 });
 
 test("composer expansion crosses a boolean-only trusted shell bridge", () => {
-  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const main = readSource("src/main/shell-ipc.ts");
+  const manager = readSource("src/main/view-manager.ts");
+  const preload = readSource("src/preload/shell.ts");
   assert.match(main, /polyask:set-composer-expanded/);
   assert.match(main, /typeof value !== "boolean"/);
   assert.match(manager, /setComposerExpanded/);
@@ -241,10 +241,10 @@ test("composer expansion crosses a boolean-only trusted shell bridge", () => {
 });
 
 test("workspace mutations cross the trusted shell bridge and the drawer reserves native bounds", () => {
-  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const workspaceLayout = readFileSync("src/main/workspace-layout.ts", "utf8");
+  const main = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const manager = readSource("src/main/view-manager.ts");
+  const workspaceLayout = readSource("src/main/workspace-layout.ts");
   for (const channel of [
     "polyask:set-selection",
     "polyask:set-tier",
@@ -262,8 +262,8 @@ test("workspace mutations cross the trusted shell bridge and the drawer reserves
 });
 
 test("selected-site paging crosses a validated shell bridge", () => {
-  const main = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const main = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
   assert.match(main, /polyask:set-page/);
   assert.match(main, /parsePageIndex/);
   assert.match(main, /manager\.setSelection/);
@@ -271,15 +271,15 @@ test("selected-site paging crosses a validated shell bridge", () => {
 });
 
 test("image IPC rejects unsupported sites before native view dispatch", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
   assert.match(ipc, /unsupportedImageSites/);
   assert.match(ipc, /image_sites_unsupported/);
 });
 
 test("answer collection uses the trusted shell and the existing read-only adapter hook", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const sitePreload = readFileSync("src/preload/site.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const sitePreload = readSource("src/preload/site.ts");
   assert.match(ipc, /polyask:collect/);
   assert.match(ipc, /trustedShell\(event\)/);
   assert.match(preload, /collectAnswers/);
@@ -287,9 +287,9 @@ test("answer collection uses the trusted shell and the existing read-only adapte
 });
 
 test("answer generation monitoring is run-scoped and never changes navigation", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const preload = readFileSync("src/preload/site.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const manager = readSource("src/main/view-manager.ts");
+  const preload = readSource("src/preload/site.ts");
   assert.match(ipc, /manager\.beginGenerationRun\(request\.runId, request\.sites\)/);
   assert.match(ipc, /watchGeneration\(request\.runId, result\.site\)/);
   assert.match(ipc, /cancelGenerationRun\(\)/);
@@ -299,8 +299,8 @@ test("answer generation monitoring is run-scoped and never changes navigation", 
 });
 
 test("a retried run keeps watching the sites that are still generating", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const manager = readSource("src/main/view-manager.ts");
   const collectionRun = ipc.indexOf("collection.beginRun(request.runId");
   const generationRun = ipc.indexOf("manager.beginGenerationRun(request.runId");
   assert.ok(collectionRun >= 0 && collectionRun < generationRun);
@@ -314,7 +314,7 @@ test("a retried run keeps watching the sites that are still generating", () => {
 });
 
 test("navigation retires generation monitoring for that site only", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const navigate = manager.slice(
     manager.indexOf("async navigate(site: SiteKey"),
     manager.indexOf("markStatus(status: SiteStatus)")
@@ -325,7 +325,7 @@ test("navigation retires generation monitoring for that site only", () => {
 });
 
 test("one unreadable generation probe never ends the watch", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const probe = manager.slice(
     manager.indexOf("private async probeGeneration("),
     manager.indexOf("private replaceView(")
@@ -338,7 +338,7 @@ test("one unreadable generation probe never ends the watch", () => {
 });
 
 test("completion is debounced across probes and never inferred from unchanged text", () => {
-  const monitor = readFileSync("src/main/generation-monitor.ts", "utf8");
+  const monitor = readSource("src/main/generation-monitor.ts");
   assert.match(monitor, /COMPLETE_CONFIRMATIONS = 3/);
   assert.match(monitor, /entry\.completeStreak \+= 1/);
   assert.match(monitor, /entry\.completeStreak >= COMPLETE_CONFIRMATIONS/);
@@ -346,7 +346,7 @@ test("completion is debounced across probes and never inferred from unchanged te
 });
 
 test("commands refuse to reach a crashed or failed page instead of guessing", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const send = manager.slice(
     manager.indexOf("sendCommand(site: SiteKey"),
     manager.indexOf("collect(site: SiteKey")
@@ -363,8 +363,8 @@ test("commands refuse to reach a crashed or failed page instead of guessing", ()
 });
 
 test("assisted synthesis dispatches through its own coordinator and cancel reaches both", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const main = readSource("src/main/index.ts");
+  const ipc = readSource("src/main/shell-ipc.ts");
   assert.match(main, /const synthesisCoordinator = new BroadcastCoordinator\(\)/);
   assert.match(main, /return synthesisCoordinator\.send\(/);
   assert.match(main, /synthesisCoordinator,/);
@@ -376,7 +376,7 @@ test("assisted synthesis dispatches through its own coordinator and cancel reach
 });
 
 test("workspace surfaces detach site views without destroying their web contents", () => {
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const manager = readSource("src/main/view-manager.ts");
   const start = manager.indexOf("setSurface(");
   const end = manager.indexOf("\n  focusRelative", start);
   const implementation = manager.slice(start, end);
@@ -385,15 +385,15 @@ test("workspace surfaces detach site views without destroying their web contents
   assert.match(implementation, /this\.reconcileViews/);
   assert.match(detach, /removeChildView/);
   assert.doesNotMatch(implementation, /webContents\.close/);
-  assert.match(readFileSync("src/shared/protocol.ts", "utf8"), /"commands"/);
-  assert.match(readFileSync("src/main/shell-ipc.ts", "utf8"), /"commands"/);
+  assert.match(readSource("src/shared/protocol.ts"), /"commands"/);
+  assert.match(readSource("src/main/shell-ipc.ts"), /"commands"/);
 });
 
 test("site health and guarded reload cross the trusted typed bridge", () => {
-  const healthIpc = readFileSync("src/main/site-health-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const sitePreload = readFileSync("src/preload/site.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const healthIpc = readSource("src/main/site-health-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const sitePreload = readSource("src/preload/site.ts");
+  const manager = readSource("src/main/view-manager.ts");
   assert.match(healthIpc, /polyask:site-health/);
   assert.match(healthIpc, /polyask:reload-site/);
   assert.match(healthIpc, /options\.trusted\(event\)/);
@@ -406,9 +406,9 @@ test("site health and guarded reload cross the trusted typed bridge", () => {
 });
 
 test("hard reload and clear-site-data self-rescue actions cross the trusted typed bridge", () => {
-  const healthIpc = readFileSync("src/main/site-health-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
+  const healthIpc = readSource("src/main/site-health-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const manager = readSource("src/main/view-manager.ts");
   assert.match(healthIpc, /polyask:clear-site-data/);
   const reloadHandler = healthIpc.slice(
     healthIpc.indexOf('ipcMain.handle("polyask:reload-site"'),
@@ -443,13 +443,13 @@ test("hard reload and clear-site-data self-rescue actions cross the trusted type
 
 test("every main-process IPC handler guards its own sender", () => {
   for (const file of ["src/main/site-health-ipc.ts", "src/main/sync-ipc.ts"]) {
-    const source = readFileSync(file, "utf8");
+    const source = readSource(file);
     const handlers = source.match(/ipcMain\.handle\(/g) ?? [];
     const guards = source.match(/options\.trusted\(event\)/g) ?? [];
     assert.ok(handlers.length > 0, file);
     assert.equal(guards.length, handlers.length, file);
   }
-  const shell = readFileSync("src/main/shell-ipc.ts", "utf8");
+  const shell = readSource("src/main/shell-ipc.ts");
   const shellHandlers = shell.match(/ipcMain\.handle\(/g) ?? [];
   const shellGuards = shell.match(/trustedShell\(event\)/g) ?? [];
   assert.ok(shellHandlers.length > 0);
@@ -457,8 +457,8 @@ test("every main-process IPC handler guards its own sender", () => {
 });
 
 test("archive mutations and history persistence stay behind trusted main-process IPC", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
   for (const channel of [
     "polyask:archive-search",
     "polyask:archive-add",
@@ -478,9 +478,9 @@ test("archive mutations and history persistence stay behind trusted main-process
 });
 
 test("prompt templates and recent history use a trusted synchronized library bridge", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const main = readSource("src/main/index.ts");
   assert.match(ipc, /polyask:prompt-template-save/);
   assert.match(ipc, /polyask:prompt-template-delete/);
   assert.match(ipc, /trustedShell\(event\)/);
@@ -491,10 +491,10 @@ test("prompt templates and recent history use a trusted synchronized library bri
 });
 
 test("completion notifications are boolean-only and update checks open the official release page", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const renderer = readSource("src/renderer/index.tsx");
+  const main = readSource("src/main/index.ts");
   assert.match(ipc, /polyask:set-completion-notifications/);
   assert.match(ipc, /typeof value !== "boolean"/);
   assert.match(preload, /setCompletionNotifications/);
@@ -505,8 +505,8 @@ test("completion notifications are boolean-only and update checks open the offic
 });
 
 test("assisted synthesis state and mutations stay behind the trusted shell bridge", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
   for (const channel of ["polyask:synthesis-send", "polyask:synthesis-collect", "polyask:synthesis-save"]) {
     assert.match(ipc, new RegExp(channel));
   }
@@ -517,9 +517,9 @@ test("assisted synthesis state and mutations stay behind the trusted shell bridg
 });
 
 test("Drive sync uses a trusted typed bridge and protects destructive cloud clearing", () => {
-  const ipc = readFileSync("src/main/sync-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const protocol = readFileSync("src/shared/protocol.ts", "utf8");
+  const ipc = readSource("src/main/sync-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const protocol = readSource("src/shared/protocol.ts");
   for (const channel of ["polyask:sync-connect", "polyask:sync-now", "polyask:sync-disconnect", "polyask:sync-clear"]) {
     assert.match(ipc, new RegExp(channel));
   }
@@ -531,8 +531,8 @@ test("Drive sync uses a trusted typed bridge and protects destructive cloud clea
 });
 
 test("Drive diagnostics use the existing trusted sync bridge", () => {
-  const ipc = readFileSync("src/main/sync-ipc.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const ipc = readSource("src/main/sync-ipc.ts");
+  const preload = readSource("src/preload/shell.ts");
   assert.match(ipc, /polyask:sync-diagnostics/);
   assert.match(ipc, /options\.trusted\(event\)/);
   assert.match(preload, /syncDiagnostics\(\): Promise<SyncDiagnosticSnapshot>/);
@@ -540,22 +540,22 @@ test("Drive diagnostics use the existing trusted sync bridge", () => {
 });
 
 test("Drive diagnostics command opens and targets the settings diagnostic section", () => {
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const renderer = readSource("src/renderer/index.tsx");
   assert.match(renderer, /"open-drive-diagnostics": \(\) =>/);
   assert.match(renderer, /setSettingsSection\("drive-diagnostics"\)/);
   assert.match(renderer, /initialSection=\{settingsSection\}/);
 });
 
 test("windows and linux auto-hide the native menu bar", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
+  const main = readSource("src/main/index.ts");
   assert.match(main, /setAutoHideMenuBar\(true\)/);
   assert.match(main, /setMenuBarVisibility\(false\)/);
 });
 
 test("desktop UI state restores before window creation and remains local to the profile", () => {
-  const main = readFileSync("src/main/index.ts", "utf8");
-  const manager = readFileSync("src/main/view-manager.ts", "utf8");
-  const store = readFileSync("src/main/ui-state-store.ts", "utf8");
+  const main = readSource("src/main/index.ts");
+  const manager = readSource("src/main/view-manager.ts");
+  const store = readSource("src/main/ui-state-store.ts");
   const load = main.indexOf("uiStateStore.load()");
   const create = main.indexOf("new BrowserWindow");
 
@@ -571,9 +571,9 @@ test("desktop UI state restores before window creation and remains local to the 
 });
 
 test("workspace popup menus stay in trusted native UI", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const native = readFileSync("src/main/native-menus.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const native = readSource("src/main/native-menus.ts");
+  const preload = readSource("src/preload/shell.ts");
 
   // 分组/命令菜单是定位到指针的弹出菜单，仍走原生。
   for (const channel of ["polyask:show-group-menu", "polyask:show-command-menu"]) {
@@ -589,11 +589,11 @@ test("workspace popup menus stay in trusted native UI", () => {
 // 其余部分格格不入。这不是安全回退——外壳本身就是受信任来源（isTrustedShellUrl 守着导航），
 // 站点视图是独立 WebContentsView 画不到外壳上；外壳若被攻陷，它本来就可以干脆不调用确认。
 test("the new-session confirmation is drawn in-app, with no native dialog left behind", () => {
-  const ipc = readFileSync("src/main/shell-ipc.ts", "utf8");
-  const native = readFileSync("src/main/native-menus.ts", "utf8");
-  const preload = readFileSync("src/preload/shell.ts", "utf8");
-  const dialog = readFileSync("src/renderer/confirm-dialog.tsx", "utf8");
-  const renderer = readFileSync("src/renderer/index.tsx", "utf8");
+  const ipc = readSource("src/main/shell-ipc.ts");
+  const native = readSource("src/main/native-menus.ts");
+  const preload = readSource("src/preload/shell.ts");
+  const dialog = readSource("src/renderer/confirm-dialog.tsx");
+  const renderer = readSource("src/renderer/index.tsx");
 
   // 旧通道必须整条拆掉，留着就还有第二条路径，两边会漂
   assert.ok(!/confirm-new-session|confirmNewSession/.test(ipc + native + preload),

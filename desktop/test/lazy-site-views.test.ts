@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { readSource } from "./fixtures";
 
-const manager = readFileSync("src/main/view-manager.ts", "utf8");
+const manager = readSource("src/main/view-manager.ts");
 const slice = (name: string): string => {
   const start = manager.indexOf(`private ${name}(`);
   assert.ok(start > 0, `${name} 不存在`);

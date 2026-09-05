@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readSource } from "./fixtures";
 
-const renderer = (file: string) => readFileSync(`src/renderer/${file}`, "utf8");
+const renderer = (file: string) => readSource(`src/renderer/${file}`);
 
 test("desktop forms expose stable names and disable browser autofill where it is noise", () => {
   const files = [
