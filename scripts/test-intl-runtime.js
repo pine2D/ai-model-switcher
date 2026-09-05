@@ -168,7 +168,7 @@ function claudeEffortCase(options) {
   const models = [radio("Fable 5", modelMenu), radio("Max Preview", modelMenu), radio("Sonnet 5", modelMenu, true)];
   const tiers = (opts.tiers || ["Low", "MediumDefault", "High", "Extra", "Max"])
     .map((name) => radio(name, effortMenu));
-  const trigger = Object.assign({ textContent: "EffortMedium", id: "eff-1" }, attr({ "aria-haspopup": "menu" }));
+  const trigger = Object.assign({ textContent: "EffortMedium", id: opts.id === undefined ? "eff-1" : opts.id }, attr({ "aria-haspopup": "menu" }));
   let expanded = !!opts.expanded;
   const document = {
     querySelector: (selector) => selector === '[data-testid="model-selector-dropdown"]'
@@ -203,6 +203,24 @@ async function claudeEffortMustIgnoreModelRadios() {
   const c = claudeEffortCase({ tiers: [] }); // 子菜单展开了但一个档位都没有
   await assert.rejects(async () => c.adapter._setEffort());
   assert.ok(!c.clicked.some((el) => c.models.includes(el)), "绝不能点到模型 radio（含诱饵 Max Preview）");
+}
+
+// 入口没有 id 时双层校验会退化成纯文本匹配，诱饵「Max Preview」就会被当最高档点下去：必须 fail-closed 抛错
+async function claudeEffortWithoutTriggerIdMustThrow() {
+  const c = claudeEffortCase({ id: "" });
+  await assert.rejects(async () => c.adapter._setEffort(), /缺少 id/);
+  assert.ok(!c.clicked.some((el) => c.models.includes(el)), "id 缺失时绝不能点到任何模型 radio（含诱饵 Max Preview）");
+  assert.ok(!c.clicked.some((el) => c.tiers.includes(el)), "id 缺失时也不得点档位项——归属无法校验");
+}
+
+// Gemini 深档模型正则版本无关：Google 升 Pro 当天不能整站抛「未找到模型」（与 fast 的 3.7 Flash 事故对称）
+async function geminiThinkMustMatchAnyProVersion() {
+  for (const pro of ["3.1 Pro Advanced reasoning", "3.2 Pro", "4.0 pro"]) {
+    const c = geminiCase((item) => [item("3.7 Flash All-around help"), item(pro), item("3.5 Flash-Lite Fastest answers")]);
+    await c.adapter.think();
+    assert.ok(c.clicked.includes(c.items[1]), "任意版本号的 Pro 都要能选中：" + pro);
+    assert.ok(!c.clicked.includes(c.items[0]) && !c.clicked.includes(c.items[2]), "深档绝不能选到 Flash / Flash-Lite：" + pro);
+  }
 }
 
 // 入口整个不见了必须抛 —— 2026-08-31 起撤销「无 effort 入口静默 return」那条例外
@@ -255,14 +273,14 @@ async function sendMustFallBackToEnterWhenClickIgnored() {
 let failed = 0;
 (async () => {
   const tests = [twentyPixelComposerMustBeFound, claudeModelInMoreMenuMustBeSelected,
-    claudeEffortMustTakeHighestKnownTier, claudeEffortMustIgnoreModelRadios, claudeMissingEffortMustThrow,
-    sendMustFallBackToEnterWhenClickIgnored, geminiStateMustFollowModeLabel,
-    geminiModelSelectMustCloseItsMenu, geminiThinkingToggleMustBeIdempotent,
+    claudeEffortMustTakeHighestKnownTier, claudeEffortMustIgnoreModelRadios, claudeEffortWithoutTriggerIdMustThrow,
+    claudeMissingEffortMustThrow, sendMustFallBackToEnterWhenClickIgnored, geminiStateMustFollowModeLabel,
+    geminiModelSelectMustCloseItsMenu, geminiThinkingToggleMustBeIdempotent, geminiThinkMustMatchAnyProVersion,
     geminiFastMustMatchAnyFlashButNotLite, geminiMenuMustBeClosedByRetriggerWhenEscFails];
   for (const test of tests) {
     try { await test(); }
     catch (error) { failed++; console.error(error.stack || error); }
   }
   if (failed) process.exitCode = 1;
-  else console.log("✓ Claude effort 语义校验、Gemini 版本无关快档与菜单收尾兼容");
+  else console.log("✓ Claude effort 语义校验（含入口无 id fail-closed）、Gemini 版本无关深/快档与菜单收尾兼容");
 })();

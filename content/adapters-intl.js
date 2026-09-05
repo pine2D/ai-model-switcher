@@ -44,12 +44,14 @@
       // 少一层都会把「最高档」点成末位模型（同 ChatGPT 2026-08 那次事故）。
       _effortItems: function (trig) {
         const id = trig.id || "";
+        // 入口没有 id 就无法校验归属：宁可抛错也不退化成纯文本匹配（那会把「Max Preview」模型项当最高档点下去）。
+        if (!id) { escMenus(); throw new Error("Claude: Effort 入口缺少 id，无法校验档位归属"); }
         return [...document.querySelectorAll('[role="menuitemradio"]')]
           .map((el) => ({ el, rank: this._EFFORT.findIndex((re) => re.test((el.textContent || "").trim())) }))
           .filter((x) => {
             if (x.rank < 0) return false;
             const menu = x.el.closest('[role="menu"]');
-            return !id || !!(menu && menu.getAttribute("aria-labelledby") === id);
+            return !!(menu && menu.getAttribute("aria-labelledby") === id);
           });
       },
       // effort 子菜单在模型下拉内；控件缺失一律 throw（2026-08-31 起不再有「静默 return」例外——
@@ -184,8 +186,9 @@
         const el = els[els.length - 1];
         return el.querySelector(".markdown") || el;
       },
-      // 等级 UI 词中英双写；英文 "Extended" 真机已确认，中文「扩展」为直译候选
-      think: async function () { await this._selectModel(/3\.1\s*pro\b/i); await this._setThinking(/^(extended|扩展)/i); },
+      // 深档模型正则与 fast 对称地**版本无关**（2026-08-31 事故只修了 fast 那一半）：任意版本号 + Pro。
+      // Pro 侧没有 Flash-Lite 式的更弱同名档，不需要后瞻。等级 UI 词中英双写；英文 "Extended" 真机已确认。
+      think: async function () { await this._selectModel(/\b\d+(?:\.\d+)?\s*pro\b/i); await this._setThinking(/^(extended|扩展)/i); },
       // 快档模型正则**版本无关**：写死 3.6 在站点升到 3.7 Flash 当天就整站抛「未找到模型」（真机
       // 2026-08-31 事故）。取「任意版本号 + Flash、且不是 Flash-Lite」——Lite 是更弱的另一档，
       // 后瞻同时挡住 `Flash-Lite` 与 `Flash Lite` 两种写法。

@@ -16,6 +16,15 @@ const context = { document, t: (key) => key, window: { __AMS: { ...helpers, adap
 vm.runInNewContext(fs.readFileSync("content/adapters-cn.js", "utf8"), context);
 
 const qwen = context.window.__AMS.adapters["qianwen.com"];
+// 档位正则必须只在源码里出现一次（执行端与识别端共用常量），两处各写一遍就是漂开的起点
+{
+  const src = fs.readFileSync("content/adapters-cn.js", "utf8");
+  for (const literal of ["Qwen3\\.7-千问(?!-Max)", "Qwen3\\.8-Max(?!-Preview)"]) {
+    assert.equal(src.split(literal).length - 1, 1, `千问档位正则「${literal}」应只在 _THINK/_FAST 常量里出现一次`);
+  }
+  assert.equal(qwen._THINK.source, "Qwen3\\.7-千问(?!-Max)");
+  assert.equal(qwen._FAST.source, "Qwen3\\.8-Max(?!-Preview)");
+}
 assert.equal(qwen.state(), "think", "正式版开启思考时应识别为 think");
 thinkButton.className = "text-primary";
 trigger.textContent = "Qwen3.8-Max";
