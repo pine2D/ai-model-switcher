@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+import { ipcErrorCode } from "../shared/ipc-error";
+
 import type {
   ArchiveFilters,
   ArchiveInput,
@@ -93,53 +95,57 @@ function subscribe<T>(channel: string, listener: (value: T) => void): () => void
   return () => ipcRenderer.removeListener(channel, wrapped);
 }
 
+// 全部 invoke 走这一层：把 Electron 的远程调用前缀剥掉，渲染层拿到的 error.message 就是主进程抛的裸码。
+const invoke = (channel: string, ...args: unknown[]): Promise<any> =>
+  ipcRenderer.invoke(channel, ...args).catch((error: unknown) => { throw new Error(ipcErrorCode(error)); });
+
 const api: PolyAskDesktopApi = Object.freeze({
-  bootstrap: () => ipcRenderer.invoke("polyask:bootstrap"),
-  menuShortcuts: () => ipcRenderer.invoke("polyask:menu-shortcuts"),
-  broadcast: (request: BroadcastRequest) => ipcRenderer.invoke("polyask:broadcast", request),
-  collectAnswers: (request: CollectionRequest) => ipcRenderer.invoke("polyask:collect", request),
-  searchArchives: (filters: ArchiveFilters) => ipcRenderer.invoke("polyask:archive-search", filters),
-  getArchive: (id: string) => ipcRenderer.invoke("polyask:archive-get", id),
-  addArchive: (input: ArchiveInput) => ipcRenderer.invoke("polyask:archive-add", input),
-  updateArchive: (id: string, patch: ArchivePatch) => ipcRenderer.invoke("polyask:archive-update", { id, patch }),
-  deleteArchive: (id: string) => ipcRenderer.invoke("polyask:archive-delete", id),
-  archiveMarkdown: (id: string, locale: string) => ipcRenderer.invoke("polyask:archive-markdown", { id, locale }),
-  sendSynthesis: (request: SynthesisSendRequest) => ipcRenderer.invoke("polyask:synthesis-send", request),
-  collectSynthesis: () => ipcRenderer.invoke("polyask:synthesis-collect"),
-  saveSynthesis: (replaceExisting: boolean) => ipcRenderer.invoke("polyask:synthesis-save", replaceExisting),
-  openExternal: (url: string) => ipcRenderer.invoke("polyask:open-external", url),
+  bootstrap: () => invoke("polyask:bootstrap"),
+  menuShortcuts: () => invoke("polyask:menu-shortcuts"),
+  broadcast: (request: BroadcastRequest) => invoke("polyask:broadcast", request),
+  collectAnswers: (request: CollectionRequest) => invoke("polyask:collect", request),
+  searchArchives: (filters: ArchiveFilters) => invoke("polyask:archive-search", filters),
+  getArchive: (id: string) => invoke("polyask:archive-get", id),
+  addArchive: (input: ArchiveInput) => invoke("polyask:archive-add", input),
+  updateArchive: (id: string, patch: ArchivePatch) => invoke("polyask:archive-update", { id, patch }),
+  deleteArchive: (id: string) => invoke("polyask:archive-delete", id),
+  archiveMarkdown: (id: string, locale: string) => invoke("polyask:archive-markdown", { id, locale }),
+  sendSynthesis: (request: SynthesisSendRequest) => invoke("polyask:synthesis-send", request),
+  collectSynthesis: () => invoke("polyask:synthesis-collect"),
+  saveSynthesis: (replaceExisting: boolean) => invoke("polyask:synthesis-save", replaceExisting),
+  openExternal: (url: string) => invoke("polyask:open-external", url),
   cancel: () => ipcRenderer.send("polyask:cancel"),
   setLayout: (mode: "overview" | "focus", focused: SiteKey) => ipcRenderer.send("polyask:set-layout", { mode, focused }),
   setPage: (page: number) => ipcRenderer.send("polyask:set-page", page),
   stepPage: (offset: -1 | 1) => ipcRenderer.send("polyask:step-page", offset),
   stepSite: (offset: -1 | 1) => ipcRenderer.send("polyask:step-site", offset),
   stepHistory: (offset: -1 | 1, site?: SiteKey) => ipcRenderer.send("polyask:step-history", { offset, site }),
-  siteHistoryState: () => ipcRenderer.invoke("polyask:site-history-state"),
-  setDisplayPreferences: (value: DisplayPreferences) => ipcRenderer.invoke("polyask:set-display", value),
+  siteHistoryState: () => invoke("polyask:site-history-state"),
+  setDisplayPreferences: (value: DisplayPreferences) => invoke("polyask:set-display", value),
   setComposerExpanded: (value: boolean) => ipcRenderer.send("polyask:set-composer-expanded", value),
   setDrawerOpen: (value: boolean) => ipcRenderer.send("polyask:set-drawer-open", value),
   setSurface: (value: DesktopSurface) => ipcRenderer.send("polyask:set-surface", value),
-  setSelection: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:set-selection", sites),
-  setTier: (value: BroadcastRequest["tier"]) => ipcRenderer.invoke("polyask:set-tier", value),
+  setSelection: (sites: readonly SiteKey[]) => invoke("polyask:set-selection", sites),
+  setTier: (value: BroadcastRequest["tier"]) => invoke("polyask:set-tier", value),
   saveGroup: (input: { readonly name: string; readonly sites: readonly SiteKey[] }) =>
-    ipcRenderer.invoke("polyask:save-group", input),
-  deleteGroup: (id: string) => ipcRenderer.invoke("polyask:delete-group", id),
-  newSession: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:new-session", sites),
-  showGroupMenu: () => ipcRenderer.invoke("polyask:show-group-menu"),
-  showCommandMenu: (commands: readonly CommandId[]) => ipcRenderer.invoke("polyask:show-command-menu", commands),
+    invoke("polyask:save-group", input),
+  deleteGroup: (id: string) => invoke("polyask:delete-group", id),
+  newSession: (sites: readonly SiteKey[]) => invoke("polyask:new-session", sites),
+  showGroupMenu: () => invoke("polyask:show-group-menu"),
+  showCommandMenu: (commands: readonly CommandId[]) => invoke("polyask:show-command-menu", commands),
   setCompletionNotifications: (enabled: boolean) =>
     ipcRenderer.send("polyask:set-completion-notifications", enabled),
   savePromptTemplate: (input: Pick<PromptTemplate, "name" | "text">) =>
-    ipcRenderer.invoke("polyask:prompt-template-save", input),
-  deletePromptTemplate: (id: string) => ipcRenderer.invoke("polyask:prompt-template-delete", id),
-  connectSync: () => ipcRenderer.invoke("polyask:sync-connect"),
-  syncNow: () => ipcRenderer.invoke("polyask:sync-now"),
-  disconnectSync: () => ipcRenderer.invoke("polyask:sync-disconnect"),
-  clearRemoteSync: (confirmation: string) => ipcRenderer.invoke("polyask:sync-clear", confirmation),
-  syncDiagnostics: () => ipcRenderer.invoke("polyask:sync-diagnostics"),
-  checkSiteHealth: (sites: readonly SiteKey[]) => ipcRenderer.invoke("polyask:site-health", sites),
-  reloadSite: (site: SiteKey, ignoreCache?: boolean) => ipcRenderer.invoke("polyask:reload-site", site, ignoreCache),
-  clearSiteData: (site: SiteKey) => ipcRenderer.invoke("polyask:clear-site-data", site),
+    invoke("polyask:prompt-template-save", input),
+  deletePromptTemplate: (id: string) => invoke("polyask:prompt-template-delete", id),
+  connectSync: () => invoke("polyask:sync-connect"),
+  syncNow: () => invoke("polyask:sync-now"),
+  disconnectSync: () => invoke("polyask:sync-disconnect"),
+  clearRemoteSync: (confirmation: string) => invoke("polyask:sync-clear", confirmation),
+  syncDiagnostics: () => invoke("polyask:sync-diagnostics"),
+  checkSiteHealth: (sites: readonly SiteKey[]) => invoke("polyask:site-health", sites),
+  reloadSite: (site: SiteKey, ignoreCache?: boolean) => invoke("polyask:reload-site", site, ignoreCache),
+  clearSiteData: (site: SiteKey) => invoke("polyask:clear-site-data", site),
   onStatus: (listener: (status: SiteStatus) => void) => subscribe("polyask:site-status", listener),
   onLayout: (listener: (layout: LayoutState) => void) => subscribe("polyask:layout", listener),
   onDisplayPreferences: (listener: (value: DisplayPreferences) => void) =>

@@ -126,6 +126,31 @@ export type SitePhase =
   | "failed"
   | "crashed";
 
+// 站点状态通道（SiteResult.code → SiteStatus.code）会出现的全部码。字段类型仍是 string——适配器是 JS，
+// 类型收不了口；但 describeStatus 用 Record<SiteCode, …> 查表，这里加一条码而没配文案，typecheck 阶段就红。
+// 反向（源码产出的码必须在这里）由 test/status-copy-coverage.test.ts 守着。
+export const SITE_CODES = [
+  "tier_unconfirmed",
+  "composer_not_found",
+  "not_ready",
+  "submit_unconfirmed",
+  "timeout",
+  "cancelled",
+  "inject_failed",
+  "no_view",
+  "load_failed",
+  "renderer_crashed",
+  "image_invalid",
+  "attachment_unsupported",
+  "attachment_failed",
+  "attachment_timeout",
+  "attachment_action_required",
+  "invalid_response",
+  "error",
+  "adapter_unavailable"
+] as const;
+export type SiteCode = (typeof SITE_CODES)[number];
+
 export interface SiteStatus {
   readonly site: SiteKey;
   readonly phase: SitePhase;

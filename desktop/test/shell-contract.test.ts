@@ -427,7 +427,7 @@ test("hard reload and clear-site-data self-rescue actions cross the trusted type
   assert.match(clearHandler, /manager\.clearSiteData\(value as SiteKey\)/);
   assert.match(healthIpc, /removeHandler\("polyask:clear-site-data"\)/);
   assert.match(preload, /clearSiteData\(site: SiteKey\): Promise<boolean>/);
-  assert.match(preload, /ipcRenderer\.invoke\("polyask:clear-site-data", site\)/);
+  assert.match(preload, /\binvoke\("polyask:clear-site-data", site\)/);
   assert.match(manager, /reload\(site: SiteKey, ignoreCache = false\): boolean/);
   assert.match(manager, /reloadIgnoringCache\(\)/);
   const clearSiteData = manager.slice(
