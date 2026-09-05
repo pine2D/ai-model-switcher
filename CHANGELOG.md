@@ -8,6 +8,8 @@
 
 ## [未发布]
 
+## [1.0.0] - 2026-09-05
+
 ### 移除
 
 - Chrome 扩展整体移除：源码、扩展页面（控制台 / 弹窗 / 设置页 / 提示词工作区）、打包脚本、36 个扩展专属测试与站点漂移探针脚本全部删除；最后一个含扩展 ZIP 的发布是 v0.25.1，代码保留在 tag `archive/extension-v0.25.1`。随之消失的用户可见能力：网页上下文（右键把所选文字/页面正文带入提示词）、迁移包导入/导出、AI 页面上的悬浮切档控件、结果库的「站点健康统计」。扩展写入 Google Drive 的数据与桌面应用同格式，连接同一账号即可继续使用；**未连接过 Google Drive 的扩展本机数据没有搬迁通道**
@@ -727,7 +729,8 @@
 - 新增 Alt+A 快捷键打开群发控制台
 - 新增发送后自动置顶全部窗口（popup 可关闭）
 
-[未发布]: https://github.com/pine2D/polyask/compare/v0.25.1...HEAD
+[未发布]: https://github.com/pine2D/polyask/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/pine2D/polyask/compare/v0.25.1...v1.0.0
 [0.25.1]: https://github.com/pine2D/polyask/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/pine2D/polyask/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/pine2D/polyask/compare/v0.24.0...v0.24.1
